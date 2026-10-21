@@ -250,7 +250,7 @@ runs:
           if [ "$room" -gt 200 ] && [ "$len" -le "$((room - 200))" ]; then
             printf '%s\n' "$text" >> "$file"
           elif [ "$room" -gt 200 ]; then
-            printf '%s' "$text" | head -c "$((room - 200))" >> "$file"
+            head -c "$((room - 200))" <<< "$text" >> "$file"
             printf '\nechoes: the run summary is full, the rest is truncated\n' >> "$file"
           fi
         }
@@ -500,7 +500,7 @@ runs:
           if [ "$room" -gt 200 ] && [ "$len" -le "$((room - 200))" ]; then
             printf '%s\n' "$text" >> "$file"
           elif [ "$room" -gt 200 ]; then
-            printf '%s' "$text" | head -c "$((room - 200))" >> "$file"
+            head -c "$((room - 200))" <<< "$text" >> "$file"
             printf '\nechoes: the run summary is full, the rest is truncated\n' >> "$file"
           fi
         }
@@ -519,7 +519,7 @@ runs:
         }
         # Whole lines within a byte budget, for the review body truncation.
         fit_lines() {
-          LC_ALL=C awk -v cap="$1" 'BEGIN { b = 0 } { if (b + length($0) + 1 > cap) exit; b += length($0) + 1; print }'
+          LC_ALL=C awk -v cap="$1" 'BEGIN { b = 0 } { if (b < cap && b + length($0) + 1 <= cap) { print; b += length($0) + 1 } }'
         }
         # No set -e here. Each step checks its own status and writes an outcome file, so a
         # failed api call degrades to a skipped review instead of aborting the run.
@@ -546,9 +546,11 @@ runs:
         omitted=0
         rate_omitted=0
         omitted_file="$RUNNER_TEMP/echoes-omitted.txt"
+        [ "$mode" = "post" ] && omitted_file="$payload/omitted.txt"
         onlynew=0
         [ -s "$base_report" ] && onlynew=1
         base_sha="$(cat "$RUNNER_TEMP/echoes-base-sha" 2>/dev/null || echo '')"
+        run_url="$GITHUB_SERVER_URL/$repo/actions/runs/$GITHUB_RUN_ID"
         # Post mode consumes a payload another job prepared, so it reads no
         # source tree and skips straight to the api calls.
         if [ "$mode" = "post" ]; then
@@ -978,7 +980,7 @@ runs:
             end="$(printf '%s' "$row" | jq -r '.end')"
             item="$(printf '%s' "$row" | jq -r '.item')"
             kind="$(printf '%s' "$row" | jq -r '.kind')"
-            others="$(printf '%s' "$row" | jq -r '.others | join("\n")')"
+            others="$(printf '%s' "$row" | jq -r '.others // [] | join("\n")')"
             candidates_md="$(printf '%s' "$row" | jq -r '.candidates_md // empty')"
             if [ "$kind" = "context" ]; then
               note="This context is repeated in this scan. A shared helper can carry it once. The other copies are at"
@@ -1004,7 +1006,6 @@ runs:
           mv "$reuse_built" "$reuse_tmp"
         fi
 
-        run_url="$GITHUB_SERVER_URL/$repo/actions/runs/$GITHUB_RUN_ID"
         if [ "$dry" = "true" ]; then
           stats="$(jq -r '"\(.total) doctests, \(.unique) unique, \(.functions // 0) functions, \(.unique_functions // 0) unique functions, \(.groups | length) duplicated groups"' "$report")"
           groups_block="$(jq -r '
@@ -1119,6 +1120,7 @@ runs:
         fi
         if [ "$mode" = "prepare" ]; then
           cp "$reuse_tmp" "$payload/reuse.ndjson"
+          cp "$omitted_file" "$payload/omitted.txt"
           echo "echoes: the review is prepared in $payload for a later job"
           echo "prepared" > "$status"
           exit 0
@@ -1131,7 +1133,8 @@ runs:
         # The first post is the permission probe.
         readonly=0
         rate_limited=0
-        posted_ok=0
+        posted_local=0
+        posted_reuse=0
         planned_n="$(cat "$comments" "$reuse_tmp" | wc -l)"
         post_one() {
           local row="$1" p line err item g
@@ -1159,17 +1162,18 @@ runs:
               failed_sites="$failed_sites  group $g  $p:$line  $item"$'\n'
             fi
           fi
-          posted_ok=$((posted_ok + 1))
           return 0
         }
         while IFS= read -r row; do
           [ -n "$row" ] || continue
           post_one "$row" || break
+          posted_local=$((posted_local + 1))
         done < "$comments"
         if [ "$readonly" != "1" ] && [ "$rate_limited" != "1" ]; then
           while IFS= read -r row; do
             [ -n "$row" ] || continue
             post_one "$row" || break
+            posted_reuse=$((posted_reuse + 1))
           done < "$reuse_tmp"
         fi
         if [ "$readonly" = "1" ]; then
@@ -1177,12 +1181,22 @@ runs:
           echo "skipped-readonly" > "$status"
           exit 0
         fi
+        # The rows the rate limit left unposted, listed like the omitted ones.
         if [ "$rate_limited" = "1" ]; then
-          rate_omitted=$((planned_n - posted_ok))
+          rate_omitted=$((planned_n - posted_local - posted_reuse))
+          rate_unposted="$(
+            { tail -n +$((posted_local + 1)) "$comments"
+              tail -n +$((posted_reuse + 1)) "$reuse_tmp"; } |
+            jq -rs 'map("- " + .path + ":" + (.start_line | tostring) + "  " + .item
+              + (if .group then " (group " + (.group | tostring) + ")" else " (" + (.kind // "context") + ")" end))
+            | join("\n")'
+          )"
           echo "echoes: the api rate limit was reached, $rate_omitted inline copies were not posted"
         fi
         if [ "$rate_omitted" -gt 0 ]; then
-          sum_append "$(printf '#### Rate limit\n\n%s inline copies were not posted because the api rate limit was reached, they are listed in this run summary' "$rate_omitted")"
+          rate_block="$(printf '#### Rate limit\n\n%s inline copies were not posted because the api rate limit was reached, they are listed in this run summary\n\n' "$rate_omitted")"
+          rate_block="$rate_block$rate_unposted"$'\n'
+          sum_append "$rate_block"
         fi
         # A review with no comment of its own needs a body. Sites GitHub could not
         # anchor inline are listed with permalinks to the head commit.

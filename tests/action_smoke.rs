@@ -1132,6 +1132,10 @@ fn s16_comment_cap() {
             3,
         ))
         .changed(&["src/a.rs", "src/b.rs", "src/c.rs", "src/d.rs"]);
+    world.write_file("src/a.rs", SRC_LIB);
+    world.write_file("src/b.rs", SRC_LIB);
+    world.write_file("src/c.rs", SRC_LIB);
+    world.write_file("src/d.rs", SRC_LIB);
     let exit = world.run();
     let r = world.runner();
     assert_eq!(exit, 0, "the capped review run exits 0");
@@ -1185,6 +1189,9 @@ fn s17_rate_limit_403() {
         ))
         .changed(&["src/lib.rs", "src/dup.rs", "src/dup2.rs"])
         .rate_limit_after(1);
+    world.write_file("src/lib.rs", SRC_LIB);
+    world.write_file("src/dup.rs", SRC_LIB);
+    world.write_file("src/dup2.rs", SRC_LIB);
     let exit = world.run();
     let r = world.runner();
     assert_eq!(exit, 0, "a rate-limited review run exits 0");
@@ -1211,8 +1218,12 @@ fn s17_rate_limit_403() {
     );
     let summary = r.summary();
     assert!(
-        summary.contains("rate limit was reached"),
+        summary.contains("Rate limit"),
         "the run summary reports the rate limit"
+    );
+    assert!(
+        summary.contains("src/dup2.rs:3  app::parse (group 1)"),
+        "the run summary lists the rate-limited copy"
     );
 }
 
@@ -1237,6 +1248,8 @@ fn s18_perm_403_readonly() {
         ))
         .changed(&["src/lib.rs", "src/dup.rs"])
         .gh_403();
+    world.write_file("src/lib.rs", SRC_LIB);
+    world.write_file("src/dup.rs", SRC_LIB);
     let exit = world.run();
     let r = world.runner();
     assert_eq!(exit, 0, "a permission 403 does not fail the job");
@@ -1340,6 +1353,9 @@ fn s20_prepare_post_cap() {
             3,
         ))
         .changed(&["src/lib.rs", "src/dup.rs", "src/parser.rs"]);
+    world.write_file("src/lib.rs", SRC_LIB);
+    world.write_file("src/dup.rs", SRC_LIB);
+    world.write_file("src/parser.rs", SRC_LIB);
     let exit = world.run();
     assert_eq!(exit, 0, "the capped prepare run exits 0");
     let r = world.runner();
@@ -1384,5 +1400,15 @@ fn s20_prepare_post_cap() {
     assert!(
         body.contains("1 inline copies were not posted"),
         "the post job carries the omitted count from the payload"
+    );
+    assert!(
+        body.contains("https://github.com/owner/repo/actions/runs/1"),
+        "the post body links the run that holds the omitted list"
+    );
+    let summary2 = r2.summary();
+    assert!(
+        summary2.contains("Inline copies not posted")
+            && summary2.contains("src/parser.rs:3  app::parser::selected (reuse)"),
+        "the post summary lists the omitted copy from the payload"
     );
 }
