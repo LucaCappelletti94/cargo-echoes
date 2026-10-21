@@ -223,8 +223,6 @@ pub(crate) struct Env<'env> {
     inherited: &'env [Frame],
     /// The qualified owner of a seeded view, printed as the owner label.
     owner: Option<String>,
-    /// Whether the far frames keep their helper handles.
-    far_helpers: bool,
 }
 
 impl Env<'_> {
@@ -243,29 +241,9 @@ impl Env<'_> {
         self.near.insert(name, value);
     }
 
-    /// Drop the helper handle of every visible value.
-    pub(crate) fn clear_helpers(&mut self) {
-        for value in self.near.values_mut() {
-            value.helper = None;
-        }
-        self.far_helpers = false;
-    }
-
-    /// Every visible value in name order.
-    pub(crate) fn values(&self) -> impl Iterator<Item = Cow<'_, schedule::Value>> {
-        let mut visible: BTreeMap<&str, Cow<'_, schedule::Value>> = self
-            .near
-            .iter()
-            .map(|(name, value)| (name.as_str(), Cow::Borrowed(value)))
-            .collect();
-        for frame in self.far_frames() {
-            for (name, binding) in frame.bindings(Ns::Value) {
-                visible
-                    .entry(name.as_str())
-                    .or_insert_with(|| Cow::Owned(self.far_value(binding)));
-            }
-        }
-        visible.into_values()
+    /// The function's own values in name order, module values carrying no proven type a rewrite reads.
+    pub(crate) fn values(&self) -> impl Iterator<Item = &schedule::Value> {
+        self.near.values()
     }
 
     fn far_frames(&self) -> impl Iterator<Item = &Frame> {
@@ -276,17 +254,13 @@ impl Env<'_> {
     }
 
     fn far_value(&self, binding: &Binding) -> schedule::Value {
-        let mut value = binding_value(binding, || {
+        binding_value(binding, || {
             if self.owner.as_deref() == Some(binding.canon.as_str()) {
                 String::from(OWNER_SELF)
             } else {
                 binding.canon.clone()
             }
-        });
-        if !self.far_helpers {
-            value.helper = None;
-        }
-        value
+        })
     }
 }
 
@@ -604,7 +578,6 @@ impl<'env> Renamer<'env> {
             if let syn::Stmt::Item(item) = stmt {
                 if let syn::Item::Use(import) = item {
                     if !crate::helpers::use_tree_known(&import.tree, 0) {
-                        env.clear_helpers();
                         continue;
                     }
                     crate::helpers::walk_imports(
@@ -1344,7 +1317,6 @@ impl<'env> Renamer<'env> {
             seed: self.seed,
             inherited: self.inherited.frames,
             owner: self.self_member_owner.clone(),
-            far_helpers: true,
         }
     }
 
