@@ -198,3 +198,40 @@ fn algebra_operator_kinds_and_output_positions_remain_distinct() {
         );
     }
 }
+
+#[test]
+fn algebra_commutes_an_operand_chosen_by_scalar_branches() {
+    same(
+        "fn f(a: u32, p: bool, b: u32) -> u32 { (if p { a } else { 1u32 }) | b }",
+        "fn g(x: u32, q: bool, y: u32) -> u32 { y | (if q { x } else { 1u32 }) }",
+    );
+    same(
+        "fn f(a: u32, p: bool, b: u32) -> u32 { let t = if p { a } else { 1u32 }; t | b }",
+        "fn g(x: u32, q: bool, y: u32) -> u32 { let t = if q { x } else { 1u32 }; y | t }",
+    );
+}
+
+#[test]
+fn a_binding_chosen_by_scalar_branches_inlines_like_other_temporaries() {
+    same(
+        "fn f(a: u32, p: bool, b: u32) -> u32 { let t = if p { a } else { 1u32 }; t | b }",
+        "fn g(x: u32, q: bool, y: u32) -> u32 { (if q { x } else { 1u32 }) | y }",
+    );
+}
+
+#[test]
+fn independent_bindings_reorder_when_one_is_chosen_by_scalar_branches() {
+    same(
+        "fn f(a: u32, p: bool, b: u32) -> u32 { let t = if p { a } else { 1u32 }; let u = b & 3u32; t | u }",
+        "fn g(x: u32, q: bool, y: u32) -> u32 { let u = y & 3u32; let t = if q { x } else { 1u32 }; t | u }",
+    );
+}
+
+#[test]
+fn unsuffixed_literal_arithmetic_folds_beside_a_typed_operand() {
+    same(
+        "fn f(a: u32) -> u32 { a & (2 * 8) }",
+        "fn g(x: u32) -> u32 { x & 16 }",
+    );
+    same("fn f() -> u32 { 2 * 8 }", "fn g() -> u32 { 16 }");
+}
