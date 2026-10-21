@@ -66,6 +66,52 @@ fn algebra_comparison_direction() {
 }
 
 #[test]
+fn algebra_equality_symmetry() {
+    for ty in TYPES {
+        for op in ["==", "!="] {
+            same(
+                &format!("fn f(a: {ty}, b: {ty}) -> bool {{ a {op} b }}"),
+                &format!("fn g(x: {ty}, y: {ty}) -> bool {{ y {op} x }}"),
+            );
+        }
+    }
+    same(
+        "fn f(a: u32) -> bool { a == 0u32 }",
+        "fn g(x: u32) -> bool { 0u32 == x }",
+    );
+}
+
+#[test]
+fn algebra_in_branch_conditions() {
+    for (forward, reverse) in [(">", "<"), (">=", "<=")] {
+        same(
+            &format!(
+                "fn f(a: u32, r: u32) -> u32 {{ if a {forward} 7u32 {{ 0u32 }} else {{ r }} }}"
+            ),
+            &format!(
+                "fn g(x: u32, s: u32) -> u32 {{ if 7u32 {reverse} x {{ 0u32 }} else {{ s }} }}"
+            ),
+        );
+    }
+    same(
+        "fn f(a: u32, b: u32, r: u32) -> u32 { if (a & b) < 7u32 { 0u32 } else { r } }",
+        "fn g(x: u32, y: u32, s: u32) -> u32 { if (y & x) < 7u32 { 0u32 } else { s } }",
+    );
+}
+
+#[test]
+fn opposite_branches_over_a_negated_comparison() {
+    for (test, negated) in [("<", ">="), ("<=", ">"), ("==", "!=")] {
+        same(
+            &format!("fn f(a: u32, r: u32) -> u32 {{ if a {test} 7u32 {{ 0u32 }} else {{ r }} }}"),
+            &format!(
+                "fn g(x: u32, s: u32) -> u32 {{ if x {negated} 7u32 {{ s }} else {{ 0u32 }} }}"
+            ),
+        );
+    }
+}
+
+#[test]
 fn algebra_bitwise_idempotence() {
     for ty in TYPES {
         for op in ["&", "|"] {
