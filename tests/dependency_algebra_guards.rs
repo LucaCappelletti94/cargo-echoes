@@ -20,8 +20,6 @@ fn separate(left: &str, right: &str) {
 #[test]
 fn comparison_kinds_and_operands_stay_ordered() {
     for (left, right) in [
-        ("a == b", "y == x"),
-        ("a != b", "y != x"),
         ("a > b", "y > x"),
         ("a >= b", "y >= x"),
         ("a == b", "y < x"),
@@ -164,10 +162,6 @@ fn nested_blocks_take_the_laws_independently() {
 #[test]
 fn scoped_non_block_syntax_stays_ordered() {
     separate(
-        "fn f(a: bool, b: bool) -> u32 { if a & b { 0u32 } else { 1u32 } }",
-        "fn g(x: bool, y: bool) -> u32 { if y & x { 0u32 } else { 1u32 } }",
-    );
-    separate(
         "fn f(a: u32, b: u32) { match a & b { _ => {} } }",
         "fn g(x: u32, y: u32) { match y & x { _ => {} } }",
     );
@@ -195,7 +189,7 @@ fn contextual_aliases_take_the_laws() {
         "type A = u32; type B = A; fn f(a: B, b: B) -> bool { a > b }",
         "type C = u32; type D = C; fn g(x: D, y: D) -> bool { y < x }",
     );
-    separate(
+    same(
         "type A = u32; fn f(a: A, b: A) -> bool { a == b }",
         "type B = u32; fn g(x: B, y: B) -> bool { y == x }",
     );

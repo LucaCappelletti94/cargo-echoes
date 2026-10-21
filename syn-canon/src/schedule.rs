@@ -570,11 +570,13 @@ impl BitwiseOp {
     }
 }
 
-/// The comparison emitted after exchanging ordered operands.
+/// The comparison emitted after exchanging operands.
 #[derive(Clone, Copy)]
 pub(crate) enum ReversedComparison {
     Lt,
     Le,
+    Eq,
+    Ne,
 }
 
 impl ReversedComparison {
@@ -582,6 +584,8 @@ impl ReversedComparison {
         match self {
             Self::Lt => syn::BinOp::Lt(syn::token::Lt::default()),
             Self::Le => syn::BinOp::Le(syn::token::Le::default()),
+            Self::Eq => syn::BinOp::Eq(syn::token::EqEq::default()),
+            Self::Ne => syn::BinOp::Ne(syn::token::Ne::default()),
         }
     }
 }
@@ -640,12 +644,12 @@ fn scalar_prim(left: &Lbl, right: &Lbl) -> Option<PrimTy> {
 }
 
 /// A comparison or a logical operation over proven scalars, oriented by
-/// kind, a bool result.
+/// kind, a bool result. Equality operands come in label order.
 fn comparison(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<TotalBinary> {
     let prim = scalar_prim(left, right)?;
     let (tag, reverse) = match bin_op {
-        syn::BinOp::Eq(_) => ('=', None),
-        syn::BinOp::Ne(_) => ('!', None),
+        syn::BinOp::Eq(_) => ('=', (right < left).then_some(ReversedComparison::Eq)),
+        syn::BinOp::Ne(_) => ('!', (right < left).then_some(ReversedComparison::Ne)),
         syn::BinOp::Lt(_) => ('<', None),
         syn::BinOp::Le(_) => ('≤', None),
         syn::BinOp::Gt(_) => ('<', Some(ReversedComparison::Lt)),
@@ -661,7 +665,8 @@ fn comparison(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<TotalBinary
     })
 }
 
-/// Negate a total boolean label without changing logical operand order.
+/// Negate a total boolean label without changing logical operand order, a
+/// comparison of integers or booleans turning into its complement.
 pub(crate) fn not_label(operand: Lbl) -> Lbl {
     match operand {
         Lbl::Not(inner) => *inner,
@@ -676,8 +681,17 @@ pub(crate) fn not_label(operand: Lbl) -> Lbl {
                 PrimTy::Bool,
             )
         }
+        Lbl::Op('<', left, right, prim) => Lbl::Op('≤', right, left, prim),
+        Lbl::Op('≤', left, right, prim) => Lbl::Op('<', right, left, prim),
+        Lbl::Op('=', left, right, prim) => Lbl::Op('!', left, right, prim),
+        Lbl::Op('!', left, right, prim) => Lbl::Op('=', left, right, prim),
         other => Lbl::Not(Box::new(other)),
     }
+}
+
+/// The complement of a `<=` or `!=` condition, which an `if` tests with its branches exchanged.
+pub(crate) fn positive_condition(cond: &Lbl) -> Option<Lbl> {
+    matches!(cond, Lbl::Op('≤' | '!', ..)).then(|| not_label(cond.clone()))
 }
 
 /// The total boolean operand compared with literal `true`.
@@ -1342,10 +1356,11 @@ pub(crate) fn branch_value(cond: &Lbl, then: &Lbl, otherwise: &Lbl) -> Option<Lb
         (Lbl::Bool(false), Lbl::Bool(true)) => Some(not_label(cond.clone())),
         _ => {
             let prim = then.prim().filter(|prim| otherwise.prim() == Some(*prim))?;
-            Some(Lbl::Select(
-                alloc::vec![cond.clone(), then.clone(), otherwise.clone()],
-                prim,
-            ))
+            let children = match positive_condition(cond) {
+                Some(positive) => alloc::vec![positive, otherwise.clone(), then.clone()],
+                None => alloc::vec![cond.clone(), then.clone(), otherwise.clone()],
+            };
+            Some(Lbl::Select(children, prim))
         }
     }
 }
@@ -1535,6 +1550,10 @@ fn label_if_expr(
             value_sites(&value, &mut sites);
             return (value, sites);
         }
+        let (cond, then, otherwise) = match positive_condition(&cond) {
+            Some(positive) => (positive, otherwise, then),
+            None => (cond, then, otherwise),
+        };
         let (then_label, then_sites) = label_block(renamer, env, then, consumer, locals, orders);
         let (otherwise_label, otherwise_sites) =
             label_block(renamer, env, otherwise, consumer, locals, orders);
@@ -1555,8 +1574,12 @@ fn label_if_expr(
             syn::Expr::Block(block) => Some(block),
             _ => None,
         });
-    if cond.prim() == Some(PrimTy::Bool)
+    let oriented = cond.prim() == Some(PrimTy::Bool)
         && crate::drift::expr_attrs(&r#if.cond).is_empty()
+        && otherwise.is_some_and(|otherwise| {
+            branches_unattributed(&r#if.attrs, &r#if.then_branch, otherwise)
+        });
+    if oriented
         && let Some(otherwise) = otherwise
         && let Some(value) = boolean_branch_fold(
             renamer,
@@ -1567,13 +1590,27 @@ fn label_if_expr(
             &cond,
             (&r#if.then_branch, &otherwise.block),
         )
-        && branches_unattributed(&r#if.attrs, &r#if.then_branch, otherwise)
     {
         let mut sites = Vec::new();
         value_sites(&value, &mut sites);
         return (value, sites);
     }
     *locals = saved;
+    if oriented
+        && let Some(otherwise) = otherwise
+        && let Some(positive) = positive_condition(&cond)
+    {
+        let (then_label, then_sites) =
+            label_block(renamer, env, &otherwise.block, consumer, locals, orders);
+        let (else_label, else_sites) =
+            label_block(renamer, env, &r#if.then_branch, consumer, locals, orders);
+        sites.extend(then_sites);
+        sites.extend(else_sites);
+        return (
+            Lbl::Other("if".into(), vec![positive, then_label, else_label]),
+            sites,
+        );
+    }
     let (then_label, then_sites) =
         label_block(renamer, env, &r#if.then_branch, consumer, locals, orders);
     let mut children = vec![cond, then_label];

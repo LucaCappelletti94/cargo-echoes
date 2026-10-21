@@ -93,10 +93,30 @@ fn algebra_in_branch_conditions() {
             ),
         );
     }
-    same(
-        "fn f(a: u32, b: u32, r: u32) -> u32 { if (a & b) < 7u32 { 0u32 } else { r } }",
-        "fn g(x: u32, y: u32, s: u32) -> u32 { if (y & x) < 7u32 { 0u32 } else { s } }",
-    );
+    for (left, right) in [
+        (
+            "fn f(a: u32, b: u32, r: u32) -> u32 { if (a & b) < 7u32 { 0u32 } else { r } }",
+            "fn g(x: u32, y: u32, s: u32) -> u32 { if (y & x) < 7u32 { 0u32 } else { s } }",
+        ),
+        (
+            "fn f(a: bool, b: bool) -> u32 { if a & b { 0u32 } else { 1u32 } }",
+            "fn g(x: bool, y: bool) -> u32 { if y & x { 0u32 } else { 1u32 } }",
+        ),
+        (
+            "fn f(a: u32, b: u32) -> u32 { if a > b { return 1u32; } 0u32 }",
+            "fn g(x: u32, y: u32) -> u32 { if y < x { return 1u32; } 0u32 }",
+        ),
+        (
+            "fn f(a: u32, r: u32) -> u32 { if a > 7u32 { 0u32 } else if a > 3u32 { 1u32 } else { r } }",
+            "fn g(x: u32, s: u32) -> u32 { if 7u32 < x { 0u32 } else if 3u32 < x { 1u32 } else { s } }",
+        ),
+        (
+            "fn f(a: u32, b: u32) -> u32 { if a > b { #[cfg(test)] let _z = 1u32; 0u32 } else { 1u32 } }",
+            "fn g(x: u32, y: u32) -> u32 { if y < x { #[cfg(test)] let _z = 1u32; 0u32 } else { 1u32 } }",
+        ),
+    ] {
+        same(left, right);
+    }
 }
 
 #[test]
@@ -108,6 +128,23 @@ fn opposite_branches_over_a_negated_comparison() {
                 "fn g(x: u32, s: u32) -> u32 {{ if x {negated} 7u32 {{ s }} else {{ 0u32 }} }}"
             ),
         );
+    }
+}
+
+#[test]
+fn negated_comparisons_take_their_complement() {
+    for ty in TYPES {
+        for (negated, complement) in [
+            ("!(a < b)", "y <= x"),
+            ("!(a <= b)", "y < x"),
+            ("!(a == b)", "x != y"),
+            ("!(a != b)", "x == y"),
+        ] {
+            same(
+                &format!("fn f(a: {ty}, b: {ty}) -> bool {{ {negated} }}"),
+                &format!("fn g(x: {ty}, y: {ty}) -> bool {{ {complement} }}"),
+            );
+        }
     }
 }
 

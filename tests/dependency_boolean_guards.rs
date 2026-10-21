@@ -301,7 +301,7 @@ fn wide_boolean_conditions_retain_the_complete_conditional_at_the_node_bound() {
 }
 
 #[test]
-fn oriented_comparisons_reorient_only_complementary_conditions() {
+fn oriented_comparisons_reorient_in_every_condition() {
     same(
         "fn f(p: i32, q: i32) -> bool { if q > p { true } else { false } }",
         "fn g(x: i32, y: i32) -> bool { x < y }",
@@ -310,7 +310,7 @@ fn oriented_comparisons_reorient_only_complementary_conditions() {
         "fn f(p: i32, q: i32) -> bool { if q >= p { true } else { false } }",
         "fn g(x: i32, y: i32) -> bool { x <= y }",
     );
-    separate(
+    same(
         "fn f(p: i32, q: i32) -> u32 { if q > p { 1u32 } else { 2u32 } }",
         "fn g(p: i32, q: i32) -> u32 { if p < q { 1u32 } else { 2u32 } }",
     );
