@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 use quote::ToTokens as _;
 use syn::visit::Visit;
 
-use crate::alpha::{MacroArgs, Renamer};
+use crate::alpha::{Env, MacroArgs, Renamer};
 use crate::reference::{BlockProof, ReferenceFacts};
 use crate::scope::{FreeKey, Ns, PrimTy, unraw};
 
@@ -934,7 +934,7 @@ pub(crate) fn stmt_kind(renamer: &Renamer, stmt: &syn::Stmt) -> StmtKind {
     StmtKind::Plain
 }
 
-pub(crate) fn scalar_leaf(env: &BTreeMap<String, Value>, expr: &syn::Expr) -> Option<Lbl> {
+pub(crate) fn scalar_leaf(env: &Env<'_>, expr: &syn::Expr) -> Option<Lbl> {
     match expr {
         syn::Expr::Lit(lit) => Some(label_lit(&lit.lit)),
         syn::Expr::Unary(_) => {
@@ -942,7 +942,8 @@ pub(crate) fn scalar_leaf(env: &BTreeMap<String, Value>, expr: &syn::Expr) -> Op
         }
         syn::Expr::Path(path) if path.qself.is_none() && path.path.segments.len() == 1 => {
             let name = path.path.segments[0].ident.to_string();
-            env.get(unraw(&name)).cloned().map(Lbl::Ref)
+            env.get(unraw(&name))
+                .map(|value| Lbl::Ref(value.into_owned()))
         }
         _ => None,
     }
@@ -954,7 +955,7 @@ pub(crate) fn scalar_leaf(env: &BTreeMap<String, Value>, expr: &syn::Expr) -> Op
 /// the storage of the referenced producers.
 pub(crate) fn label_expr(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     expr: &syn::Expr,
     consumer: usize,
     locals: &mut usize,
@@ -1051,14 +1052,14 @@ pub(crate) fn label_expr(
 
 /// The label and sites of a path, a single-segment unqualified name
 /// resolved through the environment.
-fn label_path(env: &BTreeMap<String, Value>, path: &syn::Path) -> (Lbl, Vec<Site>) {
+fn label_path(env: &Env<'_>, path: &syn::Path) -> (Lbl, Vec<Site>) {
     if path.segments.len() == 1 {
         let name = path.segments[0].ident.to_string();
         return match env.get(unraw(&name)) {
             Some(value) => (
                 Lbl::Ref(Value {
                     helper: None,
-                    ..value.clone()
+                    ..Value::clone(&value)
                 }),
                 vec![Site {
                     port: value.port.clone(),
@@ -1085,7 +1086,7 @@ fn label_path(env: &BTreeMap<String, Value>, path: &syn::Path) -> (Lbl, Vec<Site
 /// kept ordered by operator text.
 fn label_binary(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     bin: &syn::ExprBinary,
     consumer: usize,
     locals: &mut usize,
@@ -1157,7 +1158,7 @@ fn value_sites(label: &Lbl, sites: &mut Vec<Site>) {
 /// The label of a tuple, its elements in source order.
 fn label_tuple(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     elems: &syn::punctuated::Punctuated<syn::Expr, syn::token::Comma>,
     consumer: usize,
     locals: &mut usize,
@@ -1176,7 +1177,7 @@ fn label_tuple(
 /// Label a call with its resolved callee and independently total ordered arguments.
 fn label_call(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     call: &syn::ExprCall,
     consumer: usize,
     locals: &mut usize,
@@ -1235,7 +1236,7 @@ fn total_helper(
 /// its arguments in operand order.
 fn label_method(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     method: &syn::ExprMethodCall,
     consumer: usize,
     locals: &mut usize,
@@ -1263,7 +1264,7 @@ fn label_method(
 /// producer's storage.
 fn label_reference(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     reference: &syn::ExprReference,
     consumer: usize,
     locals: &mut usize,
@@ -1288,7 +1289,7 @@ fn label_reference(
 /// A unary label with proven boolean negation pushed inward.
 fn label_unary(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     unary: &syn::ExprUnary,
     consumer: usize,
     locals: &mut usize,
@@ -1460,7 +1461,7 @@ fn branch_orientation(r#if: &syn::ExprIf) -> Option<(&syn::Expr, &syn::Block, &s
 /// Prove the positive condition before orienting whole branches.
 fn oriented_if<'r>(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     r#if: &'r syn::ExprIf,
     consumer: usize,
     locals: &mut usize,
@@ -1479,7 +1480,7 @@ fn oriented_if<'r>(
 /// Fold scalar branches only after proving their types independently.
 fn boolean_branch_fold(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     consumer: usize,
     locals: &mut usize,
     orders: Option<&RefCell<FieldOrders>>,
@@ -1502,7 +1503,7 @@ fn boolean_branch_fold(
 /// Label proven branch folds before allocating branch-local ports.
 fn label_if_expr(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     r#if: &syn::ExprIf,
     consumer: usize,
     locals: &mut usize,
@@ -1579,7 +1580,7 @@ fn label_if_expr(
 /// The label of a `for` loop, its iterable bound to a fresh local port.
 fn label_for_loop(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     for_loop: &syn::ExprForLoop,
     consumer: usize,
     locals: &mut usize,
@@ -1606,7 +1607,7 @@ fn label_for_loop(
 /// The label of a `while` loop.
 fn label_while(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     r#while: &syn::ExprWhile,
     consumer: usize,
     locals: &mut usize,
@@ -1621,7 +1622,7 @@ fn label_while(
 /// The label of a `loop` expression.
 fn label_loop(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     r#loop: &syn::ExprLoop,
     consumer: usize,
     locals: &mut usize,
@@ -1635,7 +1636,7 @@ fn label_loop(
 /// local ports before its guard and body.
 fn label_match_expr(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     r#match: &syn::ExprMatch,
     consumer: usize,
     locals: &mut usize,
@@ -1677,7 +1678,7 @@ fn label_match_expr(
 /// types, the body marked on its storage.
 fn label_closure(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     closure: &syn::ExprClosure,
     consumer: usize,
     locals: &mut usize,
@@ -1720,7 +1721,7 @@ fn label_closure(
 /// The label of an array literal, its elements in source order.
 fn label_array(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     array: &syn::ExprArray,
     consumer: usize,
     locals: &mut usize,
@@ -1739,7 +1740,7 @@ fn label_array(
 /// The label of a repeat expression, its element and its length.
 fn label_repeat(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     repeat: &syn::ExprRepeat,
     consumer: usize,
     locals: &mut usize,
@@ -1754,7 +1755,7 @@ fn label_repeat(
 /// The label of a range expression, its endpoints present when they are.
 fn label_range(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     range: &syn::ExprRange,
     consumer: usize,
     locals: &mut usize,
@@ -1778,7 +1779,7 @@ fn label_range(
 /// The label of an index expression, its base and its index.
 fn label_index(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     index_expr: &syn::ExprIndex,
     consumer: usize,
     locals: &mut usize,
@@ -1793,7 +1794,7 @@ fn label_index(
 /// The label of a field projection, its base and the member's text.
 fn label_field(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     field: &syn::ExprField,
     consumer: usize,
     locals: &mut usize,
@@ -1812,7 +1813,7 @@ fn label_field(
 /// The label of a struct expression, its fields with member identities in the admitted semantic order, and its update base use.
 fn label_struct_expr(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     struct_expr: &syn::ExprStruct,
     consumer: usize,
     locals: &mut usize,
@@ -1890,7 +1891,7 @@ fn permute_values<T>(values: &mut [T], order: &[usize]) {
 /// The label of a `let` expression, its scrutinee labeled.
 fn label_let_expr(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     let_expr: &syn::ExprLet,
     consumer: usize,
     locals: &mut usize,
@@ -1903,7 +1904,7 @@ fn label_let_expr(
 /// The label of an assignment expression, its sides in operand order.
 fn label_assign(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     assign: &syn::ExprAssign,
     consumer: usize,
     locals: &mut usize,
@@ -1920,7 +1921,7 @@ fn label_assign(
 fn label_optional_value(
     tag: &str,
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     value: Option<&syn::Expr>,
     consumer: usize,
     locals: &mut usize,
@@ -1938,7 +1939,7 @@ fn label_optional_value(
 /// The label of a `try` expression, its operand labeled.
 fn label_try(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     try_expr: &syn::ExprTry,
     consumer: usize,
     locals: &mut usize,
@@ -1952,7 +1953,7 @@ fn label_try(
 /// `async` block, or a `const` block.
 fn label_blk(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     block: &syn::Block,
     consumer: usize,
     locals: &mut usize,
@@ -1965,7 +1966,7 @@ fn label_blk(
 /// The label of an `await` expression, its operand labeled.
 fn label_await(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     await_expr: &syn::ExprAwait,
     consumer: usize,
     locals: &mut usize,
@@ -1978,7 +1979,7 @@ fn label_await(
 /// The label of a cast expression, its operand and its target type text.
 fn label_cast(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     cast: &syn::ExprCast,
     consumer: usize,
     locals: &mut usize,
@@ -2003,7 +2004,7 @@ fn label_cast(
 /// referenced producer's storage.
 fn label_raw_addr(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     raw: &syn::ExprRawAddr,
     consumer: usize,
     locals: &mut usize,
@@ -2023,7 +2024,7 @@ fn label_raw_addr(
 /// The label and reference sites of a macro call, its arguments labeled.
 fn macro_label(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     mac: &syn::Macro,
     consumer: usize,
     locals: &mut usize,
@@ -2076,7 +2077,7 @@ fn macro_label(
 /// its references carried as sites.
 fn label_block(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     block: &syn::Block,
     _consumer: usize,
     locals: &mut usize,
@@ -2115,7 +2116,7 @@ fn label_block(
 /// The label and the reference sites a statement carries.
 fn statement_label(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     stmt: &syn::Stmt,
     consumer: usize,
     locals: &mut usize,
@@ -2140,7 +2141,7 @@ fn statement_label(
 /// named before the condition continues.
 fn label_cond(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     cond: &syn::Expr,
     consumer: usize,
     locals: &mut usize,
@@ -2159,7 +2160,7 @@ fn label_cond(
 /// `let` statement carries, `None` when the statement does not prove one.
 fn let_producer(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     local: &syn::Local,
     consumer: usize,
     locals: &mut usize,
@@ -2178,7 +2179,7 @@ fn let_producer(
 /// primitive language.
 fn total_init(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     expr: &syn::Expr,
     orders: Option<&RefCell<FieldOrders>>,
 ) -> Option<PrimTy> {
@@ -2192,7 +2193,7 @@ fn total_init(
 /// a tuple of such.
 fn tail_root(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     expr: &syn::Expr,
     orders: Option<&RefCell<FieldOrders>>,
 ) -> bool {
@@ -3196,8 +3197,8 @@ pub(crate) fn record_all_opaque(renamer: &mut Renamer, block: &mut syn::Block) {
     });
 }
 
-struct BlockScan {
-    env: BTreeMap<String, Value>,
+struct BlockScan<'env> {
+    env: Env<'env>,
     producers: Vec<Producer>,
     regions: Vec<Region>,
     uses: Uses,
@@ -3213,8 +3214,8 @@ struct BlockScan {
     field_orders: RefCell<FieldOrders>,
 }
 
-impl BlockScan {
-    fn new(env: BTreeMap<String, Value>, locals: usize, count: usize) -> Self {
+impl<'env> BlockScan<'env> {
+    fn new(env: Env<'env>, locals: usize, count: usize) -> Self {
         Self {
             env,
             producers: Vec::new(),
@@ -3589,7 +3590,7 @@ impl BlockScan {
 
 struct HelperCallScan<'a, 'env> {
     renamer: &'a Renamer<'env>,
-    env: &'a BTreeMap<String, Value>,
+    env: &'a Env<'env>,
     shadows: Vec<BTreeMap<String, Option<crate::scope::HelperId>>>,
     roots: BTreeSet<crate::scope::HelperId>,
 }
@@ -3713,7 +3714,7 @@ impl<'ast> Visit<'ast> for HelperCallScan<'_, '_> {
 
 fn called_helper_roots(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     block: &syn::Block,
 ) -> BTreeSet<crate::scope::HelperId> {
     let mut scan = HelperCallScan {
@@ -3751,8 +3752,7 @@ pub(crate) fn analyze(renamer: &mut Renamer, block: &mut syn::Block) {
         record_all_opaque(renamer, block);
         return;
     }
-    let mut env = BTreeMap::new();
-    renamer.frame_env(&mut env);
+    let mut env = renamer.frame_env();
     renamer.helper_import_env(block, &mut env);
     let roots = called_helper_roots(renamer, &env, block);
     if !roots.is_empty() && renamer.helper_closure_sum(&roots) > MAX_REGION_NODES {

@@ -6,7 +6,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use syn::visit::{self, Visit};
 
-use super::{BlockScan, Lbl, MAX_BLOCK_DEPTH, MAX_REGION_NODES, Port, Renamer, Value};
+use super::{BlockScan, Env, Lbl, MAX_BLOCK_DEPTH, MAX_REGION_NODES, Port, Renamer, Value};
 use crate::scope::unraw;
 
 struct Bounds {
@@ -139,7 +139,7 @@ struct Definition<'ast> {
 
 fn definitions<'ast>(
     renamer: &Renamer,
-    env: &BTreeMap<String, Value>,
+    env: &Env<'_>,
     local: &'ast syn::Local,
 ) -> Vec<(String, &'ast syn::Expr, Lbl, Vec<super::Site>)> {
     let Some(init) = &local.init else {
@@ -204,15 +204,15 @@ fn expression_bounds(expr: &syn::Expr, outer: usize) -> Bounds {
 fn expand(
     expr: &mut syn::Expr,
     syntax: &mut crate::helpers::HelperSyntax,
-    original: &BTreeMap<String, Value>,
-    retained: &BTreeMap<String, Value>,
+    original: &Env<'_>,
+    retained: &Env<'_>,
     replacements: &BTreeMap<Port, Expanded>,
     nodes: &mut usize,
 ) -> bool {
     struct Expansion<'a> {
         syntax: &'a mut crate::helpers::HelperSyntax,
-        original: &'a BTreeMap<String, Value>,
-        retained: &'a BTreeMap<String, Value>,
+        original: &'a Env<'a>,
+        retained: &'a Env<'a>,
         replacements: &'a BTreeMap<Port, Expanded>,
         nodes: &'a mut usize,
         valid: bool,
@@ -232,7 +232,7 @@ fn expand(
                     if replacement
                         .references
                         .iter()
-                        .any(|(name, value)| self.retained.get(name) != Some(value))
+                        .any(|(name, value)| self.retained.get(name).as_deref() != Some(value))
                     {
                         self.valid = false;
                         return;
@@ -246,7 +246,7 @@ fn expand(
                     self.syntax.clear_expr(expr);
                     *expr = self.syntax.clone_expr(&replacement.expr);
                 } else {
-                    self.valid = self.retained.get(unraw(&name)) == Some(value);
+                    self.valid = self.retained.get(unraw(&name)).as_deref() == Some(&*value);
                 }
             } else if let syn::Expr::Call(call) = expr {
                 for argument in &mut call.args {
@@ -269,9 +269,9 @@ fn expand(
     expansion.valid
 }
 
-fn references(expr: &syn::Expr, env: &BTreeMap<String, Value>) -> BTreeMap<String, Value> {
+fn references(expr: &syn::Expr, env: &Env<'_>) -> BTreeMap<String, Value> {
     struct References<'a> {
-        env: &'a BTreeMap<String, Value>,
+        env: &'a Env<'a>,
         values: BTreeMap<String, Value>,
     }
     impl<'ast> Visit<'ast> for References<'_> {
@@ -284,7 +284,9 @@ fn references(expr: &syn::Expr, env: &BTreeMap<String, Value>) -> BTreeMap<Strin
                 .env
                 .get(&name)
                 .expect("an expanded primitive path retains its source");
-            self.values.entry(name).or_insert_with(|| value.clone());
+            self.values
+                .entry(name)
+                .or_insert_with(|| value.into_owned());
         }
     }
     let mut references = References {
@@ -321,8 +323,7 @@ pub(super) fn normalize(renamer: &mut Renamer, block: &mut syn::Block) -> Outcom
     if original_bounds.observed {
         return Outcome::Unchanged;
     }
-    let mut env = BTreeMap::new();
-    renamer.frame_env(&mut env);
+    let mut env = renamer.frame_env();
     let locals = renamer.scopes.last().expect("a function scope").next_local;
     let mut scan = BlockScan::new(env.clone(), locals, block.stmts.len());
     let mut defs = Vec::new();
@@ -395,7 +396,7 @@ pub(super) fn normalize(renamer: &mut Renamer, block: &mut syn::Block) -> Outcom
         changes.push(
             names
                 .into_iter()
-                .filter_map(|name| scan.env.get(&name).map(|value| (name, value.clone())))
+                .filter_map(|name| scan.env.get(&name).map(|value| (name, value.into_owned())))
                 .collect::<Vec<_>>(),
         );
         approved.push(admitted);
