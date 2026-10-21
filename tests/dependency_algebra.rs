@@ -270,6 +270,18 @@ fn unsuffixed_literal_arithmetic_folds_beside_a_typed_operand() {
         "fn f() -> [u8; 2 + 3] { [0; 2 + 3] }",
         "fn f() -> [u8; 5] { [0; 5] }",
     );
+    same(
+        "fn f(a: u32) -> u32 { a % (7 % 4) }",
+        "fn g(x: u32) -> u32 { x % 3 }",
+    );
+    same(
+        "fn f(a: u32) -> u32 { a & (5 & 3) }",
+        "fn g(x: u32) -> u32 { x & 1 }",
+    );
+    same(
+        "fn f(a: u32) -> u32 { a >> (16 >> 2) }",
+        "fn g(x: u32) -> u32 { x >> 4 }",
+    );
 }
 
 #[test]

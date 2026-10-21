@@ -244,3 +244,12 @@ fn tied_future_comparison_definitions_keep_operand_roles() {
     assert_eq!(form(original), form(reordered));
     assert_ne!(form(original), form(different));
 }
+
+#[test]
+fn select_and_tied_future_definitions_reach_the_refinement() {
+    let original = "fn f(cond: bool, x: u32, y: u32) -> (bool, bool, bool) { let a = if cond { x } else { y }; let b = if cond { y } else { x }; println!(\"{}\", x); let c = if cond { x } else { y }; let d = if cond { x } else { y }; let e = x == y; ((if cond { a } else { c }) < b, a < d, (b < d) == e) }";
+    let renamed = "fn g(flag: bool, p: u32, q: u32) -> (bool, bool, bool) { let a = if flag { p } else { q }; let b = if flag { q } else { p }; println!(\"{}\", p); let c = if flag { p } else { q }; let d = if flag { p } else { q }; let e = p == q; ((if flag { a } else { c }) < b, a < d, (b < d) == e) }";
+    assert_eq!(form(original), form(renamed));
+    let different = "fn f(cond: bool, x: u32, y: u32) -> (bool, bool, bool) { let a = if cond { x } else { y }; let b = if cond { y } else { x }; println!(\"{}\", x); let c = if cond { x } else { y }; let d = if cond { x } else { y }; let e = x != y; ((if cond { a } else { c }) < b, a < d, (b < d) == e) }";
+    assert_ne!(form(original), form(different));
+}
