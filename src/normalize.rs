@@ -548,7 +548,7 @@ mod tests {
 
     #[test]
     fn bare_expression_parses() {
-        let c = canonicalize("1 + 1");
+        let c = canonicalize("x + 1");
         assert!(!c.unparsed);
         assert_eq!(c.tokens, 5);
     }

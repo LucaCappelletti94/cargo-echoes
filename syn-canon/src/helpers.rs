@@ -1857,7 +1857,7 @@ fn literal(lit: &syn::Lit, expected: Option<PrimTy>) -> Option<Proven> {
 
 fn folded(renamer: &Renamer<'_>, expr: &syn::Expr, expected: Option<PrimTy>) -> Option<Proven> {
     let mut normalized = expr.clone();
-    crate::constants::normalize_expr(renamer, &mut normalized, expected);
+    crate::constants::normalize_expr(renamer, &mut normalized, expected, true);
     match &normalized {
         syn::Expr::Lit(lit) => literal(&lit.lit, expected),
         _ => crate::constants::signed_literal(&normalized).map(|(prim, bits)| Proven {

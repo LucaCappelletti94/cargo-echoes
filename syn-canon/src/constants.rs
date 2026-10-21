@@ -249,6 +249,39 @@ fn closed(expr: &syn::Expr, depth: usize) -> bool {
     }
 }
 
+/// The value of an unsuffixed literal expression that every integer type evaluates alike,
+/// every literal, intermediate and result held to `0..=127` so nothing overflows `i8` or `u8`.
+fn type_free_value(expr: &syn::Expr, depth: usize) -> Option<u8> {
+    if depth >= MAX_DEPTH || !crate::drift::expr_attrs(expr).is_empty() {
+        return None;
+    }
+    let value = match node(expr)? {
+        Node::Literal(literal) if literal.suffix().is_empty() => {
+            literal.base10_parse::<u8>().ok()?
+        }
+        Node::Nested(expr) => type_free_value(expr, depth + 1)?,
+        Node::Binary(binary) => {
+            let left = type_free_value(&binary.left, depth + 1)?;
+            let right = type_free_value(&binary.right, depth + 1)?;
+            match arithmetic(binary.op)? {
+                BinaryOp::Math(MathOp::Add) => left.checked_add(right)?,
+                BinaryOp::Math(MathOp::Sub) => left.checked_sub(right)?,
+                BinaryOp::Math(MathOp::Mul) => left.checked_mul(right)?,
+                BinaryOp::Math(MathOp::Div) => left.checked_div(right)?,
+                BinaryOp::Math(MathOp::Rem) => left.checked_rem(right)?,
+                BinaryOp::BitAnd => left & right,
+                BinaryOp::BitOr => left | right,
+                BinaryOp::BitXor => left ^ right,
+                BinaryOp::Shl if right < 8 => u8::try_from(u16::from(left) << right).ok()?,
+                BinaryOp::Shr if right < 8 => left >> right,
+                BinaryOp::Shl | BinaryOp::Shr => return None,
+            }
+        }
+        Node::Literal(_) | Node::Unary(_) => return None,
+    };
+    (value <= 127).then_some(value)
+}
+
 fn integer_type(ty: PrimTy) -> Option<FixedInt> {
     match ty {
         PrimTy::Int { width, signed } => Some(FixedInt { width, signed }),
@@ -398,14 +431,18 @@ fn evaluate(expr: &syn::Expr, ty: FixedInt, depth: usize) -> Option<Integer> {
     }
 }
 
+/// Fold the literal arithmetic of `expr`, whose declared type is `expected` when
+/// `declared`, an unproven declared type keeping type-free folds out of its root.
 pub(crate) fn normalize_expr(
     renamer: &Renamer<'_>,
     expr: &mut syn::Expr,
     expected: Option<PrimTy>,
+    declared: bool,
 ) {
     Normalizer {
         renamer,
         expected: expected.and_then(integer_type),
+        type_free: !declared,
         contextual: true,
         depth: 0,
     }
@@ -416,6 +453,7 @@ pub(crate) fn normalize_block(renamer: &Renamer<'_>, block: &mut syn::Block) {
     Normalizer {
         renamer,
         expected: None,
+        type_free: true,
         contextual: true,
         depth: 0,
     }
@@ -425,6 +463,8 @@ pub(crate) fn normalize_block(renamer: &Renamer<'_>, block: &mut syn::Block) {
 struct Normalizer<'a, 'env> {
     renamer: &'a Renamer<'env>,
     expected: Option<FixedInt>,
+    /// Whether a closed expression here may fold to a value every integer type reads alike.
+    type_free: bool,
     contextual: bool,
     depth: usize,
 }
@@ -443,14 +483,24 @@ impl VisitMut for Normalizer<'_, '_> {
                     return;
                 }
                 *expr = value.expression(expr.span());
+            } else if self.type_free
+                && literal(expr).is_none()
+                && let Some(value) = type_free_value(expr, 0)
+            {
+                *expr = syn::Expr::Lit(syn::ExprLit {
+                    attrs: Vec::new(),
+                    lit: syn::Lit::Int(syn::LitInt::new(&format!("{value}"), expr.span())),
+                });
             }
             return;
         }
         let expected = self.expected.take();
+        let type_free = core::mem::replace(&mut self.type_free, true);
         self.depth += 1;
         visit_mut::visit_expr_mut(self, expr);
         self.depth -= 1;
         self.expected = expected;
+        self.type_free = type_free;
     }
 
     fn visit_block_mut(&mut self, block: &mut syn::Block) {

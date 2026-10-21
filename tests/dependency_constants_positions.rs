@@ -57,8 +57,8 @@ fn fixed_width_operations_fold_inside_const_and_array_constraints() {
 fn unresolved_array_and_const_widths_keep_their_constraints() {
     for (left, right) in [
         (
-            "fn f() -> [u8; 2 + 3] { [0; 2 + 3] }",
-            "fn f() -> [u8; 5] { [0; 5] }",
+            "fn f() -> [u8; 200 + 100] { [0; 200 + 100] }",
+            "fn f() -> [u8; 300] { [0; 300] }",
         ),
         (
             "const N: usize = 2usize + 3usize;",

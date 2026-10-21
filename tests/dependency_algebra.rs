@@ -131,7 +131,7 @@ fn algebra_overloads_and_inference_remain_opaque() {
             );
         }
     }
-    separate("fn f() { 1 & 2 }", "fn f() { 2 & 1 }");
+    separate("fn f() { 200 & 100 }", "fn f() { 100 & 200 }");
     separate(
         "fn f(a: u8, b: u16) { a & b }",
         "fn f(a: u8, b: u16) { b & a }",
@@ -197,4 +197,110 @@ fn algebra_operator_kinds_and_output_positions_remain_distinct() {
             &format!("fn f(a: u32, b: u32, c: u32) {{ {right} }}"),
         );
     }
+}
+
+#[test]
+fn algebra_commutes_an_operand_chosen_by_scalar_branches() {
+    same(
+        "fn f(a: u32, p: bool, b: u32) -> u32 { (if p { a } else { 1u32 }) | b }",
+        "fn g(x: u32, q: bool, y: u32) -> u32 { y | (if q { x } else { 1u32 }) }",
+    );
+    same(
+        "fn f(a: u32, p: bool, b: u32) -> u32 { let t = if p { a } else { 1u32 }; t | b }",
+        "fn g(x: u32, q: bool, y: u32) -> u32 { let t = if q { x } else { 1u32 }; y | t }",
+    );
+}
+
+#[test]
+fn a_binding_chosen_by_scalar_branches_inlines_like_other_temporaries() {
+    same(
+        "fn f(a: u32, p: bool, b: u32) -> u32 { let t = if p { a } else { 1u32 }; t | b }",
+        "fn g(x: u32, q: bool, y: u32) -> u32 { (if q { x } else { 1u32 }) | y }",
+    );
+}
+
+#[test]
+fn independent_bindings_reorder_when_one_is_chosen_by_scalar_branches() {
+    same(
+        "fn f(a: u32, p: bool, b: u32) -> u32 { let t = if p { a } else { 1u32 }; let u = b & 3u32; t | u }",
+        "fn g(x: u32, q: bool, y: u32) -> u32 { let u = y & 3u32; let t = if q { x } else { 1u32 }; t | u }",
+    );
+}
+
+#[test]
+fn branches_that_are_not_total_scalars_keep_their_order() {
+    for (left, right) in [
+        (
+            "(if p { observe(); a } else { 1u32 }) | b",
+            "b | (if p { observe(); a } else { 1u32 })",
+        ),
+        (
+            "(if check() { a } else { 1u32 }) | b",
+            "b | (if check() { a } else { 1u32 })",
+        ),
+        ("(if p { a } else { b }) | b", "(if p { b } else { a }) | b"),
+        (
+            "(if p { a } else { 1u32 }) | b",
+            "(if !p { a } else { 1u32 }) | b",
+        ),
+        (
+            "(if p { a } else { 1u64 as u32 }) | b",
+            "b | (if p { a } else { 1u64 as u32 })",
+        ),
+    ] {
+        separate(
+            &format!("fn f(a: u32, p: bool, b: u32) -> u32 {{ {left} }}"),
+            &format!("fn f(a: u32, p: bool, b: u32) -> u32 {{ {right} }}"),
+        );
+    }
+    same(
+        "fn f(a: u32, p: bool, b: u32) -> u32 { (if !p { 1u32 } else { a }) | b }",
+        "fn f(a: u32, p: bool, b: u32) -> u32 { b | (if p { a } else { 1u32 }) }",
+    );
+}
+
+#[test]
+fn unsuffixed_literal_arithmetic_folds_beside_a_typed_operand() {
+    same(
+        "fn f(a: u32) -> u32 { a & (2 * 8) }",
+        "fn g(x: u32) -> u32 { x & 16 }",
+    );
+    same("fn f() -> u32 { 2 * 8 }", "fn g() -> u32 { 16 }");
+    same(
+        "fn f() -> [u8; 2 + 3] { [0; 2 + 3] }",
+        "fn f() -> [u8; 5] { [0; 5] }",
+    );
+    same(
+        "fn f(a: u32) -> u32 { a % (7 % 4) }",
+        "fn g(x: u32) -> u32 { x % 3 }",
+    );
+    same(
+        "fn f(a: u32) -> u32 { a & (5 & 3) }",
+        "fn g(x: u32) -> u32 { x & 1 }",
+    );
+    same(
+        "fn f(a: u32) -> u32 { a >> (16 >> 2) }",
+        "fn g(x: u32) -> u32 { x >> 4 }",
+    );
+}
+
+#[test]
+fn unsuffixed_literal_arithmetic_keeps_values_some_integer_type_reads_differently() {
+    for (left, right) in [
+        ("a & (100 + 28)", "a & 128"),
+        ("a & (64 << 1)", "a & 128"),
+        ("a & (1 << 8)", "a & 256"),
+        ("a & !0", "a & 255"),
+        ("a & (2 - 8)", "a & -6"),
+        ("a & (7 / 0)", "a & 0"),
+    ] {
+        separate(
+            &format!("fn f(a: i64) -> i64 {{ {left} }}"),
+            &format!("fn f(a: i64) -> i64 {{ {right} }}"),
+        );
+    }
+    same(
+        "fn f(a: u32) -> u32 { a & ((3 << 4) | 5 ^ 1) }",
+        "fn f(a: u32) -> u32 { a & 52 }",
+    );
 }

@@ -256,10 +256,10 @@ fn constant_suffix_mismatches_and_unproven_types_remain_retained() {
         form("fn f() -> isize { 2isize + 3isize }"),
         form("fn f() -> isize { 5isize }")
     );
-    // Array lengths keep the usize constraint, no fixed-width proof.
+    // Array lengths beyond the type-free range keep the usize constraint, no fixed-width proof.
     assert_ne!(
-        form("fn f() { let a = [0u8; 2 + 3]; a }"),
-        form("fn f() { let a = [0u8; 5]; a }")
+        form("fn f() { let a = [0u8; 200 + 100]; a }"),
+        form("fn f() { let a = [0u8; 300]; a }")
     );
 }
 

@@ -126,6 +126,9 @@ pub(crate) enum Lbl {
     /// A total call of an accepted helper: callee identity, ordered
     /// argument labels, and the helper's result type.
     Call(Box<Lbl>, Vec<Lbl>, PrimTy),
+    /// A total choice between two total scalars of one type: the proven boolean
+    /// condition, then the branch it selects and the other branch.
+    Select(Vec<Lbl>, PrimTy),
 }
 
 /// The recorded field orders of an analyzed block, keyed by the first owned field buffer, None marking a rejected group.
@@ -143,9 +146,10 @@ impl Lbl {
             Self::Int(_, prim) => *prim,
             Self::Bool(_) | Self::Not(_) => Some(PrimTy::Bool),
             Self::Ref(value) => value.prim,
-            Self::Op(_, _, _, prim) | Self::Flat(_, _, prim) | Self::Call(_, _, prim) => {
-                Some(*prim)
-            }
+            Self::Op(_, _, _, prim)
+            | Self::Flat(_, _, prim)
+            | Self::Call(_, _, prim)
+            | Self::Select(_, prim) => Some(*prim),
             _ => None,
         }
     }
@@ -753,7 +757,7 @@ pub(crate) fn label_nodes(lbl: &Lbl) -> usize {
     match lbl {
         Lbl::Not(inner) => 1 + label_nodes(inner),
         Lbl::Op(_, left, right, _) => 1 + label_nodes(left) + label_nodes(right),
-        Lbl::Flat(_, leaves, _) | Lbl::Other(_, leaves) => {
+        Lbl::Flat(_, leaves, _) | Lbl::Other(_, leaves) | Lbl::Select(leaves, _) => {
             1 + leaves.iter().map(label_nodes).sum::<usize>()
         }
         Lbl::Call(callee, args, _) => {
@@ -1145,7 +1149,7 @@ fn value_sites(label: &Lbl, sites: &mut Vec<Site>) {
             value_sites(left, sites);
             value_sites(right, sites);
         }
-        Lbl::Flat(_, leaves, _) | Lbl::Call(_, leaves, _) => {
+        Lbl::Flat(_, leaves, _) | Lbl::Call(_, leaves, _) | Lbl::Select(leaves, _) => {
             for leaf in leaves {
                 value_sites(leaf, sites);
             }
@@ -1317,7 +1321,8 @@ pub(crate) fn scalar_tail(block: &syn::Block) -> Option<&syn::Expr> {
     Some(tail)
 }
 
-/// Select independently typed literal-condition tails or opposite boolean literals.
+/// Select independently typed literal-condition tails, opposite boolean literals,
+/// or a total choice between two total scalars of one type.
 pub(crate) fn branch_value(cond: &Lbl, then: &Lbl, otherwise: &Lbl) -> Option<Lbl> {
     if let Lbl::Bool(selected) = cond {
         return (then.prim() == otherwise.prim() && then.prim().is_some()).then(|| {
@@ -1328,14 +1333,19 @@ pub(crate) fn branch_value(cond: &Lbl, then: &Lbl, otherwise: &Lbl) -> Option<Lb
             }
         });
     }
+    if cond.prim() != Some(PrimTy::Bool) {
+        return None;
+    }
     match (then, otherwise) {
-        (Lbl::Bool(true), Lbl::Bool(false)) if cond.prim() == Some(PrimTy::Bool) => {
-            Some(cond.clone())
+        (Lbl::Bool(true), Lbl::Bool(false)) => Some(cond.clone()),
+        (Lbl::Bool(false), Lbl::Bool(true)) => Some(not_label(cond.clone())),
+        _ => {
+            let prim = then.prim().filter(|prim| otherwise.prim() == Some(*prim))?;
+            Some(Lbl::Select(
+                alloc::vec![cond.clone(), then.clone(), otherwise.clone()],
+                prim,
+            ))
         }
-        (Lbl::Bool(false), Lbl::Bool(true)) if cond.prim() == Some(PrimTy::Bool) => {
-            Some(not_label(cond.clone()))
-        }
-        _ => None,
     }
 }
 
@@ -2260,6 +2270,13 @@ fn color_substitute(lbl: &Lbl, colors: &[Color]) -> Lbl {
                 .map(|child| color_substitute(child, colors))
                 .collect(),
         ),
+        Lbl::Select(children, prim) => Lbl::Select(
+            children
+                .iter()
+                .map(|child| color_substitute(child, colors))
+                .collect(),
+            *prim,
+        ),
         Lbl::Graph(root, definitions) => Lbl::Graph(
             Box::new(color_substitute(root, colors)),
             definitions
@@ -2325,6 +2342,13 @@ where
                 .map(|child| future_substitute(child, map_future))
                 .collect(),
         ),
+        Lbl::Select(children, prim) => Lbl::Select(
+            children
+                .iter()
+                .map(|child| future_substitute(child, map_future))
+                .collect(),
+            *prim,
+        ),
         Lbl::Call(callee, args, prim) => Lbl::Call(
             Box::new(future_substitute(callee, map_future)),
             args.iter()
@@ -2355,7 +2379,7 @@ fn future_refs(lbl: &Lbl, visit: &mut impl FnMut(usize)) {
             future_refs(left, visit);
             future_refs(right, visit);
         }
-        Lbl::Flat(_, children, _) | Lbl::Other(_, children) => {
+        Lbl::Flat(_, children, _) | Lbl::Other(_, children) | Lbl::Select(children, _) => {
             for child in children {
                 future_refs(child, visit);
             }
@@ -2486,6 +2510,16 @@ fn future_context_walk(node: &Lbl, owner: &Lbl, path: &mut Vec<Lbl>, contexts: &
                 path.pop();
             }
         }
+        Lbl::Select(children, prim) => {
+            for (position, child) in children.iter().enumerate() {
+                path.push(Lbl::Other(
+                    "select".into(),
+                    vec![Lbl::Int(0, Some(*prim)), Lbl::Lit(position.to_string())],
+                ));
+                future_context_walk(child, owner, path, contexts);
+                path.pop();
+            }
+        }
         _ => {}
     }
 }
@@ -2517,6 +2551,9 @@ fn future_summary(lbl: &Lbl) -> Lbl {
         }
         Lbl::Other(kind, children) => {
             Lbl::Other(kind.clone(), children.iter().map(future_summary).collect())
+        }
+        Lbl::Select(children, prim) => {
+            Lbl::Select(children.iter().map(future_summary).collect(), *prim)
         }
         Lbl::Call(callee, args, prim) => Lbl::Call(
             Box::new(future_summary(callee)),
@@ -2826,6 +2863,7 @@ impl RegionProjection<'_> {
                 Lbl::Flat(*op, leaves, *prim)
             }
             Lbl::Other(kind, children) => Lbl::Other(kind.clone(), self.labels(children)?),
+            Lbl::Select(children, prim) => Lbl::Select(self.labels(children)?, *prim),
             Lbl::Call(callee, args, prim) => {
                 Lbl::Call(Box::new(self.label(callee)?), self.labels(args)?, *prim)
             }
@@ -3041,7 +3079,7 @@ fn label_affected(lbl: &Lbl, affected: &[bool]) -> bool {
         Lbl::Op(_, left, right, _) => {
             label_affected(left, affected) || label_affected(right, affected)
         }
-        Lbl::Flat(_, children, _) | Lbl::Other(_, children) => {
+        Lbl::Flat(_, children, _) | Lbl::Other(_, children) | Lbl::Select(children, _) => {
             children.iter().any(|child| label_affected(child, affected))
         }
         Lbl::Call(callee, args, _) => {
