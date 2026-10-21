@@ -48,15 +48,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          # Two copies the base does not have, so only-new mode posts on them, one behind
-          # a tilde fence and one indented. The apicheck fixture is not pinned by the
-          # integration tests, dupws is.
+          # Two copies the base does not have, so only-new mode posts on them. The first
+          # rewrites pack_argb with other names, temporaries, decimal and folded literals,
+          # reordered operands, an inverted branch, a dead binding and an explicit return.
+          # The second is an indented doctest copy. The apicheck fixture is not pinned by
+          # the integration tests, dupws is.
           printf '%s\n' '' \
-            '/// A tilde fenced copy added by the API check.' \
-            '/// ~~~' \
-            '/// fn helper() { }' \
-            '/// ~~~' \
-            'pub fn helper_tilde() {}' \
+            '/// The same packing, written again.' \
+            'fn colour(x: u32, y: u32, z: u32, w: u32, solid: bool) -> u32 {' \
+            '    // Blue first, then green and red, alpha on top.' \
+            '    let unused = 17u32;' \
+            '    let lo = 255u32 & z;' \
+            '    let mid = (y & 255u32) << (2u32 * 4u32);' \
+            '    let packed = lo | mid | (x & 0xffu32) << 16u32;' \
+            '    let top = if !solid { w & 255u32 } else { 255u32 };' \
+            '    let shown = if top == 0u32 { 0u32 } else { packed };' \
+            '    return top << 24u32 | shown;' \
+            '}' \
             '' \
             '/// An indented copy added by the API check.' \
             '///' \
@@ -64,7 +72,7 @@ jobs:
             'pub fn unparsed_indented() {}' \
             >> tests/fixtures/apicheck/src/lib.rs
           git add tests/fixtures/apicheck/src/lib.rs
-          git commit -m "Add two doctest copies for the API check"
+          git commit -m "Add a function copy and a doctest copy for the API check"
           git push origin "$branch"
           url="$(gh pr create --head "$branch" --title "echoes API check, $(date -u +%F)" --body 'Opened by the scheduled dogfood to exercise the pull request review surface against the GitHub API. It closes itself when the check passes.')"
           echo "number=${url##*/}" >> "$GITHUB_OUTPUT"
