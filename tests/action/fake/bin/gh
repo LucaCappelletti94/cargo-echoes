@@ -23,15 +23,14 @@ case "${1:-}" in
     for a in "${args[@]:-}"; do
       [ "$a" = "body=@-" ] && { stdin_body="$(cat)"; has_stdin=1; }
     done
-    filter=()
-    for a in "${args[@]:-}"; do [ "$a" != "body=@-" ] && filter+=("$a"); done
+    # The value of a field argument may span lines, so each argument is logged
+    # through its own jq pass instead of one newline-split pass.
     params_json='{}'
-    if [ ${#filter[@]} -gt 0 ]; then
-      params_json="$(printf '%s\n' "${filter[@]}" | jq -R -s '
-        split("\n") | map(select(length > 0))
-        | map(capture("^(?<key>[^=]+)=(?<value>.*)$"))
-        | from_entries')"
-    fi
+    for a in "${args[@]:-}"; do
+      if [ -n "$a" ] && [ "$a" != "body=@-" ]; then
+        params_json="$(jq -c --arg k "${a%%=*}" --arg v "${a#*=}" '. + {($k): $v}' <<< "$params_json")"
+      fi
+    done
     body_file=''
     if [ "$has_stdin" = "1" ]; then
       n="$(ls "$log_dir"/gh-call-*.md 2>/dev/null | wc -l | tr -d ' ')"
@@ -59,7 +58,20 @@ case "${1:-}" in
               exit 1
             fi
             case "$path" in
-              */comments) resp='{"id": 4242}' ;;
+              */comments)
+                # The comment posts beyond the allowed count hit a secondary rate limit.
+                if [ -n "${SCEN_GH_RATELIMIT:-}" ]; then
+                  n="$(cat "$log_dir/gh-comments-done" 2>/dev/null || echo 0)"
+                  n=$((n + 1))
+                  printf '%s' "$n" > "$log_dir/gh-comments-done"
+                  if [ "$n" -gt "${SCEN_GH_RATELIMIT:-0}" ]; then
+                    echo '{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you retry making this request.","documentation_url":"https://docs.github.com/rest/overview/rate-limits-for-the-github-api"}'
+                    echo "gh: You have exceeded a secondary rate limit. Please wait a few minutes before you retry making this request. (HTTP 403)" >&2
+                    exit 1
+                  fi
+                fi
+                resp='{"id": 4242}'
+                ;;
               */reviews)
                 ev=CHANGES_REQUESTED
                 for a in "${args[@]:-}"; do case "$a" in event=*) ev="${a#event=}";; esac; done

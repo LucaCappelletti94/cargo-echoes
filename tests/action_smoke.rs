@@ -16,7 +16,7 @@ use action::fix::{
 };
 use action::runner::{Runner, Use};
 use action::world::{SRC_DUP, SRC_LIB, SRC_PARSER, World};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 // actions/cache v4 and actions/cache save v4 resolve to this commit, verified
 // against the actions/cache repository refs.
@@ -1103,5 +1103,286 @@ fn s15_prepare_post_reuse_only() {
             .and_then(Value::as_str),
         Some("COMMENT"),
         "dependency-only advice never triggers request changes through post"
+    );
+}
+
+#[test]
+fn s16_comment_cap() {
+    let mut world = World::new("s16")
+        .inputs(&[
+            ("pr-number", "7"),
+            ("only-new", "false"),
+            ("max-comments", "2"),
+        ])
+        .event("pull_request")
+        .json(report(
+            &[group(
+                "g1",
+                "H1",
+                &[
+                    doc_site("src/a.rs", 3, 5, "app::a"),
+                    doc_site("src/b.rs", 3, 5, "app::b"),
+                    doc_site("src/c.rs", 3, 5, "app::c"),
+                    doc_site("src/d.rs", 3, 5, "app::d"),
+                ],
+            )],
+            &[],
+            None,
+            6,
+            3,
+        ))
+        .changed(&["src/a.rs", "src/b.rs", "src/c.rs", "src/d.rs"]);
+    let exit = world.run();
+    let r = world.runner();
+    assert_eq!(exit, 0, "the capped review run exits 0");
+    assert_eq!(
+        r.status(),
+        "posted",
+        "the review is posted under the comment cap"
+    );
+    assert_eq!(
+        r.comment_posts().len(),
+        2,
+        "exactly the capped number of inline comments is posted"
+    );
+    let reviews = r.review_posts();
+    assert_eq!(reviews.len(), 1, "one review is posted");
+    let body = reviews[0]
+        .get("params")
+        .and_then(|p| p.get("body"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    assert!(
+        body.contains("1 inline copies were not posted") && body.contains("/actions/runs/1"),
+        "the review body reports the omitted copy and links the run summary"
+    );
+    let summary = r.summary();
+    assert!(
+        summary.contains("Inline copies not posted") && summary.contains("src/d.rs:3"),
+        "the run summary lists the omitted copy"
+    );
+}
+
+#[test]
+fn s17_rate_limit_403() {
+    let mut world = World::new("s17")
+        .inputs(&[("pr-number", "7"), ("only-new", "false")])
+        .event("pull_request")
+        .json(report(
+            &[group(
+                "g1",
+                "H1",
+                &[
+                    doc_site("src/lib.rs", 3, 5, "app::parse"),
+                    doc_site("src/dup.rs", 3, 5, "app::parse"),
+                    doc_site("src/dup2.rs", 3, 5, "app::parse"),
+                ],
+            )],
+            &[],
+            None,
+            6,
+            3,
+        ))
+        .changed(&["src/lib.rs", "src/dup.rs", "src/dup2.rs"])
+        .rate_limit_after(1);
+    let exit = world.run();
+    let r = world.runner();
+    assert_eq!(exit, 0, "a rate-limited review run exits 0");
+    assert_eq!(
+        r.status(),
+        "posted",
+        "a secondary rate limit is not misreported as read-only"
+    );
+    let reviews = r.review_posts();
+    assert_eq!(
+        reviews.len(),
+        1,
+        "the review is posted despite the rate limit"
+    );
+    let body = reviews[0]
+        .get("params")
+        .and_then(|p| p.get("body"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    assert!(
+        body.contains("1 inline copies were not posted because the api rate limit was reached")
+            && body.contains("/actions/runs/1"),
+        "the review body reports the rate-limited omission and links the run summary"
+    );
+    let summary = r.summary();
+    assert!(
+        summary.contains("rate limit was reached"),
+        "the run summary reports the rate limit"
+    );
+}
+
+#[test]
+fn s18_perm_403_readonly() {
+    let mut world = World::new("s18")
+        .inputs(&[("pr-number", "7"), ("only-new", "false")])
+        .event("pull_request")
+        .json(report(
+            &[group(
+                "g1",
+                "H1",
+                &[
+                    doc_site("src/lib.rs", 3, 5, "app::parse"),
+                    doc_site("src/dup.rs", 3, 5, "app::parse"),
+                ],
+            )],
+            &[],
+            None,
+            6,
+            3,
+        ))
+        .changed(&["src/lib.rs", "src/dup.rs"])
+        .gh_403();
+    let exit = world.run();
+    let r = world.runner();
+    assert_eq!(exit, 0, "a permission 403 does not fail the job");
+    assert_eq!(
+        r.status(),
+        "skipped-readonly",
+        "a permission 403 without a rate limit message is read-only"
+    );
+    assert_eq!(
+        r.comment_posts().len(),
+        1,
+        "the permission probe is attempted once"
+    );
+    assert_eq!(
+        r.review_posts().len(),
+        0,
+        "no review is posted without permission"
+    );
+}
+
+#[test]
+fn s19_oor_truncation() {
+    let mut sites = Vec::new();
+    for i in 0..800 {
+        sites.push(json!({
+            "file": "src/lib.rs",
+            "line": 10 + i * 8,
+            "item": format!("app::f{i}"),
+        }));
+    }
+    let mut world = World::new("s19")
+        .inputs(&[("pr-number", "7"), ("only-new", "false")])
+        .event("pull_request")
+        .json(report(&[group("g1", "H1", &sites)], &[], None, 6, 3))
+        .changed(&["src/lib.rs"]);
+    let exit = world.run();
+    let r = world.runner();
+    assert_eq!(exit, 0, "the oversized review run exits 0");
+    assert_eq!(
+        r.status(),
+        "posted",
+        "the oversized review is posted truncated"
+    );
+    assert_eq!(
+        r.comment_posts().len(),
+        0,
+        "out-of-range sites get no inline comment"
+    );
+    let reviews = r.review_posts();
+    assert_eq!(reviews.len(), 1, "one review is posted");
+    let body = reviews[0]
+        .get("params")
+        .and_then(|p| p.get("body"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let len = body.chars().count();
+    assert!(
+        len < 65536,
+        "the review body stays under the api limit, it is {len} characters"
+    );
+    assert!(
+        body.contains("more, they are in the run summary") && body.contains("src/lib.rs"),
+        "the truncated list points at the run summary"
+    );
+}
+
+#[test]
+fn s20_prepare_post_cap() {
+    let local = site("src/parser.rs", 3, 6, "app::parser::selected");
+    let mut world = World::new("s20a")
+        .inputs(&[
+            ("pr-number", "7"),
+            ("mode", "prepare"),
+            ("payload", "echoes-payload"),
+            ("max-comments", "1"),
+        ])
+        .event("pull_request")
+        .json(report(
+            &[group(
+                "g1",
+                "H1",
+                &[
+                    doc_site("src/lib.rs", 3, 5, "app::parse"),
+                    doc_site("src/dup.rs", 3, 5, "app::parse"),
+                ],
+            )],
+            &[],
+            Some(&reuse(
+                &[reuse_group(
+                    "R1",
+                    &local,
+                    &[
+                        Cand::new("direct", "1.2.3", 1, "direct::helper", "reuse-api")
+                            .repository("upstream/direct")
+                            .build(),
+                    ],
+                )],
+                Some(coverage(true, 1, 1, 0, &[], &[])),
+            )),
+            6,
+            3,
+        ))
+        .changed(&["src/lib.rs", "src/dup.rs", "src/parser.rs"]);
+    let exit = world.run();
+    assert_eq!(exit, 0, "the capped prepare run exits 0");
+    let r = world.runner();
+    assert_eq!(r.status(), "prepared", "the prepare run writes the status");
+    assert_eq!(r.comment_posts().len(), 0, "the prepare run posts nothing");
+    let summary = r.summary();
+    assert!(
+        summary.contains("Inline copies not posted"),
+        "the prepare summary lists the omitted copy"
+    );
+    let payload_ws = world.workspace_path().to_path_buf();
+    let (base, head) = world.shas();
+    let mut world2 = World::new("s20b")
+        .inputs(&[
+            ("pr-number", "7"),
+            ("mode", "post"),
+            ("payload", "echoes-payload"),
+        ])
+        .event("pull_request")
+        .workspace(payload_ws)
+        .base_sha(&base)
+        .head_sha(&head);
+    let exit2 = world2.run();
+    let r2 = world2.runner();
+    assert_eq!(exit2, 0, "the post run exits 0");
+    assert_eq!(
+        r2.status(),
+        "posted",
+        "the post run posts the capped review"
+    );
+    assert_eq!(
+        r2.comment_posts().len(),
+        1,
+        "the post job posts only the capped comments"
+    );
+    let reviews = r2.review_posts();
+    let body = reviews[0]
+        .get("params")
+        .and_then(|p| p.get("body"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    assert!(
+        body.contains("1 inline copies were not posted"),
+        "the post job carries the omitted count from the payload"
     );
 }
