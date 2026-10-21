@@ -1,5 +1,5 @@
 name: Wrong review
-description: A echoes review comment is wrong or a duplicate was missed
+description: An echoes review comment is wrong or a duplicate was missed
 title: "Wrong review"
 body:
   - type: dropdown
