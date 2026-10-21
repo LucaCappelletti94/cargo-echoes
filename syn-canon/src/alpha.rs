@@ -59,7 +59,7 @@ const OWNER_SELF: &str = "__dejadoc_owner_self";
 
 /// A resolved name reference, its identity only, the canon resolves on render.
 #[derive(Clone, Copy)]
-struct Resolved {
+struct Resolved<'env> {
     domain: Domain,
     ns: Ns,
     id: BindingId,
@@ -69,6 +69,15 @@ struct Resolved {
     port: usize,
     target: Option<usize>,
     helper: Option<crate::scope::HelperId>,
+    /// The canon of an inherited binding. A local binding's canon is in the local table.
+    inherited: Option<&'env str>,
+}
+
+impl Resolved<'_> {
+    fn inherited_canon(&self) -> &str {
+        self.inherited
+            .expect("an inherited binding carries its canon")
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -185,6 +194,74 @@ pub(crate) fn resolve_target_path<'a>(
         origin: None,
     });
     (rooted, segments)
+}
+
+/// The scheduler's value of a binding, `canon` naming a binding without a port of its own.
+fn binding_value(binding: &Binding, canon: impl FnOnce() -> String) -> schedule::Value {
+    let port = match binding.origin {
+        Origin::Parameter => schedule::Port::Param(binding.port),
+        _ => binding
+            .value_port
+            .clone()
+            .unwrap_or_else(|| schedule::Port::Free(FreeKey::Resolved(canon()))),
+    };
+    schedule::Value {
+        port,
+        prim: binding.prim,
+        helper: binding.helper,
+    }
+}
+
+/// The scheduler's value environment of a block. The function's own frames and the binders of
+/// the walk sit in a map, and the enclosing generics, module and inherited frames resolve on
+/// demand, so building or cloning one costs the size of the function, never of its module.
+#[derive(Clone, Default)]
+pub(crate) struct Env<'env> {
+    near: BTreeMap<String, schedule::Value>,
+    generics: Option<&'env Frame>,
+    seed: Option<&'env Frame>,
+    inherited: &'env [Frame],
+    /// The qualified owner of a seeded view, printed as the owner label.
+    owner: Option<String>,
+}
+
+impl Env<'_> {
+    /// The value `name` resolves to, the nearest binding first.
+    pub(crate) fn get(&self, name: &str) -> Option<Cow<'_, schedule::Value>> {
+        if let Some(value) = self.near.get(name) {
+            return Some(Cow::Borrowed(value));
+        }
+        self.far_frames()
+            .find_map(|frame| frame.bindings(Ns::Value).get(name))
+            .map(|binding| Cow::Owned(self.far_value(binding)))
+    }
+
+    /// Bind `name` to `value`, masking any farther binding of it.
+    pub(crate) fn insert(&mut self, name: String, value: schedule::Value) {
+        self.near.insert(name, value);
+    }
+
+    /// The function's own values in name order, module values carrying no proven type a rewrite reads.
+    pub(crate) fn values(&self) -> impl Iterator<Item = &schedule::Value> {
+        self.near.values()
+    }
+
+    fn far_frames(&self) -> impl Iterator<Item = &Frame> {
+        self.generics
+            .into_iter()
+            .chain(self.seed)
+            .chain(self.inherited.iter())
+    }
+
+    fn far_value(&self, binding: &Binding) -> schedule::Value {
+        binding_value(binding, || {
+            if self.owner.as_deref() == Some(binding.canon.as_str()) {
+                String::from(OWNER_SELF)
+            } else {
+                binding.canon.clone()
+            }
+        })
+    }
 }
 
 /// The empty module-frame table of a whole-file pass.
@@ -425,7 +502,7 @@ impl<'env> Renamer<'env> {
 
     pub(crate) fn helper_id(
         &self,
-        env: &BTreeMap<String, schedule::Value>,
+        env: &Env<'_>,
         path: &syn::Path,
     ) -> Option<crate::scope::HelperId> {
         if !self.helpers_allowed()
@@ -489,11 +566,7 @@ impl<'env> Renamer<'env> {
         self.helper_syntax.scope(block)
     }
 
-    pub(crate) fn helper_import_env(
-        &self,
-        block: &syn::Block,
-        env: &mut BTreeMap<String, schedule::Value>,
-    ) {
+    pub(crate) fn helper_import_env(&self, block: &syn::Block, env: &mut Env<'_>) {
         let Some(scope) = self.helper_block_scope(block) else {
             return;
         };
@@ -505,9 +578,6 @@ impl<'env> Renamer<'env> {
             if let syn::Stmt::Item(item) = stmt {
                 if let syn::Item::Use(import) = item {
                     if !crate::helpers::use_tree_known(&import.tree, 0) {
-                        for value in env.values_mut() {
-                            value.helper = None;
-                        }
                         continue;
                     }
                     crate::helpers::walk_imports(
@@ -694,7 +764,7 @@ impl<'env> Renamer<'env> {
     }
 
     /// The canonical name a resolved reference renders.
-    fn render(&mut self, resolved: &Resolved) -> String {
+    fn render(&mut self, resolved: &Resolved<'_>) -> String {
         match resolved.domain {
             Domain::Local => self
                 .local_canons
@@ -705,40 +775,24 @@ impl<'env> Renamer<'env> {
                 if self.context {
                     inherited_name(resolved.ns, self.inherited_number(resolved.id))
                 } else {
-                    self.inherited_canon(self.inherited_binding(resolved.id))
+                    self.inherited_canon(resolved.inherited_canon())
                 }
             }
         }
     }
 
-    /// The printed name of an inherited binding, the owner label for the view's own owner.
-    fn inherited_canon(&self, binding: &Binding) -> String {
-        if self.names_owner(binding) {
+    /// The printed name of an inherited binding's canon, the owner label for the view's own owner.
+    fn inherited_canon(&self, canon: &str) -> String {
+        if self.names_owner(canon) {
             String::from(OWNER_SELF)
         } else {
-            binding.canon.clone()
+            String::from(canon)
         }
     }
 
-    /// Whether an inherited binding is the view's own owner, in any namespace it occupies.
-    fn names_owner(&self, binding: &Binding) -> bool {
-        self.self_member_owner.as_deref() == Some(binding.canon.as_str())
-    }
-
-    /// The inherited binding selected by its identity.
-    fn inherited_binding(&self, id: BindingId) -> &Binding {
-        self.self_frame
-            .iter()
-            .chain(self.generics)
-            .chain(self.seed)
-            .chain(self.inherited.frames.iter())
-            .flat_map(|frame| {
-                [Ns::Value, Ns::Type, Ns::Lifetime, Ns::Label, Ns::Macro]
-                    .into_iter()
-                    .flat_map(move |ns| frame.bindings(ns).values())
-            })
-            .find(|binding| binding.id == id)
-            .expect("an inherited binding resolved by lookup")
+    /// Whether an inherited binding's canon is the view's own owner, in any namespace it occupies.
+    fn names_owner(&self, canon: &str) -> bool {
+        self.self_member_owner.as_deref() == Some(canon)
     }
 
     /// The first-reference number of an inherited binding id.
@@ -752,7 +806,12 @@ impl<'env> Renamer<'env> {
         number
     }
 
-    fn resolved(domain: Domain, ns: Ns, binding: &Binding) -> Resolved {
+    fn resolved<'a>(
+        domain: Domain,
+        ns: Ns,
+        binding: &Binding,
+        inherited: Option<&'a str>,
+    ) -> Resolved<'a> {
         Resolved {
             domain,
             ns,
@@ -762,35 +821,43 @@ impl<'env> Renamer<'env> {
             port: binding.port,
             target: binding.target,
             helper: binding.helper,
+            inherited,
         }
     }
 
     /// Nearest-binding lookup across the local and inherited frames,
     /// namespace priority first. A raw name that resolves keeps its
     /// binding, an unresolved raw token stays opaque by default.
-    fn lookup(&self, ns: &[Ns], name: &str) -> Option<Resolved> {
+    fn lookup(&self, ns: &[Ns], name: &str) -> Option<Resolved<'env>> {
+        let inherited: &'env [Frame] = self.inherited.frames;
         for ns in ns {
             for frame in self.frames.iter().rev() {
                 if let Some(binding) = frame.lookup(*ns, name) {
                     if self.opaque_tokens && (binding.raw || name.starts_with("r#")) {
                         return None;
                     }
-                    return Some(Self::resolved(Domain::Local, *ns, binding));
+                    return Some(Self::resolved(Domain::Local, *ns, binding, None));
                 }
             }
-            for frame in self
+            // The `Self` frame's one binding has the owner label for its canon.
+            let found = self
                 .self_frame
-                .iter()
-                .chain(self.generics)
-                .chain(self.seed)
-                .chain(self.inherited.frames.iter())
-            {
-                if let Some(binding) = frame.lookup(*ns, name) {
-                    if self.opaque_tokens && (binding.raw || name.starts_with("r#")) {
-                        return None;
-                    }
-                    return Some(Self::resolved(Domain::Inherited, *ns, binding));
+                .as_ref()
+                .and_then(|frame| frame.lookup(*ns, name))
+                .map(|binding| (binding, OWNER_SELF))
+                .or_else(|| {
+                    self.generics
+                        .into_iter()
+                        .chain(self.seed)
+                        .chain(inherited)
+                        .find_map(|frame| frame.lookup(*ns, name))
+                        .map(|binding| (binding, binding.canon.as_str()))
+                });
+            if let Some((binding, canon)) = found {
+                if self.opaque_tokens && (binding.raw || name.starts_with("r#")) {
+                    return None;
                 }
+                return Some(Self::resolved(Domain::Inherited, *ns, binding, Some(canon)));
             }
         }
         None
@@ -1223,54 +1290,33 @@ impl<'env> Renamer<'env> {
     }
 
     /// The canonical identity the resolver names a resolved binding by.
-    fn identity(&self, resolved: &Resolved) -> String {
+    fn identity(&self, resolved: &Resolved<'_>) -> String {
         match resolved.domain {
             Domain::Local => self
                 .local_canons
                 .get(&resolved.id)
                 .expect("a local binding")
                 .clone(),
-            Domain::Inherited => self.inherited_canon(self.inherited_binding(resolved.id)),
+            Domain::Inherited => self.inherited_canon(resolved.inherited_canon()),
         }
     }
 
-    /// Pass every visible value binding into the scheduler's value
-    /// environment, a nearer name masking a farther one.
-    pub(crate) fn frame_env(&self, env: &mut BTreeMap<String, schedule::Value>) {
-        let inherited = self
-            .self_frame
-            .iter()
-            .chain(self.generics)
-            .chain(self.seed)
-            .chain(self.inherited.frames.iter());
-        let frames = self
-            .frames
-            .iter()
-            .rev()
-            .map(|frame| (frame, false))
-            .chain(inherited.map(|frame| (frame, true)));
-        for (frame, is_inherited) in frames {
+    /// The scheduler's value environment of every visible value binding, a nearer name masking
+    /// a farther one. The `Self` frame binds no value.
+    pub(crate) fn frame_env(&self) -> Env<'env> {
+        let mut near = BTreeMap::new();
+        for frame in self.frames.iter().rev() {
             for (name, binding) in frame.bindings(Ns::Value) {
-                let port = match binding.origin {
-                    Origin::Parameter => schedule::Port::Param(binding.port),
-                    _ => binding.value_port.as_ref().map_or_else(
-                        || {
-                            let canon = if is_inherited {
-                                self.inherited_canon(binding)
-                            } else {
-                                binding.canon.clone()
-                            };
-                            schedule::Port::Free(FreeKey::Resolved(canon))
-                        },
-                        Clone::clone,
-                    ),
-                };
-                env.entry(name.clone()).or_insert_with(|| schedule::Value {
-                    port,
-                    prim: binding.prim,
-                    helper: binding.helper,
-                });
+                near.entry(name.clone())
+                    .or_insert_with(|| binding_value(binding, || binding.canon.clone()));
             }
+        }
+        Env {
+            near,
+            generics: self.generics,
+            seed: self.seed,
+            inherited: self.inherited.frames,
+            owner: self.self_member_owner.clone(),
         }
     }
 
@@ -1468,7 +1514,7 @@ impl<'env> Renamer<'env> {
                 && path.segments.len() > 1
                 && resolved.domain == Domain::Inherited
                 && (resolved.origin == Origin::SelfTy
-                    || self.names_owner(self.inherited_binding(resolved.id)));
+                    || self.names_owner(resolved.inherited_canon()));
             let name = match &self.self_member_owner {
                 Some(owner) if member => owner.clone(),
                 _ => self.render(&resolved),
@@ -1764,7 +1810,7 @@ impl<'env> Renamer<'env> {
         let first_name = first.ident.to_string();
         let resolved = if head_name == "crate" {
             let binding = self.frames.first()?.lookup(Ns::Type, &first_name)?;
-            Self::resolved(Domain::Local, Ns::Type, binding)
+            Self::resolved(Domain::Local, Ns::Type, binding, None)
         } else {
             self.lookup(root_ns, &first_name)?
         };
@@ -3339,7 +3385,7 @@ impl VisitMut for Renamer<'_> {
                         self.lookup(&[Ns::Value], &ident.to_string())
                             .and_then(|binding| binding.helper)
                     } else {
-                        self.helper_id(&BTreeMap::new(), &path.path)
+                        self.helper_id(&Env::default(), &path.path)
                     };
                     helper.filter(|helper| {
                         self.helper_table.get(*helper).is_some()

@@ -363,6 +363,50 @@ fn caller_local_globs_cannot_select_a_farther_helper_module() {
 }
 
 #[test]
+fn a_rejected_import_shadows_the_module_helper() {
+    let deep = (0..65)
+        .map(|index| format!("n{index}"))
+        .collect::<Vec<_>>()
+        .join("::");
+    let free = "fn low(x: u32) -> u32 { x & 15u32 } fn f(a: u32, b: u32) -> (u32, u32) { let a = low(a); let b = low(b); (a, b) }";
+    let free_swapped = "fn low(x: u32) -> u32 { x & 15u32 } fn f(a: u32, b: u32) -> (u32, u32) { let b = low(b); let a = low(a); (a, b) }";
+    assert_eq!(
+        view(free, None, "f"),
+        view(free_swapped, None, "f"),
+        "the helper schedules while its name stays free"
+    );
+    let shadowed = format!(
+        "fn low(x: u32) -> u32 {{ x & 15u32 }} fn f(a: u32, b: u32) -> (u32, u32) {{ use {deep}; let a = low(a); let b = low(b); (a, b) }}"
+    );
+    let shadowed_swapped = format!(
+        "fn low(x: u32) -> u32 {{ x & 15u32 }} fn f(a: u32, b: u32) -> (u32, u32) {{ use {deep}; let b = low(b); let a = low(a); (a, b) }}"
+    );
+    assert_ne!(
+        view(&shadowed, None, "f"),
+        view(&shadowed_swapped, None, "f"),
+        "a non-glob import past the depth budget could shadow the helper, so the calls keep their order"
+    );
+}
+
+#[test]
+fn a_rejected_glob_import_shadows_the_module_helper() {
+    let free = "fn low(x: u32) -> u32 { x & 15u32 } fn f(a: u32, b: u32) -> (u32, u32) { let a = low(a); let b = low(b); (a, b) }";
+    let free_swapped = "fn low(x: u32) -> u32 { x & 15u32 } fn f(a: u32, b: u32) -> (u32, u32) { let b = low(b); let a = low(a); (a, b) }";
+    assert_eq!(
+        view(free, None, "f"),
+        view(free_swapped, None, "f"),
+        "the helper schedules while its name stays free"
+    );
+    let shadowed = "fn low(x: u32) -> u32 { x & 15u32 } fn f(a: u32, b: u32) -> (u32, u32) { use unknown::*; let a = low(a); let b = low(b); (a, b) }";
+    let shadowed_swapped = "fn low(x: u32) -> u32 { x & 15u32 } fn f(a: u32, b: u32) -> (u32, u32) { use unknown::*; let b = low(b); let a = low(a); (a, b) }";
+    assert_ne!(
+        view(shadowed, None, "f"),
+        view(shadowed_swapped, None, "f"),
+        "a rejected glob import could shadow the helper, so the calls keep their order"
+    );
+}
+
+#[test]
 fn tuple_constructors_mask_same_spelled_helper_values() {
     let prefix = "fn low(x:u32)->u32{x&15u32}";
     let first = format!(

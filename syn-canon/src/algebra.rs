@@ -1,14 +1,12 @@
 //! Primitive value laws over resolved, bounded expression trees.
 
 use alloc::boxed::Box;
-use alloc::collections::BTreeMap;
-use alloc::string::String;
 use alloc::vec::Vec;
 use syn::spanned::Spanned as _;
 use syn::visit::{self, Visit};
 use syn::visit_mut::{self, VisitMut};
 
-use crate::alpha::Renamer;
+use crate::alpha::{Env, Renamer};
 use crate::schedule::{self, BitwiseOp, BlockFacts, Lbl, Port, TotalBinary, Value};
 use crate::scope::PrimTy;
 
@@ -60,8 +58,7 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block, facts: &B
     if !facts.can_rewrite() {
         return;
     }
-    let mut env = BTreeMap::new();
-    renamer.frame_env(&mut env);
+    let env = renamer.frame_env();
     let mut walker = Walker {
         env,
         locals: 0,
@@ -122,8 +119,8 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block, facts: &B
     }
 }
 
-struct Walker {
-    env: BTreeMap<String, Value>,
+struct Walker<'env> {
+    env: Env<'env>,
     locals: usize,
     dedup: bool,
 }
@@ -139,7 +136,7 @@ fn tail_expr_mut(block: &mut syn::Block) -> Option<&mut syn::Expr> {
     Some(expr)
 }
 
-impl Walker {
+impl Walker<'_> {
     fn scalar_in_place(&self, expr: &mut syn::Expr, algebra: bool) -> Option<Lbl> {
         let owned = core::mem::replace(expr, empty_expr());
         let (normalized, label) = self.scalar(owned, algebra);
@@ -332,7 +329,7 @@ impl Walker {
     }
 }
 
-impl VisitMut for Walker {
+impl VisitMut for Walker<'_> {
     fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
         if !crate::drift::expr_attrs(expr).is_empty() {
             return;

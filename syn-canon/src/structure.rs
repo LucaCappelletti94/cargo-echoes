@@ -1,6 +1,5 @@
 //! Named field and literal alternative reordering under the existing primitive proof.
 
-use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
@@ -72,8 +71,7 @@ pub(crate) fn named_fields(renamer: &Renamer<'_>, expr: &mut syn::ExprStruct) {
 }
 
 fn out_of_block_order(renamer: &Renamer<'_>, expr: &syn::ExprStruct) -> Option<Vec<usize>> {
-    let mut env: BTreeMap<String, schedule::Value> = BTreeMap::new();
-    renamer.frame_env(&mut env);
+    let env = renamer.frame_env();
     let mut locals = 0usize;
     let mut member_names: Vec<String> = Vec::with_capacity(expr.fields.len());
     let mut total: Vec<bool> = Vec::with_capacity(expr.fields.len());

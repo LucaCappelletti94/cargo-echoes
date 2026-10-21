@@ -1446,7 +1446,7 @@ impl<'a> Observations<'a> {
             syn::Expr::Binary(binary) => self.scalar_binary(binary),
             syn::Expr::If(branch) => self.scalar_if(branch),
             _ => {
-                let label = crate::schedule::scalar_leaf(&BTreeMap::new(), expr)?;
+                let label = crate::schedule::scalar_leaf(&crate::alpha::Env::default(), expr)?;
                 let prim = label.prim()?;
                 Some((label, prim))
             }
