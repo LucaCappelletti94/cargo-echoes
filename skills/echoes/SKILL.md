@@ -1,6 +1,6 @@
 ---
 name: echoes
-description: Run cargo echoes and resolve duplicated Rust doctests, functions and code blocks, in one workspace or across a GitHub organization. Use when a echoes check or review flags a duplicate, or the user asks to deduplicate Rust code.
+description: Run cargo echoes and resolve duplicated Rust doctests, functions and code blocks, in one workspace or across a GitHub organization. Use when an echoes check or review flags a duplicate, or the user asks to deduplicate Rust code.
 license: MIT
 ---
 
