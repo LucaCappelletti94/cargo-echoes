@@ -115,7 +115,7 @@ impl Budget {
                 self.label(left, depth + 1);
                 self.label(right, depth + 1);
             }
-            Lbl::Flat(_, children, _) | Lbl::Other(_, children) => {
+            Lbl::Flat(_, children, _) | Lbl::Other(_, children) | Lbl::Select(children, _) => {
                 for child in children {
                     self.label(child, depth + 1);
                 }
@@ -1319,7 +1319,7 @@ fn rank_payloads(labels: &mut [Lbl], root: &mut Lbl) {
 fn remap(label: &mut Lbl, positions: &[usize]) {
     match label {
         Lbl::Future(slot, _) => *slot = positions[*slot],
-        Lbl::Other(_, children) | Lbl::Flat(_, children, _) => {
+        Lbl::Other(_, children) | Lbl::Flat(_, children, _) | Lbl::Select(children, _) => {
             for child in children {
                 remap(child, positions);
             }

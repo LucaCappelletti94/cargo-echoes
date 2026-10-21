@@ -2781,7 +2781,7 @@ fn visit_value_item(
     renamer.rename_binder(Ns::Value, ident);
     if renamer.constants_allowed() {
         let expected = renamer.param_prim(ty);
-        crate::constants::normalize_expr(renamer, expr, expected);
+        crate::constants::normalize_expr(renamer, expr, expected, true);
     }
     renamer.visit_attrs(attrs);
     syn::visit_mut::visit_type_mut(renamer, ty);
@@ -2821,7 +2821,7 @@ impl VisitMut for Renamer<'_> {
         self.constants_observed |= !crate::drift::expr_attrs(expr).is_empty();
         let prepared = self.constants_prepared;
         if !prepared && self.constants_allowed() {
-            crate::constants::normalize_expr(self, expr, None);
+            crate::constants::normalize_expr(self, expr, None, false);
         }
         self.constants_prepared = true;
         syn::visit_mut::visit_expr_mut(self, expr);
@@ -3121,7 +3121,7 @@ impl VisitMut for Renamer<'_> {
         self.constants_observed |= crate::context::live_attr(&item.attrs);
         if self.constants_allowed() {
             let expected = self.param_prim(&item.ty);
-            crate::constants::normalize_expr(self, &mut item.expr, expected);
+            crate::constants::normalize_expr(self, &mut item.expr, expected, true);
         }
         syn::visit_mut::visit_impl_item_const_mut(self, item);
         self.constants_observed = observed;
@@ -3134,7 +3134,7 @@ impl VisitMut for Renamer<'_> {
             && let Some((_, expr)) = &mut item.default
         {
             let expected = self.param_prim(&item.ty);
-            crate::constants::normalize_expr(self, expr, expected);
+            crate::constants::normalize_expr(self, expr, expected, true);
         }
         syn::visit_mut::visit_trait_item_const_mut(self, item);
         self.constants_observed = observed;
@@ -3147,7 +3147,7 @@ impl VisitMut for Renamer<'_> {
             && let Some((_, expr)) = &mut param.default
         {
             let expected = self.param_prim(&param.ty);
-            crate::constants::normalize_expr(self, expr, expected);
+            crate::constants::normalize_expr(self, expr, expected, true);
         }
         syn::visit_mut::visit_const_param_mut(self, param);
         self.constants_observed = observed;

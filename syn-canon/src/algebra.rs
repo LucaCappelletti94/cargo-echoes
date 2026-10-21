@@ -311,6 +311,9 @@ impl Walker {
         let Some(value) = schedule::branch_value(&cond_label, &then, &otherwise) else {
             return (syn::Expr::If(branch), None);
         };
+        if matches!(value, Lbl::Select(..)) {
+            return (syn::Expr::If(branch), Some(value));
+        }
         if let Lbl::Bool(selected) = cond_label {
             let block = if selected {
                 &mut branch.then_branch

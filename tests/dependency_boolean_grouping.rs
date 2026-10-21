@@ -293,11 +293,19 @@ fn boolean_cli_fixture_preserves_exact_function_and_doctest_members() {
         )
         .unwrap(),
     );
-    for threshold in [0, 30] {
-        let report = Echoes::default()
+    let run = |threshold| {
+        Echoes::default()
             .functions()
             .fn_min_tokens(threshold)
-            .run_targets("", std::slice::from_ref(&target), &|_, _| None);
+            .run_targets("", std::slice::from_ref(&target), &|_, _| None)
+    };
+    let size = run(0)
+        .groups
+        .iter()
+        .find(|group| group.kind == echoes::Kind::Function)
+        .map_or(0, |group| group.tokens);
+    for threshold in [0, size] {
+        let report = run(threshold);
         let function_groups: Vec<_> = report
             .groups
             .iter()
@@ -312,7 +320,7 @@ fn boolean_cli_fixture_preserves_exact_function_and_doctest_members() {
                 vec!["boolean::right::first", "boolean::right::same"],
             ]
         );
-        assert!(function_groups.iter().all(|group| group.tokens >= 30));
+        assert!(function_groups.iter().all(|group| group.tokens == size));
         assert_public_sites(&function_groups);
         let doctest_groups: Vec<_> = report
             .groups
@@ -336,6 +344,12 @@ fn boolean_cli_fixture_preserves_exact_function_and_doctest_members() {
         assert!(!grouped.iter().any(|item| item.contains("different")));
         assert_eq!(grouped.iter().filter(|item| **item == "boolean").count(), 2);
     }
+    assert!(
+        !run(size + 1)
+            .groups
+            .iter()
+            .any(|group| group.kind == echoes::Kind::Function)
+    );
 }
 
 fn logical_tree(out: &mut String, leaves: usize, op: &str, leaf: &str) {
