@@ -364,8 +364,9 @@ impl Runner {
                 cwd = p;
             }
         }
+        // Match the real runner, which runs steps as bash --noprofile --norc -eo pipefail.
         let out = Command::new("bash")
-            .arg("-c")
+            .args(["--noprofile", "--norc", "-eo", "pipefail", "-c"])
             .arg(step.get("run").and_then(Value::as_str).unwrap_or(""))
             .env_clear()
             .envs(&env)

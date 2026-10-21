@@ -36,6 +36,7 @@ pub struct World {
     changed: Vec<String>,
     exit_code: i32,
     gh_403: bool,
+    rate_limit_after: usize,
     meta_root: Option<PathBuf>,
     workspace_override: Option<PathBuf>,
     runner: Option<Runner>,
@@ -66,6 +67,7 @@ impl World {
             changed: Vec::new(),
             exit_code: 0,
             gh_403: false,
+            rate_limit_after: 0,
             meta_root: None,
             workspace_override: None,
             runner: None,
@@ -121,6 +123,12 @@ impl World {
 
     pub fn gh_403(mut self) -> Self {
         self.gh_403 = true;
+        self
+    }
+
+    /// The inline comment posts beyond this many hit a secondary rate limit.
+    pub fn rate_limit_after(mut self, allowed: usize) -> Self {
+        self.rate_limit_after = allowed;
         self
     }
 
@@ -219,6 +227,14 @@ impl World {
         scenario_env.insert(
             "SCEN_GH_403".into(),
             if self.gh_403 { "1".into() } else { "0".into() },
+        );
+        scenario_env.insert(
+            "SCEN_GH_RATELIMIT".into(),
+            if self.rate_limit_after > 0 {
+                self.rate_limit_after.to_string()
+            } else {
+                String::new()
+            },
         );
         scenario_env.insert(
             "SCEN_META_ROOT".into(),

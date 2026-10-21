@@ -127,6 +127,10 @@ inputs:
     description: Directory holding the prepared review, written by prepare and read by post
     required: false
     default: ''
+  max-comments:
+    description: Inline comments posted per run, the omitted copies go to the review body and the run summary
+    required: false
+    default: '50'
 
 runs:
   using: 'composite'
@@ -235,6 +239,21 @@ runs:
         CONTEXT_CHECK_LATEST: ${{ inputs.context-check-latest }}
         CONTEXT_FAIL: ${{ inputs.context-fail-on-reuse }}
       run: |
+        # The runner drops step summaries over 1 MiB, so a step keeps its
+        # summary writes within a safe total, the truncated tail gets a note.
+        sum_append() {
+          local text="$1" file="$GITHUB_STEP_SUMMARY"
+          local cap=$((900 * 1024)) size=0 room len
+          [ -f "$file" ] && size="$(wc -c < "$file")"
+          room=$((cap - size))
+          len="$(printf '%s' "$text" | wc -c)"
+          if [ "$room" -gt 200 ] && [ "$len" -le "$((room - 200))" ]; then
+            printf '%s\n' "$text" >> "$file"
+          elif [ "$room" -gt 200 ]; then
+            head -c "$((room - 200))" <<< "$text" >> "$file"
+            printf '\nechoes: the run summary is full, the rest is truncated\n' >> "$file"
+          fi
+        }
         # Report paths are relative to the workspace root cargo resolves, the cwd or one of
         # its ancestors. GitHub reads, matches and links paths from the repository root, so
         # one prefix from that root projects every report path for the later steps.
@@ -285,13 +304,13 @@ runs:
           jq -r '. as $r | "\($r.total) doctests, \($r.unique) unique, \($r.functions // 0) functions, \($r.unique_functions // 0) unique functions, \($r.groups | length) duplicated groups"' "$report"
           # The whole scan in the run summary, which needs no token, so a
           # fork pull request has it whatever the review can do.
-          {
+          sum_append "$(
             jq -r '"### echoes\n\n\(.total) doctests, \(.unique) unique, \(.functions // 0) functions, \(.unique_functions // 0) unique functions, \(.groups | length) duplicated groups"' "$report"
             jq -r '
               .groups[] | "\n- group `\(.id)`, \(.kind // "doctest"), \(.sites | length) copies\n"
                 + (.sites | map("  - `" + .file + ":" + (.line | tostring) + "`  " + .item)
                    | join("\n"))' "$report"
-          } >> "$GITHUB_STEP_SUMMARY"
+          )"
           # Context groups and dependency reuse, grouped by local context with
           # the accessible APIs first, in the same public report.
           context_summary="$(jq -r '
@@ -331,9 +350,7 @@ runs:
                     + (if .reuse.coverage.complete then "" else "\n\nThe requested dependency analysis is incomplete, the run fails\n" + ([ .reuse.coverage.failures[] | "- " + . ] | join("\n")) end)
                     + (if (.reuse.coverage.warnings | length) > 0 then "\n" + ([ .reuse.coverage.warnings[] | "- " + . ] | join("\n")) else "" end)
                else "" end)' "$report")"
-          if [ -n "$context_summary" ]; then
-            printf '%s\n\n' "$context_summary" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          [ -n "$context_summary" ] && sum_append "$context_summary"
           if [ "$(jq '(.groups | length) + (.context_groups | length) + ((.reuse // {}).groups // [] | length)' "$report")" -gt 0 ]; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           fi
@@ -363,13 +380,13 @@ runs:
             mv "$out.rooted" "$out"
           fi
           cat "$out"
-          {
+          sum_append "$(
             echo '### echoes'
             echo
             echo '```'
             grep -v '^::' "$out"
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          )"
           if [ "$CONTEXT_DEPTH" != "0" ]; then
             case "$status" in
               0|1) echo "index-ok=true" >> "$GITHUB_OUTPUT" ;;
@@ -470,7 +487,40 @@ runs:
         ANNOTATIONS: ${{ inputs.annotations }}
         MODE: ${{ inputs.mode }}
         PAYLOAD: ${{ inputs.payload }}
+        MAX_COMMENTS: ${{ inputs.max-comments }}
       run: |
+        # The runner drops step summaries over 1 MiB, so a step keeps its
+        # summary writes within a safe total, the truncated tail gets a note.
+        sum_append() {
+          local text="$1" file="$GITHUB_STEP_SUMMARY"
+          local cap=$((900 * 1024)) size=0 room len
+          [ -f "$file" ] && size="$(wc -c < "$file")"
+          room=$((cap - size))
+          len="$(printf '%s' "$text" | wc -c)"
+          if [ "$room" -gt 200 ] && [ "$len" -le "$((room - 200))" ]; then
+            printf '%s\n' "$text" >> "$file"
+          elif [ "$room" -gt 200 ]; then
+            head -c "$((room - 200))" <<< "$text" >> "$file"
+            printf '\nechoes: the run summary is full, the rest is truncated\n' >> "$file"
+          fi
+        }
+        # A 429 is a rate limit, and a 403 naming a rate limit is one too.
+        rate_limited_error() {
+          local err="$1"
+          if printf '%s' "$err" | grep -qE 'HTTP 429|"status": "429"'; then
+            return 0
+          fi
+          if printf '%s' "$err" | grep -qE 'HTTP 403|"status": "403"'; then
+            if printf '%s' "$err" | grep -qiE 'rate limit|x-ratelimit-remaining: 0'; then
+              return 0
+            fi
+          fi
+          return 1
+        }
+        # Whole lines within a byte budget, for the review body truncation.
+        fit_lines() {
+          LC_ALL=C awk -v cap="$1" 'BEGIN { b = 0 } { if (b < cap && b + length($0) + 1 <= cap) { print; b += length($0) + 1 } }'
+        }
         # No set -e here. Each step checks its own status and writes an outcome file, so a
         # failed api call degrades to a skipped review instead of aborting the run.
         pr="$PR_NUMBER"
@@ -493,9 +543,14 @@ runs:
         mkdir -p "$payload"
         failed_sites=''
         out_of_range=''
+        omitted=0
+        rate_omitted=0
+        omitted_file="$RUNNER_TEMP/echoes-omitted.txt"
+        [ "$mode" = "post" ] && omitted_file="$payload/omitted.txt"
         onlynew=0
         [ -s "$base_report" ] && onlynew=1
         base_sha="$(cat "$RUNNER_TEMP/echoes-base-sha" 2>/dev/null || echo '')"
+        run_url="$GITHUB_SERVER_URL/$repo/actions/runs/$GITHUB_RUN_ID"
         # Post mode consumes a payload another job prepared, so it reads no
         # source tree and skips straight to the api calls.
         if [ "$mode" = "post" ]; then
@@ -507,6 +562,7 @@ runs:
           pr="$(jq -r '.pr' "$meta")"
           head_sha="$(jq -r '.head_sha' "$meta")"
           out_of_range="$(jq -r '.out_of_range' "$meta")"
+          omitted="$(jq -r '.omitted // 0' "$meta")"
           findings="$(jq -r '.findings' "$meta")"
           review_event="$(jq -r '.event // empty' "$meta")"
           findings_span=0
@@ -924,7 +980,7 @@ runs:
             end="$(printf '%s' "$row" | jq -r '.end')"
             item="$(printf '%s' "$row" | jq -r '.item')"
             kind="$(printf '%s' "$row" | jq -r '.kind')"
-            others="$(printf '%s' "$row" | jq -r '.others | join("\n")')"
+            others="$(printf '%s' "$row" | jq -r '.others // [] | join("\n")')"
             candidates_md="$(printf '%s' "$row" | jq -r '.candidates_md // empty')"
             if [ "$kind" = "context" ]; then
               note="This context is repeated in this scan. A shared helper can carry it once. The other copies are at"
@@ -950,7 +1006,6 @@ runs:
           mv "$reuse_built" "$reuse_tmp"
         fi
 
-        run_url="$GITHUB_SERVER_URL/$repo/actions/runs/$GITHUB_RUN_ID"
         if [ "$dry" = "true" ]; then
           stats="$(jq -r '"\(.total) doctests, \(.unique) unique, \(.functions // 0) functions, \(.unique_functions // 0) unique functions, \(.groups | length) duplicated groups"' "$report")"
           groups_block="$(jq -r '
@@ -993,11 +1048,38 @@ runs:
             echo
             echo "Run $run_url"
           } > "$body"
-          { echo; cat "$body"; } >> "$GITHUB_STEP_SUMMARY"
+          sum_append "$(cat "$body")"
           echo "echoes dry run, the review is not posted"
           cat "$body"
           echo "dry-run" > "$status"
           exit 0
+        fi
+
+        # The inline posts are capped per run, the omitted copies go to the
+        # review body and the run summary.
+        case "$MAX_COMMENTS" in
+          '' | *[!0-9]*) max_comments=50 ;;
+          *) max_comments="$MAX_COMMENTS" ;;
+        esac
+        : > "$omitted_file"
+        touch "$comments" "$reuse_tmp"
+        local_n="$(wc -l < "$comments")"
+        reuse_n="$(wc -l < "$reuse_tmp")"
+        total_n=$((local_n + reuse_n))
+        if [ "$total_n" -gt "$max_comments" ]; then
+          omitted=$((total_n - max_comments))
+          keep_local="$max_comments"
+          [ "$keep_local" -gt "$local_n" ] && keep_local="$local_n"
+          keep_reuse=$((max_comments - keep_local))
+          { tail -n +$((keep_local + 1)) "$comments"
+            tail -n +$((keep_reuse + 1)) "$reuse_tmp"; } |
+            jq -rs 'map("- " + .path + ":" + (.start_line | tostring) + "  " + .item
+              + (if .group then " (group " + (.group | tostring) + ")" else " (" + (.kind // "context") + ")" end))
+            | join("\n")' > "$omitted_file"
+          head -n "$keep_local" "$comments" > "$comments.capped"
+          head -n "$keep_reuse" "$reuse_tmp" > "$reuse_tmp.capped"
+          mv "$comments.capped" "$comments"
+          mv "$reuse_tmp.capped" "$reuse_tmp"
         fi
 
           # Both lists grow with the pull request, past one argument's 128 KiB.
@@ -1006,14 +1088,13 @@ runs:
           event='REQUEST_CHANGES'
           [ -s "$comments" ] || [ -n "$out_of_range" ] || event='COMMENT'
           jq -n --arg pr "$pr" --arg head "$head_sha" --arg event "$event" \
+            --argjson omitted "$omitted" \
             --rawfile oor "$RUNNER_TEMP/echoes-out-of-range.txt" --rawfile f "$RUNNER_TEMP/echoes-findings.txt" \
-            '{pr: $pr, head_sha: $head, event: $event, out_of_range: $oor, findings: $f}' > "$meta"
-          touch "$comments"
-          touch "$reuse_tmp"
+            '{pr: $pr, head_sha: $head, event: $event, omitted: $omitted, out_of_range: $oor, findings: $f}' > "$meta"
         fi
         # Nothing to post, in prepare mode the payload still exists so the
         # posting job has something to download.
-        if [ ! -s "$comments" ] && [ -z "$out_of_range" ] && [ ! -s "$reuse_tmp" ]; then
+        if [ ! -s "$comments" ] && [ -z "$out_of_range" ] && [ ! -s "$reuse_tmp" ] && [ "$omitted" -eq 0 ]; then
           if [ "$onlynew" = "1" ]; then
             echo "echoes: no duplicate was introduced by this pull request, the review is not posted"
             echo "skipped-existing" > "$status"
@@ -1028,15 +1109,18 @@ runs:
         if [ -n "$findings" ] && [ "$dry" != "true" ]; then
           findings_title='#### Copies to remove'
           [ "$findings_span" = "1" ] && findings_title='#### Findings'
-          {
-            echo
-            printf '%s\n' "$findings_title"
-            echo
-            printf '%s' "$findings"
-          } >> "$GITHUB_STEP_SUMMARY"
+          sum_append "$(printf '\n%s\n\n%s' "$findings_title" "$findings")"
+        fi
+        # The omitted copies and the rate limit stay in the run summary, the
+        # public record of what the review did not post inline.
+        if [ "$omitted" -gt 0 ]; then
+          omitted_block="$(printf '#### Inline copies not posted\n\n%s inline copies were not posted, they are listed in this run summary\n\n' "$omitted")"
+          [ -s "$omitted_file" ] && omitted_block="$omitted_block$(head -c 400000 "$omitted_file")"$'\n'
+          sum_append "$omitted_block"
         fi
         if [ "$mode" = "prepare" ]; then
           cp "$reuse_tmp" "$payload/reuse.ndjson"
+          cp "$omitted_file" "$payload/omitted.txt"
           echo "echoes: the review is prepared in $payload for a later job"
           echo "prepared" > "$status"
           exit 0
@@ -1048,6 +1132,10 @@ runs:
         }
         # The first post is the permission probe.
         readonly=0
+        rate_limited=0
+        posted_local=0
+        posted_reuse=0
+        planned_n="$(cat "$comments" "$reuse_tmp" | wc -l)"
         post_one() {
           local row="$1" p line err item g
           p="$(printf '%s' "$row" | jq -r '.path')"
@@ -1056,6 +1144,10 @@ runs:
             -f "commit_id=$head_sha" -f "path=$p" \
             -F "start_line=$line" -F "line=$(printf '%s' "$row" | jq -r '.line')" \
             -f start_side=RIGHT -f side=RIGHT -F 'body=@-' 2>&1)"; then
+            if rate_limited_error "$err"; then
+              rate_limited=1
+              return 1
+            fi
             if printf '%s' "$err" | grep -qE 'HTTP 403|"status": "403"'; then
               readonly=1
               return 1
@@ -1075,17 +1167,36 @@ runs:
         while IFS= read -r row; do
           [ -n "$row" ] || continue
           post_one "$row" || break
+          posted_local=$((posted_local + 1))
         done < "$comments"
-        if [ "$readonly" != "1" ]; then
+        if [ "$readonly" != "1" ] && [ "$rate_limited" != "1" ]; then
           while IFS= read -r row; do
             [ -n "$row" ] || continue
             post_one "$row" || break
+            posted_reuse=$((posted_reuse + 1))
           done < "$reuse_tmp"
         fi
         if [ "$readonly" = "1" ]; then
           readonly_notice
           echo "skipped-readonly" > "$status"
           exit 0
+        fi
+        # The rows the rate limit left unposted, listed like the omitted ones.
+        if [ "$rate_limited" = "1" ]; then
+          rate_omitted=$((planned_n - posted_local - posted_reuse))
+          rate_unposted="$(
+            { tail -n +$((posted_local + 1)) "$comments"
+              tail -n +$((posted_reuse + 1)) "$reuse_tmp"; } |
+            jq -rs 'map("- " + .path + ":" + (.start_line | tostring) + "  " + .item
+              + (if .group then " (group " + (.group | tostring) + ")" else " (" + (.kind // "context") + ")" end))
+            | join("\n")'
+          )"
+          echo "echoes: the api rate limit was reached, $rate_omitted inline copies were not posted"
+        fi
+        if [ "$rate_omitted" -gt 0 ]; then
+          rate_block="$(printf '#### Rate limit\n\n%s inline copies were not posted because the api rate limit was reached, they are listed in this run summary\n\n' "$rate_omitted")"
+          rate_block="$rate_block$rate_unposted"$'\n'
+          sum_append "$rate_block"
         fi
         # A review with no comment of its own needs a body. Sites GitHub could not
         # anchor inline are listed with permalinks to the head commit.
@@ -1099,13 +1210,47 @@ runs:
           review_body="$(printf 'These duplicates are not on lines GitHub shows in this pull request diff, the inline comment cannot attach there. The links point at the copies on the head commit.\n\n%s' "$out_of_range")"
         fi
         if [ -n "$failed_sites" ]; then
-          failed_block="$(printf '\n\nDuplicates echoes could not comment inline\n\n```\n%s```' "$failed_sites")"
-          review_body="$review_body$failed_block"
+          review_body="$review_body$(printf '\n\nDuplicates echoes could not comment inline\n\n```\n%s```' "$failed_sites")"
+        fi
+        if [ "$omitted" -gt 0 ]; then
+          review_body="$review_body$(printf '\n\n%s inline copies were not posted, they are listed in the run summary %s' "$omitted" "$run_url")"
+        fi
+        if [ "$rate_omitted" -gt 0 ]; then
+          review_body="$review_body$(printf '\n\n%s inline copies were not posted because the api rate limit was reached, they are listed in the run summary %s' "$rate_omitted" "$run_url")"
+        fi
+        # The api rejects a review body over 65,536 characters, so the lists
+        # are truncated with a pointer to the run summary.
+        if [ "${#review_body}" -gt 65000 ]; then
+          budget=$((65000 / 2 - 400))
+          oor_part=''
+          if [ -n "$out_of_range" ]; then
+            oor_kept="$(printf '%s' "$out_of_range" | fit_lines "$budget")"
+            oor_more=$(($(printf '%s' "$out_of_range" | wc -l) - $(printf '%s' "$oor_kept" | wc -l)))
+            oor_part='These duplicates are not on lines GitHub shows in this pull request diff, the inline comment cannot attach there. The links point at the copies on the head commit.'
+            oor_part="$oor_part"$'\n\n'"$oor_kept"
+            [ "$oor_more" -gt 0 ] && oor_part="$oor_part"$'\n'"and $oor_more more, they are in the run summary $run_url"
+          fi
+          failed_part=''
+          if [ -n "$failed_sites" ]; then
+            failed_kept="$(printf '%s' "$failed_sites" | fit_lines "$budget")"
+            failed_more=$(($(printf '%s' "$failed_sites" | wc -l) - $(printf '%s' "$failed_kept" | wc -l)))
+            failed_part="$(printf '\n\nDuplicates echoes could not comment inline\n\n```\n%s```' "$failed_kept")"
+            [ "$failed_more" -gt 0 ] && failed_part="$failed_part"$'\n'"and $failed_more more, they are in the run summary $run_url"
+          fi
+          review_body="$oor_part$failed_part"
+          [ "$omitted" -gt 0 ] && review_body="$review_body$(printf '\n\n%s inline copies were not posted, they are listed in the run summary %s' "$omitted" "$run_url")"
+          [ "$rate_omitted" -gt 0 ] && review_body="$review_body$(printf '\n\n%s inline copies were not posted because the api rate limit was reached, they are listed in the run summary %s' "$rate_omitted" "$run_url")"
         fi
         if [ -n "$review_body" ]; then
           review+=(-f "body=$review_body")
         fi
         if ! resp="$(gh api -X POST "repos/$repo/pulls/$pr/reviews" "${review[@]}" 2>&1)"; then
+          if rate_limited_error "$resp"; then
+            echo "echoes: the api rate limit was reached, the review was not posted"
+            printf '%s\n' "$resp"
+            echo "failed" > "$status"
+            exit 1
+          fi
           if printf '%s' "$resp" | grep -qE 'HTTP 403|"status": "403"'; then
             readonly_notice
             echo "skipped-readonly" > "$status"
