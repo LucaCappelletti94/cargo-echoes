@@ -20,5 +20,6 @@ cap_lints = true
 profile = "test"
 test_tool = "nextest"
 test_workspace = true
-# The baseline only runs the mutated packages' tests, so this floor carries the workspace suite.
-minimum_test_timeout = 180
+# The baseline only runs the mutated packages' tests, so this floor carries the workspace suite,
+# which takes up to 700 seconds beside a second mutant.
+minimum_test_timeout = 900
