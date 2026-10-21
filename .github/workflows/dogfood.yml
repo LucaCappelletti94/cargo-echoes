@@ -22,6 +22,8 @@ jobs:
       - uses: ./
         with:
           cwd: ${{ startsWith(github.head_ref, 'dogfood-api-check-') && 'tests/fixtures/apicheck' || 'tests/fixtures/dupws' }}
+          # The check branch adds a function copy, so its review needs the function check.
+          functions: ${{ startsWith(github.head_ref, 'dogfood-api-check-') }}
           pr-number: ${{ github.event.pull_request.number }}
           dry-run: ${{ github.event_name == 'push' }}
           # The fixture duplicates are deliberate, so they are not flagged on this repository's own diffs.
@@ -71,12 +73,19 @@ jobs:
                 [ -n "$rows" ] || { echo "the inline echoes comments are missing on the fixture files"; exit 1; }
                 posted="$(printf '%s\n' "$rows" | wc -l)"
                 [ -z "$EXPECTED_ROWS" ] || [ "$posted" = "$EXPECTED_ROWS" ] || { echo "expected $EXPECTED_ROWS live comments, got $posted"; exit 1; }
-                # Each suggestion deletes one whole block, from its opening line to its
-                # closing fence, or the single indented line, plus one blank line after it.
+                # Each suggestion deletes one whole function, from its doc comment to its
+                # closing brace, or one whole doctest block, from its opening line to its
+                # closing fence or the single indented line, plus one blank line after it.
                 while IFS=$'\t' read -r p s e; do
                   first="$(sed -n "${s}p" "$p")"
                   last="$(sed -n "${e}p" "$p")"
                   [ -z "$(printf '%s' "$last" | sed 's|^///||' | tr -d '[:space:]')" ] && last="$(sed -n "$((e - 1))p" "$p")"
+                  if [ "$last" = "}" ]; then
+                    sed -n "${s},${e}p" "$p" | grep -qE '^(pub )?fn ' \
+                      || { echo "comment on $p:$s-$e ends on a brace but holds no function"; exit 1; }
+                    echo "verified $p:$s-$e deletes exactly one function"
+                    continue
+                  fi
                   case "$first" in
                     *'```'*|*'~~~'*) fence="${first##*/// }"; fence="${fence:0:3}" ;;
                     '///     '*) fence='' ;;
@@ -120,6 +129,7 @@ jobs:
         with:
           # The scheduled check branch adds copies to apicheck, dupws stays as the integration tests pin it.
           cwd: ${{ startsWith(github.head_ref, 'dogfood-api-check-') && 'tests/fixtures/apicheck' || 'tests/fixtures/dupws' }}
+          functions: ${{ startsWith(github.head_ref, 'dogfood-api-check-') }}
           pr-number: ${{ github.event.pull_request.number }}
           mode: prepare
           payload: echoes-payload
