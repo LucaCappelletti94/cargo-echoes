@@ -618,17 +618,41 @@ runs:
         }
         # A repository path inside a url, each segment percent-encoded.
         url_path() { jq -rn --arg s "$1" '$s | split("/") | map(@uri) | join("/")'; }
-        # Every line number a report carries is a positive integer, the shell does
-        # arithmetic with them and gh reads a value starting with @ as a file.
-        valid_report() {
-          jq -e '
-            def pos: type == "number" and . >= 1 and . == floor;
-            def site: type == "object" and (.line | pos) and ((.end == null) or (.end | pos))
-              and (.file | type == "string") and (.item | type == "string");
-            type == "object" and (.groups | type == "array")
-            and all(.groups[]; (.sites | type == "array") and all(.sites[]; site))
-            and all((.context_groups // [])[]; (.sites | type == "array") and all(.sites[]; site))
-            and all(((.reuse // {}).groups // [])[]; .local | site)' "$1" > /dev/null 2>&1
+        # The prepared report rebuilt from its first JSON document, keeping only the fields
+        # the renderer reads. Each check below is one the renderer needs, a string it
+        # concatenates, a line it compares or a list it iterates or indexes. Picking a
+        # field out of a non-object is an error that rejects the report on its own.
+        # Values it only compares or prints, such as the kind and the remedy, pass
+        # through so a newer binary's values still render.
+        canonical_report() {
+          jq -c -s '
+            def int: type == "number" and . >= 1 and . <= 2147483647 and . == floor;
+            def str: type == "string";
+            def need(c): if c then . else error("malformed") end;
+            def site(end_required):
+              need((.file | str) and (.item | str) and (.line | int)
+                and (if end_required then (.end | int) else (.end == null or (.end | int)) end)
+                and (.self_type == null or (.self_type | str)))
+              | {file, item, line, end, self_type, public};
+            def candidate:
+              need(.conditions == null or (.conditions | type == "array"))
+              | {package, version, depth, conditions, action, api_path, site: {item: .site.item},
+                 source_url, issue_url, existing_issue: (.existing_issue | if . then {url, state} else null end),
+                 lookup_warning};
+            .[0]
+            | need((.groups | type == "array")
+              and (.context_groups == null or (.context_groups | type == "array"))
+              and ((.reuse // {}).groups == null or ((.reuse // {}).groups | type == "array")))
+            | { groups: [.groups[]
+                  | need((.hash | str) and (.sites | type == "array" and length > 0))
+                  | {kind, remedy, hash, sites: [.sites[] | site(false)]}],
+                context_groups: [(.context_groups // [])[]
+                  | need((.hash | str) and (.sites | type == "array" and length > 0))
+                  | {hash, sites: [.sites[] | site(true)]}],
+                reuse: {groups: [((.reuse // {}).groups // [])[]
+                  | need((.hash | str) and (.candidates | type == "array"))
+                  | {hash, local: (.local | site(true)), candidates: [.candidates[] | candidate]}]} }
+          ' "$1" > "$2" 2>/dev/null
         }
         base_sha="$(cat "$RUNNER_TEMP/echoes-base-sha" 2>/dev/null || echo '')"
         head_sha=''
@@ -649,8 +673,11 @@ runs:
           for f in meta.json report.json; do
             [ -s "$payload/$f" ] || reject "the prepared review in $payload lacks $f, rerun the prepare job with this version of the action"
           done
-          claimed_pr="$(jq -r '.pr // empty | tostring' "$payload/meta.json" 2>/dev/null)"
-          claimed_head="$(jq -r '.head_sha // empty | tostring' "$payload/meta.json" 2>/dev/null)"
+          meta="$RUNNER_TEMP/echoes-meta.json"
+          jq -c -s '.[0] | if type == "object" then . else error("malformed") end' "$payload/meta.json" > "$meta" 2>/dev/null \
+            || reject "the prepared metadata is malformed"
+          claimed_pr="$(jq -r '.pr // empty | tostring' "$meta")"
+          claimed_head="$(jq -r '.head_sha // empty | tostring' "$meta")"
           # One line only, grep reads a newline in its pattern as a second pattern.
           [[ "$claimed_pr" =~ ^[1-9][0-9]{0,9}$ ]] || reject "the prepared pull request number is not a number"
           if [ "$EVENT_NAME" = "workflow_run" ]; then
@@ -671,18 +698,18 @@ runs:
             [ "$claimed_head" = "$head_sha" ] || stale "pull request $pr moved on from the prepared head $claimed_head"
           fi
           pr="$claimed_pr"
-          valid_report "$payload/report.json" || reject "the prepared report is malformed"
-          cp "$payload/report.json" "$report"
+          canonical_report "$payload/report.json" "$report" || reject "the prepared report is malformed"
           rm -f "$base_report"
-          if [ -s "$payload/base-report.json" ]; then
-            valid_report "$payload/base-report.json" || reject "the prepared base report is malformed"
-            cp "$payload/base-report.json" "$base_report"
+          if [ -e "$payload/base-report.json" ]; then
+            canonical_report "$payload/base-report.json" "$base_report" || reject "the prepared base report is malformed"
           fi
           if [ -f "$payload/blank.txt" ]; then cp "$payload/blank.txt" "$blank_file"; else : > "$blank_file"; fi
-          version="$(jq -r '.version // empty | tostring' "$payload/meta.json")"
-          base_sha="$(jq -r '.base_sha // empty | tostring' "$payload/meta.json")"
+          version="$(jq -r '.version // empty | tostring' "$meta")"
+          base_sha="$(jq -r '.base_sha // empty | tostring' "$meta")"
           [[ "$base_sha" =~ ^[0-9a-f]{40}$ ]] || base_sha=''
-          changed_files="$(gh api "repos/$repo/pulls/$pr/files" --paginate --jq '.[].filename' 2>/dev/null)" || changed_files=''
+          changed_files="$(gh api "repos/$repo/pulls/$pr/files" --paginate --jq '.[].filename' 2>/dev/null)" \
+            || reject "the changed files of pull request $pr cannot be listed"
+          [ "$dry" != "true" ] || reject "dry-run does not apply to post mode"
         else
           version="$(cargo echoes --version | awk '{ print $NF }')"
           # The head SHA and changed file list, empty when there is no pull request.
@@ -794,7 +821,7 @@ runs:
              .kind, .remedy, .firstitem,
              (if .baseitem == "" then "-" else .baseitem end), .selftypes,
              (if .s.public then "1" else "0" end)]
-          | @tsv' "$report" > "$inline_file"
+          | map(if . == null then "" else tostring | gsub("[\u001f\r\n]"; " ") end) | join("\u001f")' "$report" > "$inline_file"
         # The code span and link checks for jq programs, the same rules as md_code.
         jq_md='
           def md_code: (tostring | gsub("[\r\n]"; " ")) as $s
@@ -918,10 +945,11 @@ runs:
           fi
         }
         # The bare url GitHub previews as code, collapsed in a details block
-        # when the block spans more than ten lines.
+        # when the block spans more than ten lines. Report numbers stay out of shell
+        # arithmetic, which would run a command substitution inside them.
         preview_of() {
           local n="${3:-$2}" label="${4:-the duplicated doctest}"
-          if [ $((n - $2 + 1)) -gt 10 ]; then
+          if [ "$(awk -v s="$2" -v e="$n" 'BEGIN { print (e - s + 1 > 10) }')" = 1 ]; then
             printf '<details>\n<summary>Show %s</summary>\n\n%s\n\n</details>' "$label" "$1"
           else
             printf '%s' "$1"
@@ -933,8 +961,10 @@ runs:
         # One pass builds every comment, live posts them, the dry run renders them.
         # The end line of each block comes from the report, `-` when the crate has
         # none, a block spanning an include or an escaped literal, or an older binary.
+        # Fields are split on the unit separator, which read never merges the way it
+        # merges runs of tabs, so an empty field cannot shift the ones after it.
         declare -A seen_first=() seen_first_end=()
-        while IFS=$'\t' read -r p line item g c n first new basekeep knew end fend bend kind remedy firstitem baseitem selftypes public; do
+        while IFS=$'\x1f' read -r p line item g c n first new basekeep knew end fend bend kind remedy firstitem baseitem selftypes public; do
           [ -n "$p" ] || continue
           # A public copy that already shipped is called or deprecated, deleting it breaks callers.
           if [ "$remedy" = "delete" ] && [ "$kind" = "function" ] && [ "$public" = "1" ] && [ "$onlynew" != "1" ]; then
@@ -1010,7 +1040,7 @@ runs:
           delete_end="$close_line"
           if [ "$remedy" = "delete" ]; then
             if grep -Fxq -- "$p:$close_line" "$blank_file" 2>/dev/null; then
-              delete_end=$((close_line + 1))
+              delete_end="$(awk -v l="$close_line" 'BEGIN { print l + 1 }')"
             fi
           fi
           url=''

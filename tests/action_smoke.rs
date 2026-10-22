@@ -1896,6 +1896,207 @@ fn s39_review_fences_candidate_text_and_checks_links() {
     );
 }
 
+/// A marker path a forged command substitution would create.
+fn marker(name: &str) -> std::path::PathBuf {
+    let path = std::env::temp_dir().join(format!("echoes-{name}-{}", std::process::id()));
+    let _ = fs::remove_file(&path);
+    path
+}
+
+#[test]
+fn s40_post_reads_one_report_document() {
+    let prep = prepared("s40a", 2, "app::parse", "doctest");
+    let mark = marker("s40");
+    let evil = json!({"groups": [{"hash": "h", "kind": "doctest", "sites": [
+        {"file": "src/c0.rs", "line": 1, "end": format!("a[$(touch {})]", mark.display()), "item": "a"},
+        {"file": "src/c1.rs", "line": 10, "end": 12, "item": "b"}]}]});
+    let report = prep.workspace_path().join("echoes-payload/report.json");
+    fs::write(&report, format!("{evil}\n{{\"groups\":[]}}\n")).unwrap();
+    let mut post = post_world("s40b", &prep, "workflow_run", &[]);
+    assert_eq!(post_status(&mut post), (1, "rejected".into()));
+    assert!(
+        !mark.exists(),
+        "the first document reached shell arithmetic"
+    );
+}
+
+#[test]
+fn s41_post_keeps_columns_with_empty_items() {
+    let prep = prepared("s41a", 2, "", "doctest");
+    let mut post = post_world("s41b", &prep, "workflow_run", &[]);
+    assert_eq!(post_status(&mut post), (0, "posted".into()));
+    let r = post.runner();
+    assert_eq!(r.comment_posts()[0]["params"]["path"], "src/c1.rs");
+    let bodies = joined_bodies(&r.body_files());
+    assert!(
+        bodies.contains("appears 2 times in this scan, this is copy 2"),
+        "{bodies}"
+    );
+    let prep = prepared("s41c", 2, "", "doctest");
+    let mark = marker("s41");
+    let report = prep.workspace_path().join("echoes-payload/report.json");
+    let mut r: Value = serde_json::from_str(&fs::read_to_string(&report).unwrap()).unwrap();
+    r["groups"][0]["kind"] = json!(format!("a[$(touch {})]", mark.display()));
+    fs::write(&report, r.to_string()).unwrap();
+    fs::write(
+        prep.workspace_path()
+            .join("echoes-payload/base-report.json"),
+        "{\"groups\":[]}",
+    )
+    .unwrap();
+    forge_meta(&prep, "base_sha", json!("a".repeat(40)));
+    let mut post = post_world("s41d", &prep, "workflow_run", &[]);
+    assert_eq!(
+        post_status(&mut post),
+        (0, "posted".into()),
+        "an unknown kind still renders"
+    );
+    assert!(!mark.exists(), "a report value reached shell arithmetic");
+}
+
+#[test]
+fn s42_post_rejects_numbers_the_renderer_cannot_use() {
+    let prep = prepared("s42a", 2, "app::parse", "doctest");
+    let report = prep.workspace_path().join("echoes-payload/report.json");
+    let mut r: Value = serde_json::from_str(&fs::read_to_string(&report).unwrap()).unwrap();
+    r["groups"][0]["sites"][0]["end"] = json!(1e30);
+    fs::write(&report, r.to_string()).unwrap();
+    let mut post = post_world("s42b", &prep, "workflow_run", &[]);
+    assert_eq!(
+        post_status(&mut post),
+        (1, "rejected".into()),
+        "an exponent is no line"
+    );
+    let prep = prepared("s42c", 2, "app::parse", "doctest");
+    let report = prep.workspace_path().join("echoes-payload/report.json");
+    let mut r: Value = serde_json::from_str(&fs::read_to_string(&report).unwrap()).unwrap();
+    let mut open = site("src/c1.rs", 3, 5, "app::ctx");
+    open["end"] = Value::Null;
+    r["context_groups"] = json!([ctx_group(
+        "C1",
+        "HC",
+        &[site("src/c0.rs", 3, 5, "app::ctx"), open]
+    )]);
+    fs::write(&report, r.to_string()).unwrap();
+    let mut post = post_world("s42d", &prep, "workflow_run", &[]);
+    assert_eq!(
+        post_status(&mut post),
+        (1, "rejected".into()),
+        "a context block has an end"
+    );
+}
+
+#[test]
+fn s43_post_rejects_what_it_cannot_check() {
+    let prep = prepared("s43a", 2, "app::parse", "doctest");
+    let mut dry = post_world("s43b", &prep, "workflow_run", &[("dry-run", "true")]);
+    assert_eq!(
+        post_status(&mut dry),
+        (1, "rejected".into()),
+        "dry-run prints raw report text"
+    );
+    let mut files = post_world("s43c", &prep, "workflow_run", &[]).env("SCEN_GH_FILES_FAIL", "1");
+    assert_eq!(
+        post_status(&mut files),
+        (1, "rejected".into()),
+        "a failed diff listing is no clean diff"
+    );
+    for (i, meta) in ["[1, 2, 3]", "\"hello\"", "7", "{"].into_iter().enumerate() {
+        fs::write(prep.workspace_path().join("echoes-payload/meta.json"), meta).unwrap();
+        let mut post = post_world(&format!("s43d{i}"), &prep, "workflow_run", &[]);
+        assert_eq!(
+            post_status(&mut post),
+            (1, "rejected".into()),
+            "meta.json = {meta}"
+        );
+    }
+}
+
+/// Sets the value at a JSON pointer, adding the last key when the object lacks it.
+fn set_at(doc: &mut Value, pointer: &str, value: Value) {
+    let (parent, key) = pointer.rsplit_once('/').unwrap();
+    let target = doc.pointer_mut(parent).unwrap();
+    match target {
+        Value::Array(items) => items[key.parse::<usize>().unwrap()] = value,
+        Value::Object(map) => {
+            map.insert(key.to_string(), value);
+        }
+        _ => panic!("{pointer} has no container"),
+    }
+}
+
+#[test]
+fn s44_post_rejects_every_shape_the_renderer_cannot_read() {
+    let prep = prepared("s44a", 2, "app::parse", "doctest");
+    let report = prep.workspace_path().join("echoes-payload/report.json");
+    let mut valid: Value = serde_json::from_str(&fs::read_to_string(&report).unwrap()).unwrap();
+    valid["context_groups"] = json!([ctx_group(
+        "C1",
+        "HC",
+        &[
+            site("src/c0.rs", 3, 5, "app::ctx"),
+            site("src/c1.rs", 3, 5, "app::ctx")
+        ]
+    )]);
+    valid["reuse"] = reuse(
+        &[reuse_group(
+            "R1",
+            &site("src/c1.rs", 3, 5, "app::local"),
+            &[Cand::new("direct", "1.2.3", 1, "direct::helper", "reuse-api").build()],
+        )],
+        Some(coverage(true, 1, 1, 0, &[], &[])),
+    );
+    let run = |name: &str, doc: &Value| {
+        fs::write(&report, doc.to_string()).unwrap();
+        post_status(&mut post_world(name, &prep, "workflow_run", &[]))
+    };
+    assert_eq!(
+        run("s44ok", &valid),
+        (0, "posted".into()),
+        "the unmodified report posts"
+    );
+    let cases = [
+        ("/groups", json!({})),
+        ("/groups/0", json!("x")),
+        ("/groups/0/hash", json!(1)),
+        ("/groups/0/sites", json!([])),
+        ("/groups/0/sites/0", json!("x")),
+        ("/groups/0/sites/0/file", json!(1)),
+        ("/groups/0/sites/0/item", json!(1)),
+        ("/groups/0/sites/0/line", json!(0)),
+        ("/groups/0/sites/0/line", json!(1.5)),
+        ("/groups/0/sites/0/line", json!(2_147_483_648_u64)),
+        ("/groups/0/sites/0/line", json!("3")),
+        ("/groups/0/sites/0/end", json!("5")),
+        ("/groups/0/sites/0/self_type", json!(1)),
+        ("/context_groups", json!({})),
+        ("/context_groups/0", json!(1)),
+        ("/context_groups/0/hash", json!(1)),
+        ("/context_groups/0/sites", json!([])),
+        ("/context_groups/0/sites/1/end", Value::Null),
+        ("/reuse", json!([])),
+        ("/reuse/groups", json!({})),
+        ("/reuse/groups/0", json!(1)),
+        ("/reuse/groups/0/hash", json!(1)),
+        ("/reuse/groups/0/local", json!("x")),
+        ("/reuse/groups/0/local/end", Value::Null),
+        ("/reuse/groups/0/candidates", json!({})),
+        ("/reuse/groups/0/candidates/0", json!("x")),
+        ("/reuse/groups/0/candidates/0/conditions", json!("x")),
+        ("/reuse/groups/0/candidates/0/site", json!("x")),
+        ("/reuse/groups/0/candidates/0/existing_issue", json!("x")),
+    ];
+    for (i, (pointer, value)) in cases.into_iter().enumerate() {
+        let mut doc = valid.clone();
+        set_at(&mut doc, pointer, value.clone());
+        assert_eq!(
+            run(&format!("s44c{i}"), &doc),
+            (1, "rejected".into()),
+            "{pointer} = {value}"
+        );
+    }
+}
+
 fn scan_token(r: &Runner) -> String {
     r.scan_calls()[0]
         .get("token")

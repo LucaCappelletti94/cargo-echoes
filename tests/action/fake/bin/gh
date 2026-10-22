@@ -43,6 +43,10 @@ case "${1:-}" in
     resp='{}'
     case "$path" in
       "repos/$GITHUB_REPOSITORY/pulls/"*"/files")
+        if [ "${SCEN_GH_FILES_FAIL:-0}" = "1" ]; then
+          echo "gh: Server Error (HTTP 500)" >&2
+          exit 1
+        fi
         if [ -n "${SCEN_CHANGED_FILES:-}" ] && [ -f "${SCEN_CHANGED_FILES:-}" ]; then
           resp="$(jq -Rcs 'split("\n") | map(select(length > 0)) | map({filename: .})' < "$SCEN_CHANGED_FILES")"
         else
