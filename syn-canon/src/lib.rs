@@ -1471,6 +1471,34 @@ mod tests {
     }
 
     #[test]
+    fn a_preceding_array_argument_does_not_hold_the_struct_literal_comma() {
+        let a = canonicalize("foo([1u8, 2u8], P { x: 1, y: 2 });");
+        let b = canonicalize("foo([1u8, 2u8], P { x: 1, y: 2, });");
+        assert_eq!(a.text, b.text);
+    }
+
+    #[test]
+    fn an_over_bound_const_struct_expression_keeps_its_source_field_order() {
+        let chain = |first: u32| -> String {
+            (first..first + 70u32)
+                .map(|value| format!("{value}u8"))
+                .collect::<Vec<_>>()
+                .join(" | ")
+        };
+        let kept = format!(
+            "struct S {{ a: u8, b: u8 }}\nconst C: S = S {{ b: {}, a: {} }};\nfn main() {{}}",
+            chain(1),
+            chain(101)
+        );
+        let swapped = format!(
+            "struct S {{ a: u8, b: u8 }}\nconst C: S = S {{ a: {}, b: {} }};\nfn main() {{}}",
+            chain(101),
+            chain(1)
+        );
+        assert_ne!(canonicalize(&kept).text, canonicalize(&swapped).text);
+    }
+
+    #[test]
     fn trailing_comma_call_merges() {
         let a = canonicalize("foo(1, 2);");
         let b = canonicalize("foo(1, 2,);");

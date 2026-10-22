@@ -2071,6 +2071,8 @@ mod tests {
     use std::sync::Arc;
 
     const MATCHING_BODY: &str = "let total = value + 1u32; total * 2u32";
+    /// Canonical-equal to `MATCHING_BODY` for a parameter named `input`.
+    const INPUT_BODY: &str = "let result = input + 1u32; result * 2u32";
 
     fn put(root: &Path, rel: &str, text: &str) {
         let path = root.join(rel);
@@ -2849,21 +2851,25 @@ mod tests {
         let _ = stream.write_all(body);
     }
 
-    fn crate_archive(name: &str, version: &str, lib: &str) -> Vec<u8> {
+    /// A crate archive holding the manifest, the library and extra files.
+    fn crate_archive_with(name: &str, version: &str, lib: &str, extra: &[(&str, &str)]) -> Vec<u8> {
         let manifest =
             format!("[package]\nname = \"{name}\"\nversion = \"{version}\"\nedition = \"2021\"\n");
         let top = format!("{name}-{version}");
         let mut bytes = Vec::new();
         let encoder = flate2::write::GzEncoder::new(&mut bytes, flate2::Compression::default());
         let mut tar = tar::Builder::new(encoder);
-        for (file, text) in [
-            (format!("{top}/Cargo.toml"), manifest.clone()),
+        let mut files = vec![
+            (format!("{top}/Cargo.toml"), manifest),
             (format!("{top}/src/lib.rs"), lib.to_owned()),
-        ] {
+        ];
+        for (rel, text) in extra {
+            files.push((format!("{top}/{rel}"), text.to_string()));
+        }
+        for (file, text) in files {
             let data = text.as_bytes();
             let mut header = tar::Header::new_gnu();
-            // data.len is a byte count, lossless into u64
-            header.set_size(data.len() as u64);
+            header.set_size(u64::try_from(data.len()).expect("a byte length fits u64"));
             header.set_mode(0o644);
             header.set_cksum();
             tar.append_data(&mut header, file, data).unwrap();
@@ -2871,6 +2877,11 @@ mod tests {
         let encoder = tar.into_inner().unwrap();
         encoder.finish().unwrap();
         bytes
+    }
+
+    /// A crate archive holding the manifest and the library.
+    fn crate_archive(name: &str, version: &str, lib: &str) -> Vec<u8> {
+        crate_archive_with(name, version, lib, &[])
     }
 
     const RESOLVED_LIB: &str = "pub fn both(input: u32) -> u32 { let result = input + 1u32; result * 2u32 }\npub fn only_old(input: u32) -> u32 { input + 3u32 }\n";
@@ -5177,6 +5188,709 @@ iota = { version = "4", optional = true }
                 ReuseAction::RequestExtraction,
                 ReuseAction::Unresolved
             ]
+        );
+    }
+
+    /// A dependency record with an explicit version and depth for the merge unit tests.
+    fn dep_rec_versioned(name: &str, version: &str, depth: usize, access: ContextAccess) -> DepRec {
+        DepRec {
+            name: name.to_owned(),
+            version: version.to_owned(),
+            source: String::new(),
+            depth,
+            root: PathBuf::from("/dep-root"),
+            repository: None,
+            latest_only: false,
+            record: record(&format!("{name}::helper"), "src/lib.rs", 1, name, access),
+        }
+    }
+
+    /// The single candidate of a one-anchor group built from one record list.
+    fn single_candidate(recs: Vec<DepRec>) -> DependencyCandidate {
+        let anchor = record(
+            "app::anchor",
+            "app/src/lib.rs",
+            10,
+            "app",
+            ContextAccess::PublicFunction,
+        );
+        let ws = std::env::temp_dir().join("echoes-merge-test");
+        let mut by_form: BTreeMap<String, Vec<DepRec>> = BTreeMap::new();
+        by_form.insert("F".to_owned(), recs);
+        let anchors: Vec<&IndexedContext> = vec![&anchor];
+        let (groups, _) = group(&anchors, &by_form, &ws, 0);
+        assert_eq!(groups.len(), 1, "{groups:?}");
+        let candidates: Vec<DependencyCandidate> = groups
+            .into_iter()
+            .flat_map(|group| group.candidates)
+            .collect();
+        assert_eq!(candidates.len(), 1, "{candidates:?}");
+        candidates.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn a_later_public_record_at_one_range_keeps_the_reuse_action() {
+        let internal = dep_rec_versioned("dep", "1.0.0", 1, ContextAccess::InternalFunction);
+        let public = dep_rec_versioned("dep", "2.0.0", 2, ContextAccess::PublicFunction);
+        let candidate = single_candidate(vec![internal, public]);
+        assert_eq!(candidate.version, "2.0.0");
+        assert_eq!(candidate.action, ReuseAction::ReuseApi);
+    }
+
+    #[test]
+    fn a_later_internal_record_at_one_range_keeps_the_first_version() {
+        let first = dep_rec_versioned("dep", "1.0.0", 1, ContextAccess::InternalFunction);
+        let second = dep_rec_versioned("dep", "2.0.0", 2, ContextAccess::InternalFunction);
+        let candidate = single_candidate(vec![first, second]);
+        assert_eq!(
+            candidate.version, "1.0.0",
+            "a same-priority record must not replace the merged fields"
+        );
+    }
+
+    #[test]
+    fn a_later_internal_record_at_one_range_beats_an_unresolved_one() {
+        let unresolved = dep_rec_versioned("dep", "1.0.0", 1, ContextAccess::Unresolved);
+        let internal = dep_rec_versioned("dep", "2.0.0", 2, ContextAccess::InternalFunction);
+        let candidate = single_candidate(vec![unresolved, internal]);
+        assert_eq!(candidate.version, "2.0.0");
+        assert_eq!(candidate.action, ReuseAction::RequestExtraction);
+    }
+
+    #[test]
+    fn source_keys_distinguish_kinds_and_values() {
+        let path_a = source_key("path", "/one");
+        let path_b = source_key("path", "/two");
+        let registry_a = source_key("registry", "/one");
+        assert_ne!(
+            path_a, path_b,
+            "different source roots must not share one cache key"
+        );
+        assert_ne!(
+            path_a, registry_a,
+            "different source kinds must not share one cache key"
+        );
+    }
+
+    #[test]
+    fn a_failed_cfg_probe_is_reported_as_unavailable() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = discovery(dir.path());
+        let cfgs = d.cfgs_for("definitely-not-a-target");
+        assert!(cfgs.is_some_and(Vec::is_empty));
+        assert!(
+            d.coverage
+                .failures
+                .iter()
+                .any(|failure| failure.contains("rustc cfg unavailable")),
+            "{:?}",
+            d.coverage
+        );
+    }
+
+    #[test]
+    fn a_non_github_repository_is_carried_with_a_warning() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = dir.path().join("index");
+        fixture(dir.path());
+        let root_path = dir.path().join("Cargo.toml");
+        let mut root: toml::Value =
+            toml::from_str(&std::fs::read_to_string(&root_path).unwrap()).unwrap();
+        root["workspace"]["exclude"]
+            .as_array_mut()
+            .unwrap()
+            .push(toml::Value::String("deps/repdep".to_owned()));
+        std::fs::write(root_path, toml::to_string(&root).unwrap()).unwrap();
+        put(
+            dir.path(),
+            "deps/repdep/Cargo.toml",
+            "[package]\nname = \"repdep\"\nversion = \"0.1.0\"\nedition = \"2024\"\nrepository = \"https://gitlab.com/o/repdep\"\n[workspace]\n",
+        );
+        put(
+            dir.path(),
+            "deps/repdep/src/lib.rs",
+            "pub fn helper(input: u32) -> u32 { let result = input + 1u32; result * 2u32 }\n",
+        );
+        let path = dir.path().join("app/Cargo.toml");
+        let mut manifest = std::fs::read_to_string(&path).unwrap();
+        manifest.push_str("\n[dependencies.repdep]\npath = \"../deps/repdep\"\n");
+        std::fs::write(path, manifest).unwrap();
+        let local = app_records(dir.path());
+        let targets = app_targets(dir.path());
+        let report = run(
+            dir.path(),
+            &local,
+            &targets,
+            &app_options(dir.path(), &cache, 1),
+        );
+        assert_eq!(
+            packages(&report),
+            vec!["direct".to_owned(), "repdep".to_owned()],
+            "{report:?}"
+        );
+        let candidate = report
+            .groups
+            .iter()
+            .flat_map(|group| &group.candidates)
+            .find(|candidate| candidate.package == "repdep")
+            .unwrap();
+        assert_eq!(
+            candidate.repository.as_deref(),
+            Some("https://gitlab.com/o/repdep")
+        );
+        assert!(
+            report
+                .coverage
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("upstream repository is not on GitHub")),
+            "{:?}",
+            report.coverage
+        );
+    }
+
+    #[test]
+    fn a_private_module_reaching_outside_the_package_is_followed() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = dir.path().join("index");
+        fixture(dir.path());
+        let root_path = dir.path().join("Cargo.toml");
+        let mut root: toml::Value =
+            toml::from_str(&std::fs::read_to_string(&root_path).unwrap()).unwrap();
+        root["workspace"]["exclude"]
+            .as_array_mut()
+            .unwrap()
+            .push(toml::Value::String("deps/escaping".to_owned()));
+        std::fs::write(root_path, toml::to_string(&root).unwrap()).unwrap();
+        put(
+            dir.path(),
+            "deps/escaping/Cargo.toml",
+            "[package]\nname = \"escaping\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n",
+        );
+        put(
+            dir.path(),
+            "deps/escaping/src/lib.rs",
+            "#[path = \"../../outside.rs\"]\nmod extra;\npub fn helper(input: u32) -> u32 { input + 29u32 }\n",
+        );
+        put(
+            dir.path(),
+            "deps/outside.rs",
+            &format!("pub fn far(value: u32) -> u32 {{ {MATCHING_BODY} }}\n"),
+        );
+        let path = dir.path().join("app/Cargo.toml");
+        let mut manifest = std::fs::read_to_string(&path).unwrap();
+        manifest.push_str("\n[dependencies.escaping]\npath = \"../deps/escaping\"\n");
+        std::fs::write(path, manifest).unwrap();
+        let local = app_records(dir.path());
+        let targets = app_targets(dir.path());
+        let report = run(
+            dir.path(),
+            &local,
+            &targets,
+            &app_options(dir.path(), &cache, 1),
+        );
+        assert!(report.coverage.complete, "{:?}", report.coverage);
+        let names = packages(&report);
+        assert!(
+            names.iter().any(|name| name == "escaping"),
+            "the outside module must be indexed, got {names:?}"
+        );
+    }
+
+    #[test]
+    fn a_one_sided_tree_failure_keeps_the_source_private() {
+        for (broken_on_disk, broken_in_archive) in [(true, false), (false, true)] {
+            let dir = tempfile::tempdir().unwrap();
+            let ws = dir.path().join("ws");
+            let cache = dir.path().join("index");
+            put(
+                &ws,
+                "app/Cargo.toml",
+                "[package]\nname = \"app\"\nversion = \"0.1.0\"\n",
+            );
+            put(
+                &ws,
+                "app/src/lib.rs",
+                &format!("pub fn local_match(value: u32) -> u32 {{ {MATCHING_BODY} }}\n"),
+            );
+            put(
+                &ws,
+                "vendor/upstream/Cargo.toml",
+                "[package]\nname = \"upstream\"\nversion = \"1.0.0\"\nedition = \"2021\"\n",
+            );
+            let lib = "#[cfg(test)] mod broken;\npub fn both(value: u32) -> u32 { let total = value + 1u32; total * 2u32 }\n";
+            put(&ws, "vendor/upstream/src/lib.rs", lib);
+            if broken_on_disk {
+                put(&ws, "vendor/upstream/src/broken.rs", "this is not rust {{{");
+            }
+            let extra = if broken_in_archive {
+                vec![("src/broken.rs", "this is not rust {{{")]
+            } else {
+                Vec::new()
+            };
+            let routes = BTreeMap::from([(
+                "/crates/upstream/upstream-1.0.0.crate".to_owned(),
+                crate_archive_with("upstream", "1.0.0", lib, &extra),
+            )]);
+            let server = HttpServer::start(routes);
+            let report = registry_run(&ws, &cache, &server.base, false);
+            server.stop();
+            let public_index = cache.join("public/crates.io/upstream-1.0.0.json");
+            assert!(
+                !public_index.exists(),
+                "a one-sided tree failure must keep the source private (disk {broken_on_disk}, archive {broken_in_archive})"
+            );
+            let candidate = &report.groups[0].candidates[0];
+            assert_eq!(candidate.site.item, "upstream::both");
+        }
+    }
+
+    #[test]
+    fn output_well_below_the_limit_is_kept() {
+        let id = next_proc_id();
+        let args = ["-c", "head -c 2000000 /dev/zero"].map(str::to_owned);
+        let output = run_bounded(
+            std::process::Command::new("sh").args(&args),
+            std::time::Duration::from_secs(30),
+            &id,
+        )
+        .expect("two megabytes of output sit well under the capture limit");
+        assert_eq!(u64::try_from(output.stdout.len()).unwrap(), 2_000_000);
+    }
+
+    #[test]
+    fn proc_ids_correlate_with_the_process_and_distinguish_requests() {
+        let first = next_proc_id();
+        let second = next_proc_id();
+        assert_ne!(
+            first, second,
+            "correlated ids must distinguish two requests"
+        );
+        let prefix = format!("djd.proc.{}-", std::process::id());
+        assert!(
+            first.starts_with(&prefix),
+            "expected the {prefix} prefix, got {first}"
+        );
+        assert!(
+            second.starts_with(&prefix),
+            "expected the {prefix} prefix, got {second}"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn dropping_a_process_kills_and_reaps_its_child() {
+        let child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        drop(Process(child));
+        let stat = format!("/proc/{pid}/stat");
+        let dead = (0..250).any(|_| {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            std::fs::read_to_string(&stat).map_or(true, |line| line.contains(") Z "))
+        });
+        assert!(dead, "child {pid} survived its Process drop");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_breached_deadline_reaps_the_killed_child() {
+        let dir = tempfile::tempdir().unwrap();
+        let pid_file = dir.path().join("pid");
+        let args = [
+            "-c".to_owned(),
+            "echo $$ > \"$1\"; sleep 30".to_owned(),
+            "sh".to_owned(),
+            pid_file.to_string_lossy().into_owned(),
+        ];
+        let id = next_proc_id();
+        let error = run_bounded(
+            std::process::Command::new("sh").args(&args),
+            std::time::Duration::from_millis(200),
+            &id,
+        )
+        .expect_err("a breached deadline must be reported");
+        assert!(matches!(error, ProcessError::Deadline { .. }));
+        let pid = std::fs::read_to_string(&pid_file)
+            .unwrap()
+            .trim()
+            .to_owned();
+        let stat = format!("/proc/{pid}/stat");
+        let gone = (0..250).any(|_| {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            !std::fs::read_to_string(&stat).is_ok_and(|line| line.contains(") Z "))
+        });
+        assert!(
+            gone,
+            "child {pid} was left a zombie after the deadline kill"
+        );
+    }
+
+    /// One package of the synthetic manifest-edge metadata, under `dir` of the workspace.
+    fn walk_pkg(
+        ws: &str,
+        dir: &str,
+        name: &str,
+        id: &str,
+        source: Option<&str>,
+        deps: &[serde_json::Value],
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "name": name,
+            "version": "0.1.0",
+            "id": id,
+            "source": source,
+            "dependencies": deps,
+            "targets": [
+                {
+                    "name": name,
+                    "kind": ["lib"],
+                    "crate_types": ["lib"],
+                    "src_path": format!("{ws}/{dir}/src/lib.rs")
+                }
+            ],
+            "manifest_path": format!("{ws}/{dir}/Cargo.toml"),
+            "metadata": null,
+            "features": {}
+        })
+    }
+
+    /// One manifest dependency edge of the synthetic metadata.
+    fn walk_dep(
+        name: &str,
+        source: Option<&str>,
+        req: &str,
+        target: Option<&str>,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "name": name,
+            "source": source,
+            "req": req,
+            "kind": null,
+            "optional": false,
+            "uses_default_features": true,
+            "features": [],
+            "target": target,
+            "rename": null,
+            "registry": null,
+            "path": null
+        })
+    }
+
+    /// Run the discovery analysis over metadata whose `mid` package is absent from the
+    /// resolve graph, so its manifest edges drive the traversal.
+    fn walk_run(
+        ws: &Path,
+        cache: &Path,
+        base: &str,
+        packages: &[serde_json::Value],
+        app_deps: &[(&str, &str)],
+    ) -> ReuseReport {
+        let ws_text = ws.to_string_lossy().into_owned();
+        let deps_json: Vec<serde_json::Value> = app_deps
+            .iter()
+            .map(|(name, id)| {
+                serde_json::json!({
+                    "name": name,
+                    "pkg": id,
+                    "dep_kinds": [{ "kind": "normal" }],
+                    "features": []
+                })
+            })
+            .collect();
+        let value = serde_json::json!({
+            "packages": packages,
+            "workspace_members": ["path+file:///ws/app#0.1.0"],
+            "resolve": {
+                "nodes": [
+                    {
+                        "id": "path+file:///ws/app#0.1.0",
+                        "deps": deps_json,
+                        "dependencies": app_deps.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+                        "features": []
+                    }
+                ]
+            },
+            "workspace_root": ws_text,
+            "target_directory": format!("{ws_text}/target"),
+            "metadata": null,
+            "version": 1
+        });
+        let local = local_records(ws, "app", &[("app/src/lib.rs", vec![])]);
+        let refs: Vec<&IndexedContext> = local.iter().collect();
+        let metadata: Metadata = serde_json::from_value(value).unwrap();
+        let graph = build_graph(&metadata, &BTreeMap::new());
+        let store = Store::open(cache).unwrap();
+        let options = DependencySearch {
+            depth: Some(3),
+            check_latest: Some(false),
+            cache_dir: Some(cache.to_string_lossy().into_owned()),
+            ..DependencySearch::default()
+        };
+        let eff = effective(&options);
+        let mut d = Discovery {
+            graph,
+            index_fingerprint: index_fingerprint(&eff),
+            eff,
+            store: Some(store),
+            store_root: cache.to_path_buf(),
+            registry: Registry {
+                api: format!("{base}/api/v1/crates"),
+                cdn: format!("{base}/crates"),
+            },
+            coverage: DependencyCoverage::default(),
+            effective_targets: vec!["x86_64-unknown-linux-gnu".to_owned()],
+            cfgs: BTreeMap::new(),
+            latest_known: BTreeMap::new(),
+        };
+        let targets = single_lib_targets(ws);
+        analyze_discovery(&mut d, ws, &targets, &refs, 0)
+    }
+
+    fn walk_files(ws: &Path, dirs: &[(&str, &str)]) {
+        put(
+            ws,
+            "app/Cargo.toml",
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+        );
+        put(
+            ws,
+            "app/src/lib.rs",
+            &format!("pub fn local_match(value: u32) -> u32 {{ {MATCHING_BODY} }}\n"),
+        );
+        for (dir, body) in dirs {
+            put(
+                ws,
+                &format!("{dir}/Cargo.toml"),
+                &format!("[package]\nname = \"{dir}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"),
+            );
+            put(
+                ws,
+                &format!("{dir}/src/lib.rs"),
+                &format!("pub fn helper(input: u32) -> u32 {{ {body} }}\n"),
+            );
+        }
+    }
+
+    #[test]
+    fn manifest_edges_of_an_unresolved_package_skip_other_platforms() {
+        let dir = tempfile::tempdir().unwrap();
+        let ws = dir.path().join("ws");
+        let cache = dir.path().join("index");
+        walk_files(&ws, &[("mid", INPUT_BODY), ("winonly", INPUT_BODY)]);
+        let ws_text = ws.to_string_lossy().into_owned();
+        let pkgs = vec![
+            walk_pkg(
+                &ws_text,
+                "app",
+                "app",
+                "path+file:///ws/app#0.1.0",
+                None,
+                &[walk_dep("mid", None, "^0.1.0", None)],
+            ),
+            walk_pkg(
+                &ws_text,
+                "mid",
+                "mid",
+                "path+file:///ws/mid#0.1.0",
+                None,
+                &[walk_dep(
+                    "winonly",
+                    None,
+                    "^0.1.0",
+                    Some("x86_64-pc-windows-gnu"),
+                )],
+            ),
+            walk_pkg(
+                &ws_text,
+                "winonly",
+                "winonly",
+                "path+file:///ws/winonly#0.1.0",
+                None,
+                &[],
+            ),
+        ];
+        let report = walk_run(
+            &ws,
+            &cache,
+            "http://127.0.0.1:1",
+            &pkgs,
+            &[("mid", "path+file:///ws/mid#0.1.0")],
+        );
+        assert!(report.coverage.complete, "{:?}", report.coverage);
+        let names = packages(&report);
+        assert!(
+            names.iter().any(|name| name == "mid"),
+            "the matching-platform package must be traversed, got {names:?}"
+        );
+        assert!(
+            !names.iter().any(|name| name == "winonly"),
+            "a windows-only manifest edge must not match the linux target, got {names:?}"
+        );
+    }
+
+    #[test]
+    fn an_unresolved_dependency_picks_the_first_matching_graph_package() {
+        let dir = tempfile::tempdir().unwrap();
+        let ws = dir.path().join("ws");
+        let cache = dir.path().join("index");
+        walk_files(
+            &ws,
+            &[
+                ("mid", "input + 101u32"),
+                ("dup-a", INPUT_BODY),
+                ("dup-b", INPUT_BODY),
+                ("beta", INPUT_BODY),
+            ],
+        );
+        put(
+            &ws,
+            "alpha/Cargo.toml",
+            "[package]\nname = \"alpha\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+        );
+        let ws_text = ws.to_string_lossy().into_owned();
+        let pkgs = vec![
+            walk_pkg(
+                &ws_text,
+                "app",
+                "app",
+                "path+file:///ws/app#0.1.0",
+                None,
+                &[walk_dep("mid", None, "^0.1.0", None)],
+            ),
+            walk_pkg(
+                &ws_text,
+                "mid",
+                "mid",
+                "path+file:///ws/mid#0.1.0",
+                None,
+                &[walk_dep("dup", None, "^0.1.0", None)],
+            ),
+            walk_pkg(
+                &ws_text,
+                "dup-a",
+                "dup",
+                "path+file:///ws/dup-a#0.1.0",
+                None,
+                &[walk_dep("alpha", None, "^0.1.0", None)],
+            ),
+            walk_pkg(
+                &ws_text,
+                "dup-b",
+                "dup",
+                "path+file:///ws/dup-b#0.1.0",
+                None,
+                &[walk_dep("beta", None, "^0.1.0", None)],
+            ),
+            walk_pkg(
+                &ws_text,
+                "alpha",
+                "alpha",
+                "path+file:///ws/alpha#0.1.0",
+                None,
+                &[],
+            ),
+            walk_pkg(
+                &ws_text,
+                "beta",
+                "beta",
+                "path+file:///ws/beta#0.1.0",
+                None,
+                &[],
+            ),
+        ];
+        let report = walk_run(
+            &ws,
+            &cache,
+            "http://127.0.0.1:1",
+            &pkgs,
+            &[("mid", "path+file:///ws/mid#0.1.0")],
+        );
+        assert!(
+            report
+                .coverage
+                .failures
+                .iter()
+                .any(|failure| failure.contains("alpha")),
+            "the first equal-version package must win, got {:?}",
+            report.coverage
+        );
+        let names = packages(&report);
+        assert!(
+            names.iter().any(|name| name == "dup"),
+            "the resolved package must be traversed, got {names:?}"
+        );
+        assert!(
+            !names.iter().any(|name| name == "beta"),
+            "the later equal-version package must lose, got {names:?}"
+        );
+    }
+
+    #[test]
+    fn a_pre_release_only_requirement_is_not_discovered() {
+        let dir = tempfile::tempdir().unwrap();
+        let ws = dir.path().join("ws");
+        let cache = dir.path().join("index");
+        walk_files(&ws, &[("mid", "input + 101u32")]);
+        let ws_text = ws.to_string_lossy().into_owned();
+        let pkgs = vec![
+            walk_pkg(
+                &ws_text,
+                "app",
+                "app",
+                "path+file:///ws/app#0.1.0",
+                None,
+                &[walk_dep("mid", None, "^0.1.0", None)],
+            ),
+            walk_pkg(
+                &ws_text,
+                "mid",
+                "mid",
+                "path+file:///ws/mid#0.1.0",
+                None,
+                &[walk_dep(
+                    "upstream",
+                    Some(CRATES_IO_SOURCE),
+                    "=2.0.0-rc.1",
+                    None,
+                )],
+            ),
+        ];
+        let lib = format!("pub fn helper(value: u32) -> u32 {{ {MATCHING_BODY} }}\n");
+        let routes = BTreeMap::from([
+            (
+                "/api/v1/crates/upstream".to_owned(),
+                br#"{"versions":[{"num":"1.0.0"},{"num":"2.0.0-rc.1"}]}"#.to_vec(),
+            ),
+            (
+                "/crates/upstream/upstream-2.0.0-rc.1.crate".to_owned(),
+                crate_archive("upstream", "2.0.0-rc.1", &lib),
+            ),
+        ]);
+        let server = HttpServer::start(routes);
+        let report = walk_run(
+            &ws,
+            &cache,
+            &server.base,
+            &pkgs,
+            &[("mid", "path+file:///ws/mid#0.1.0")],
+        );
+        server.stop();
+        assert!(
+            report
+                .coverage
+                .failures
+                .iter()
+                .any(|failure| failure.contains("no stable version of upstream matches")),
+            "{:?}",
+            report.coverage
+        );
+        let names = packages(&report);
+        assert!(
+            !names.iter().any(|name| name == "upstream"),
+            "a pre-release-only requirement must not resolve, got {names:?}"
         );
     }
 }

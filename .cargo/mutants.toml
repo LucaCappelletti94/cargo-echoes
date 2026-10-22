@@ -15,6 +15,16 @@ exclude_re = [
     '^syn-canon/src/drift\.rs:\d+:\d+: delete match arm syn::ForeignItem::Macro\(v\) in <impl VisitMut for Drift>::visit_foreign_item_mut$',
     '^syn-canon/src/form\.rs:\d+:\d+: replace == with != in framed_tree$',
     '^src/dependencies\.rs:\d+:\d+: replace < with <= in run_bounded$',
+    # The fingerprint is only compared with itself within one build.
+    '^src/context_cache\.rs:\d+:\d+: replace canonicalization_fingerprint -> String with (String::new\(\)|"xyzzy"\.into\(\))$',
+    # Any read buffer size writes the same bytes.
+    '^src/context_network\.rs:\d+:\d+: replace \* with \+ in stream_to_file$',
+    # The second `||`, a published-only failure always leaves an actual file the subset check misses.
+    '^src/dependencies\.rs:1204:9: replace \|\| with && in same_sources$',
+    # The child is killed before the wait, so one more poll at the deadline reaps the same zombie.
+    '^src/dependencies\.rs:\d+:\d+: replace < with <= in reap_bounded$',
+    # The local port counter only keeps unplanned locals distinct, and no rewrite reads it.
+    '^syn-canon/src/algebra\.rs:\d+:\d+: replace \+= with \*= in normalize$',
 ]
 cap_lints = true
 profile = "test"

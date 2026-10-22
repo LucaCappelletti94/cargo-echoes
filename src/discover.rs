@@ -1328,4 +1328,51 @@ mod tests {
             [(vec!["feature = \"x\"".to_string()], "other.rs".to_string())]
         );
     }
+
+    #[test]
+    fn inline_mod_children_stay_on_the_rustdoc_route() {
+        // An inline module's children collect with the doctest walk before queued
+        // files, and a cfg-off file module never reaches rustdoc.
+        let dir = tempfile::tempdir().unwrap();
+        for (path, text) in [
+            (
+                "lib.rs",
+                "pub mod plain { mod deep; }\n#[cfg(test)] mod b;\n",
+            ),
+            ("plain/deep.rs", "pub fn g() {}\n"),
+            ("b.rs", "pub fn p() {}\n"),
+        ] {
+            let path = dir.path().join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        }
+        let got: Vec<(String, bool)> = module_tree(&target(&dir.path().join("lib.rs")), None)
+            .files
+            .into_iter()
+            .map(|f| (f.path.rsplit('/').next().unwrap().to_string(), f.rustdoc))
+            .collect();
+        let want = [("lib.rs", true), ("deep.rs", true), ("b.rs", false)];
+        assert_eq!(got, want.map(|(p, r)| (p.to_string(), r)));
+    }
+
+    #[test]
+    fn a_name_value_attribute_other_than_path_is_not_a_module_path() {
+        // A doc attribute on a module declaration is not a module path claim.
+        let dir = tempfile::tempdir().unwrap();
+        for (path, text) in [
+            ("lib.rs", "#[doc = \"a docs line\"]\npub mod named;\n"),
+            ("named.rs", "pub fn g() {}\n"),
+        ] {
+            let path = dir.path().join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        }
+        let got: Vec<(String, bool)> = module_tree(&target(&dir.path().join("lib.rs")), None)
+            .files
+            .into_iter()
+            .map(|f| (f.path.rsplit('/').next().unwrap().to_string(), f.rustdoc))
+            .collect();
+        let want = [("lib.rs", true), ("named.rs", true)];
+        assert_eq!(got, want.map(|(p, r)| (p.to_string(), r)));
+    }
 }
