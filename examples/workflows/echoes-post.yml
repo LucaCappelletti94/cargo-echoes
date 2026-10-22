@@ -10,6 +10,7 @@ jobs:
       actions: read
       pull-requests: write
     # This job holds a write token, so it must never check out or run pull-request code.
+    # The action reviews only the open pull request whose head the triggering run built.
     steps:
       - uses: actions/download-artifact@v4
         with:

@@ -40,6 +40,8 @@ pub struct World {
     meta_root: Option<PathBuf>,
     workspace_override: Option<PathBuf>,
     env: BTreeMap<String, String>,
+    run_event: String,
+    open_prs: Option<Value>,
     runner: Option<Runner>,
 }
 
@@ -72,6 +74,8 @@ impl World {
             meta_root: None,
             workspace_override: None,
             env: BTreeMap::new(),
+            run_event: "pull_request".into(),
+            open_prs: None,
             runner: None,
         }
     }
@@ -137,6 +141,18 @@ impl World {
     /// A variable the calling job sets, which every step inherits.
     pub fn env(mut self, key: &str, value: &str) -> Self {
         self.env.insert(key.to_string(), value.to_string());
+        self
+    }
+
+    /// The event of the run a `workflow_run` trigger reports.
+    pub fn run_event(mut self, event: &str) -> Self {
+        self.run_event = event.to_string();
+        self
+    }
+
+    /// The open pull requests the API lists, one at the head commit by default.
+    pub fn open_prs(mut self, prs: Value) -> Self {
+        self.open_prs = Some(prs);
         self
     }
 
@@ -217,12 +233,29 @@ impl World {
         fs::write(fixtures.join("human.txt"), &self.human).expect("write the human fixture");
         fs::write(fixtures.join("changed.txt"), self.changed.join("\n"))
             .expect("write the changed fixture");
+        let head_owner = if self.fork { "fork" } else { "owner" };
+        let open_prs = self.open_prs.clone().unwrap_or_else(|| {
+            json!([{
+                "number": 7,
+                "head": {
+                    "sha": self.head_sha,
+                    "label": format!("{head_owner}:feature"),
+                    "repo": { "full_name": format!("{head_owner}/repo") }
+                }
+            }])
+        });
+        fs::write(
+            fixtures.join("open_prs.json"),
+            serde_json::to_string(&open_prs).expect("serialize the open pull requests"),
+        )
+        .expect("write the open pull requests fixture");
         let mut scenario_env = BTreeMap::new();
         for (key, file) in [
             ("SCEN_JSON", "report.json"),
             ("SCEN_BASE_JSON", "base.json"),
             ("SCEN_HUMAN", "human.txt"),
             ("SCEN_CHANGED_FILES", "changed.txt"),
+            ("SCEN_OPEN_PRS", "open_prs.json"),
         ] {
             scenario_env.insert(
                 key.to_string(),
@@ -262,7 +295,7 @@ impl World {
         let mut runner = Runner::new(
             &action,
             self.inputs.clone(),
-            github_fixture(&self.event, self.fork),
+            github_fixture(&self.event, self.fork, &self.head_sha, &self.run_event),
             scenario_env,
             self.workspace.to_string_lossy().into_owned(),
             runtmp.to_string_lossy().into_owned(),
@@ -274,7 +307,8 @@ impl World {
 }
 
 /// The fake `github` context of a scenario.
-fn github_fixture(event: &str, fork: bool) -> Value {
+fn github_fixture(event: &str, fork: bool, head_sha: &str, run_event: &str) -> Value {
+    let head_owner = if fork { "fork" } else { "owner" };
     json!({
         "repository": "owner/repo",
         "token": "workflow-token",
@@ -287,8 +321,17 @@ fn github_fixture(event: &str, fork: bool) -> Value {
                 "number": 7,
                 "head": {
                     "repo": {
-                        "full_name": if fork { "fork/repo" } else { "owner/repo" }
+                        "full_name": format!("{head_owner}/repo")
                     }
+                }
+            },
+            "workflow_run": {
+                "event": run_event,
+                "head_sha": head_sha,
+                "head_branch": "feature",
+                "head_repository": {
+                    "full_name": format!("{head_owner}/repo"),
+                    "owner": { "login": head_owner }
                 }
             }
         }

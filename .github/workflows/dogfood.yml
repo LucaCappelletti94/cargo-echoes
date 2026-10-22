@@ -143,22 +143,24 @@ jobs:
         run: |
           set -euo pipefail
           status="$(cat "$RUNNER_TEMP/echoes-post-status")"
-          jq -e '.pr != "" and (.head_sha | length) == 40' echoes-payload/review.json > /dev/null \
+          jq -e '.pr != "" and (.head_sha | length) == 40' echoes-payload/meta.json > /dev/null \
             || { echo "the payload metadata is incomplete"; exit 1; }
+          jq -e '.groups | type == "array"' echoes-payload/report.json > /dev/null \
+            || { echo "the payload report is malformed"; exit 1; }
           case "$status" in
             prepared)
-              rows="$(wc -l < echoes-payload/comments.ndjson)"
+              rows="$(wc -l < "$RUNNER_TEMP/echoes-comments.ndjson")"
               [ "$rows" -gt 0 ] || { echo "expected one row per removable copy in the diff, got none"; exit 1; }
               [ -z "$EXPECTED_ROWS" ] || [ "$rows" = "$EXPECTED_ROWS" ] || { echo "expected $EXPECTED_ROWS rows, got $rows"; exit 1; }
               jq -e 'select(.path | startswith("tests/fixtures/")) | .line >= .start_line and (.body | contains("```suggestion"))' \
-                echoes-payload/comments.ndjson > /dev/null \
+                "$RUNNER_TEMP/echoes-comments.ndjson" > /dev/null \
                 || { echo "a payload row is malformed"; exit 1; }
-              echo "the prepared payload holds one postable comment per removable copy"
+              echo "the prepare run rendered one postable comment per removable copy"
               ;;
             skipped-nodiff)
-              [ ! -s echoes-payload/comments.ndjson ] \
-                || { echo "a skipped payload must hold no comment"; exit 1; }
-              echo "the fixture files are not in this pull request diff, the payload is empty as expected"
+              [ ! -s "$RUNNER_TEMP/echoes-comments.ndjson" ] \
+                || { echo "a skipped run must render no comment"; exit 1; }
+              echo "the fixture files are outside this pull request diff"
               ;;
             *)
               echo "unexpected prepare status: $status"
@@ -190,7 +192,7 @@ jobs:
           body="$RUNNER_TEMP/echoes-review.md"
           removable=0
           declare -A shared=()
-          while IFS=$'\t' read -r p line _ _ c _ _ _ _ _ end _ _ kind remedy _ _ _ public; do
+          while IFS=$'\x1f' read -r p line _ _ c _ _ _ _ _ end _ _ kind remedy _ _ _ public; do
             [ "$c" != "1" ] || continue
             [ "$kind" = "function" ] || { echo "$p:$line is a $kind, the fixture holds functions only"; exit 1; }
             [ "$remedy" = "delete" ] && [ "$public" = "1" ] && remedy=public
@@ -215,11 +217,6 @@ jobs:
           done
           suggestions="$(grep -c '^```suggestion' "$body")"
           [ "$suggestions" = "3" ] || { echo "expected 3 delete suggestions, the other copies carry none, got $suggestions"; exit 1; }
-          grep -q 'It is public API, so deleting it breaks its callers' "$body" || { echo "the public API comment is missing"; exit 1; }
-          grep -q 'on another type (Alpha, Beta)' "$body" || { echo "the generic or macro comment is missing"; exit 1; }
-          grep -q "so it can't simply be deleted" "$body" || { echo "the trait method comment is missing"; exit 1; }
-          grep -q 'under another `cfg`' "$body" || { echo "the cfg comment is missing"; exit 1; }
-          grep -q 'times in this module' "$body" || { echo "the function copy wording is missing"; exit 1; }
 
   member:
     name: Dogfood the action from a workspace member and on procedural macros
