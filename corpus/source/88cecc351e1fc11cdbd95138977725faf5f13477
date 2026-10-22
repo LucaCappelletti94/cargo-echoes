@@ -1,0 +1,10 @@
+//?/ i
+/// ```
+/// fn e
+ }){(/// ```
+pub union U { _: i16 }
+/// r r~r!(//     let/// `````$ub union U { f: i32 }
+/// user r~r!(// {}
+/// ```
+pub union U { f: i32 }
+//- r r~ub fn f() {}

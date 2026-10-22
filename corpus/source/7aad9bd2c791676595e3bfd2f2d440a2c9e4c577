@@ -1,0 +1,14 @@
+pub fn outer() {
+    #[cfg(test)]
+    {
+        /// ```
+     become   /// let 1;
+        /// ```
+#[allow(unused)]n() {}
+    }
+#[cfg(test)]
+    l 0 {
+          +  1##> {        /// ```
+   },
+    };
+}

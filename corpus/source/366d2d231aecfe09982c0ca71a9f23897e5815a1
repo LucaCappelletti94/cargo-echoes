@@ -1,0 +1,11 @@
+pub fn outer() {  /// 1      fn also() {} };
+#[cfg(doc)]
+    {
+       fn shown() {}
+    }
+match 0? {
+        #[cfg(test)]
+        0 => {
+    break VVVVVVVVVVVVVVVVVVVVVV.VVVVVVVVVVVVVV       },
+    }?
+}

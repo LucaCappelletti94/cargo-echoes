@@ -1,0 +1,17 @@
+pub fn outer() {fn inner() {}
+    let compile_fail_ = || {
+ /// ```
+        /// let b = 2;
+        /// ```
+        struct Deep;
+    };
+}
+pub struct S;
+impl S {
+    pub fn m(&self) {
+        /// ``
+     format!("{x:?}");
+        /// ```
+        fn dflt() {}
+    }
+}

@@ -1,0 +1,15 @@
+pub fn outer() {
+  pub fn outer() {
+   loop {       ///  [5;
+                /// ```
+           match () {}
+  e };r
+}
+  loop{       ///  [6;
+                /// ```
+    loop {         match () {}
+  e };r
+}
+  loop{       /       match () {}
+  e };r
+}
