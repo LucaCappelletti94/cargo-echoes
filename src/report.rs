@@ -5,6 +5,7 @@ use crate::{Kind, Remedy, Report, ReuseAction};
 use alloc::collections::BTreeSet;
 use alloc::format;
 use alloc::string::String;
+use alloc::vec::Vec;
 use core::fmt::Write;
 
 /// Render the report for humans.
@@ -110,10 +111,21 @@ fn organization_human(out: &mut String, report: &Report) {
         let _ = writeln!(out);
         return;
     };
+    let owners = if organization.name.is_empty() {
+        let mut owners: Vec<&str> = Vec::new();
+        for repository in &organization.repositories {
+            let owner = repository.name.split('/').next().unwrap_or_default();
+            if !owners.iter().any(|seen| seen.eq_ignore_ascii_case(owner)) {
+                owners.push(owner);
+            }
+        }
+        format!("owners {}", owners.join(", "))
+    } else {
+        format!("organization {}", organization.name)
+    };
     let _ = writeln!(
         out,
-        ", organization {} ({} accessible repositories, {} packages)",
-        organization.name,
+        ", {owners} ({} accessible repositories, {} packages)",
         organization.repositories.len(),
         organization.packages.len()
     );
@@ -659,6 +671,29 @@ mod tests {
             annotations(&report, true)
                 .lines()
                 .any(|line| line == "::error title=echoes::Incomplete organization analysis")
+        );
+    }
+
+    #[test]
+    fn a_scan_of_several_owners_names_each_owner() {
+        let mut report = report();
+        let repository = |name: &str| crate::OrganizationRepository {
+            name: name.to_string(),
+            commit: None,
+        };
+        report.organization = Some(crate::OrganizationReport {
+            name: String::new(),
+            repositories: vec![
+                repository("b/two"),
+                repository("a/one"),
+                repository("B/three"),
+            ],
+            ..Default::default()
+        });
+        let human = human(&report, false);
+        assert!(
+            human.contains(", owners b, a (3 accessible repositories, 0 packages)\n"),
+            "{human}"
         );
     }
 

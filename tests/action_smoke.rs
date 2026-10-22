@@ -1412,3 +1412,82 @@ fn s20_prepare_post_cap() {
         "the post summary lists the omitted copy from the payload"
     );
 }
+
+fn scan_token(r: &Runner) -> String {
+    r.scan_calls()[0]
+        .get("token")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
+#[test]
+fn s21_selected_repositories() {
+    let mut world = World::new("s21").inputs(&[("repositories", "o/a\n  O/b \n\n")]);
+    let nested = world.workspace_path().join("crates/app");
+    world.set_meta_root(nested);
+    let exit = world.run();
+    let r = world.runner();
+    assert_eq!(exit, 0, "a clean selection scan exits 0");
+    let scan = r.scan_args(0);
+    assert_eq!(
+        &scan[scan.len() - 4..],
+        ["--repository", "o/a", "--repository", "O/b"],
+        "each nonblank line becomes one trimmed repository"
+    );
+    assert!(
+        !scan
+            .iter()
+            .any(|a| a == "--github" || a == "--organization"),
+        "{scan:?}"
+    );
+    assert_eq!(
+        scan_token(r),
+        "workflow-token",
+        "the workflow token authenticates the listing"
+    );
+    let prefix = fs::read_to_string(Path::new(r.run_temp()).join("echoes-prefix")).unwrap();
+    assert_eq!(
+        prefix, "",
+        "selected repositories are not under the local workspace"
+    );
+}
+
+#[test]
+fn s22_selected_organizations_keep_the_job_token() {
+    let mut world = World::new("s22")
+        .inputs(&[("organizations", "acme\nwidgets")])
+        .env("GH_TOKEN", "pat");
+    let exit = world.run();
+    let r = world.runner();
+    assert_eq!(exit, 0, "a clean selection scan exits 0");
+    let scan = r.scan_args(0);
+    assert_eq!(
+        &scan[scan.len() - 4..],
+        ["--organization", "acme", "--organization", "widgets"]
+    );
+    assert_eq!(
+        scan_token(r),
+        "pat",
+        "a token the job sets reaches private repositories"
+    );
+}
+
+#[test]
+fn s23_selection_is_gate_only_and_exclusive() {
+    for (case, extra) in [
+        ("both", ("organizations", "acme")),
+        ("pr", ("pr-number", "7")),
+        ("dry", ("dry-run", "true")),
+        ("prepare", ("mode", "prepare")),
+        ("post", ("mode", "post")),
+    ] {
+        let mut world =
+            World::new(&format!("s23-{case}")).inputs(&[("repositories", "o/a"), extra]);
+        let exit = world.run();
+        let r = world.runner();
+        assert_ne!(exit, 0, "{case}");
+        assert!(r.scan_calls().is_empty(), "{case} scans nothing");
+        assert!(r.gh_calls().is_empty(), "{case} calls no API");
+    }
+}
