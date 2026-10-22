@@ -1,7 +1,5 @@
 name: cargo-echoes
-description: >-
-  cargo-echoes finds duplicated Rust doctests, functions and code blocks in
-  your workspace and reviews the copies a pull request adds.
+description: Find duplicated Rust doctests, functions and code blocks, and review the copies a pull request adds
 
 branding:
   icon: 'copy'
