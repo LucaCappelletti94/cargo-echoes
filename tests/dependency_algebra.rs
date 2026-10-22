@@ -129,6 +129,10 @@ fn opposite_branches_over_a_negated_comparison() {
             ),
         );
     }
+    same(
+        "fn f(a: u32, b: u32) -> u32 { let x = a & 1u32; let y = b & 1u32; if !(x <= y) { println!(\"{x}\"); } else { println!(\"{y}\"); } 0u32 }",
+        "fn g(a: u32, b: u32) -> u32 { let y = b & 1u32; let x = a & 1u32; if y < x { println!(\"{x}\"); } else { println!(\"{y}\"); } 0u32 }",
+    );
 }
 
 #[test]
