@@ -132,31 +132,74 @@ fn github_owner(url: &str) -> Option<&str> {
     is_github_login(owner).then_some(owner)
 }
 
-/// Load every accessible repository of one organization as a pinned snapshot corpus.
+/// The GitHub repositories an organization scan reads.
+pub(crate) enum Selection {
+    /// Every accessible repository of each organization or user.
+    Owners(Vec<String>),
+    /// Exactly these `owner/repo` repositories, whoever owns them.
+    Repositories(Vec<String>),
+}
+
+/// Load the selected repositories as a pinned snapshot corpus.
 ///
 /// Branches are pinned on every run. Snapshots are cached privately, keyed by repository and
 /// full commit, and reused while immutable. Failed repositories are recorded in
 /// `report.coverage.failures` with repository-qualified strings.
 #[must_use = "Use the corpus as the organization scan input"]
-pub(crate) fn load(organization: &str, cache_root: Option<&Path>, all_targets: bool) -> Corpus {
+pub(crate) fn load(selection: &Selection, cache_root: Option<&Path>, all_targets: bool) -> Corpus {
     let cache =
         cache_root.map_or_else(crate::context_cache::Store::default_root, Path::to_path_buf);
-    load_with_bases(organization, GITHUB_API, &cache, all_targets)
+    load_with_bases(selection, GITHUB_API, &cache, all_targets)
 }
 
 /// The acquisition against one explicit API base, the loopback seam for the regressions.
-fn load_with_bases(organization: &str, api: &str, cache: &Path, all_targets: bool) -> Corpus {
+fn load_with_bases(selection: &Selection, api: &str, cache: &Path, all_targets: bool) -> Corpus {
     let mut repos: Vec<RepoRef> = Vec::new();
     let mut failures: Vec<String> = Vec::new();
-    if is_github_login(organization) {
-        enumerate_repos(api, organization, MAX_PAGES, &mut repos, &mut failures);
-    } else {
-        failures.push(format!(
-            "{organization}: the organization login is not a valid GitHub login"
-        ));
+    let mut owners: Vec<&str> = Vec::new();
+    match selection {
+        Selection::Owners(logins) => {
+            for login in logins {
+                if owners.iter().any(|seen| seen.eq_ignore_ascii_case(login)) {
+                    continue;
+                }
+                owners.push(login);
+                if is_github_login(login) {
+                    enumerate_repos(api, login, MAX_PAGES, &mut repos, &mut failures);
+                } else {
+                    failures.push(format!(
+                        "{login}: the organization login is not a valid GitHub login"
+                    ));
+                }
+            }
+        }
+        Selection::Repositories(names) => {
+            for name in names {
+                let Some((owner, _)) = name
+                    .split_once('/')
+                    .filter(|(owner, repo)| is_github_login(owner) && is_repository_name(repo))
+                else {
+                    failures.push(format!("{name}: is not an owner/repository name"));
+                    continue;
+                };
+                if repos
+                    .iter()
+                    .any(|repo| repo.name.eq_ignore_ascii_case(name))
+                {
+                    continue;
+                }
+                if !owners.iter().any(|seen| seen.eq_ignore_ascii_case(owner)) {
+                    owners.push(owner);
+                }
+                repos.push(describe_repo(api, name));
+            }
+        }
     }
     let mut report = crate::organization::OrganizationReport {
-        name: organization.to_string(),
+        name: match owners.as_slice() {
+            [owner] => (*owner).to_string(),
+            _ => String::new(),
+        },
         ..Default::default()
     };
     let mut roots: Vec<Option<PathBuf>> = Vec::with_capacity(repos.len());
@@ -201,12 +244,41 @@ fn load_with_bases(organization: &str, api: &str, cache: &Path, all_targets: boo
     }
 }
 
-/// One enumerated repository.
+/// One selected repository.
 struct RepoRef {
     /// The `owner/repo` name.
     name: String,
-    /// The default branch, from the listing.
-    default: Option<String>,
+    /// The default branch, or the repository-qualified failure that left it unknown.
+    default: Result<String, String>,
+}
+
+/// A named repository with the default branch its metadata reports.
+fn describe_repo(api: &str, name: &str) -> RepoRef {
+    let url = format!("{api}/repos/{}", crate::context_upstream::encode_path(name));
+    let default = match crate::context_network::get_raw(
+        &url,
+        crate::context_network::READ_LIMIT,
+        crate::context_network::REQUEST_DEADLINE,
+    ) {
+        Err(error) => Err(format!("{name}: {error}")),
+        Ok(response) if !crate::context_network::is_success(response.status) => Err(format!(
+            "{name}: {} GET {url} HTTP {}",
+            response.id, response.status
+        )),
+        Ok(response) => serde_json::from_slice::<serde_json::Value>(&response.body)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("default_branch")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned)
+            })
+            .ok_or_else(|| format!("{name}: the default branch is unknown")),
+    };
+    RepoRef {
+        name: name.to_owned(),
+        default,
+    }
 }
 
 /// A valid GitHub login, one to 39 alphanumeric, hyphen or underscore characters starting
@@ -390,11 +462,12 @@ fn enumerate_repos(
                 continue;
             }
             repos.push(RepoRef {
-                name,
                 default: entry
                     .get("default_branch")
                     .and_then(serde_json::Value::as_str)
-                    .map(str::to_owned),
+                    .map(str::to_owned)
+                    .ok_or_else(|| format!("{name}: the default branch is unknown")),
+                name,
             });
         }
         let Some(next) = next else {
@@ -429,9 +502,12 @@ fn acquire_repo(
     failures: &mut Vec<String>,
     cache: &Path,
 ) -> (Option<String>, Option<Snapshot>) {
-    let Some(default) = &repo.default else {
-        failures.push(format!("{}: the default branch is unknown", repo.name));
-        return (None, None);
+    let default = match &repo.default {
+        Ok(default) => default,
+        Err(failure) => {
+            failures.push(failure.clone());
+            return (None, None);
+        }
     };
     match pin_commit(api, &repo.name, default) {
         Ok(None) => (None, None),
@@ -684,7 +760,12 @@ mod tests {
         fixture.page_route("/api/users/u/repos", vec![listing(&[entry("u/app")])]);
         empty_pins(&fixture, &["u/app"]);
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("u", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("u"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(corpus.report.coverage.failures, Vec::<String>::new());
         assert_eq!(names(&corpus), ["u/app"]);
         assert_eq!(
@@ -702,7 +783,12 @@ mod tests {
         fixture.page_route("/api/user/repos", vec![listing(&[entry("u/secret")])]);
         empty_pins(&fixture, &["u/secret"]);
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("u", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("u"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(corpus.report.coverage.failures, Vec::<String>::new());
         assert_eq!(names(&corpus), ["u/secret"]);
         assert_eq!(
@@ -720,7 +806,12 @@ mod tests {
         fixture.page_route("/api/users/u/repos", vec![listing(&[entry("u/app")])]);
         empty_pins(&fixture, &["u/app"]);
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("u", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("u"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert!(!corpus.report.coverage.complete);
         assert_eq!(corpus.report.coverage.failures.len(), 1);
         assert!(corpus.report.coverage.failures[0].starts_with("u: "));
@@ -738,7 +829,12 @@ mod tests {
             let fixture = Fixture::start();
             fixture.route("/api/users/o", status, &body);
             let dir = tempfile::tempdir().unwrap();
-            let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+            let corpus = load_with_bases(
+                &one_owner("o"),
+                fixture.api_base().as_str(),
+                dir.path(),
+                false,
+            );
             assert_eq!(corpus.report.coverage.failures.len(), 1, "{status}");
             assert!(corpus.report.coverage.failures[0].starts_with("o: "));
             assert_eq!(corpus.report.repositories.len(), 0);
@@ -870,6 +966,139 @@ mod tests {
         }
     }
 
+    /// A selection of one owner's repositories.
+    fn one_owner(login: &str) -> Selection {
+        Selection::Owners(vec![login.to_owned()])
+    }
+
+    /// Register the repository metadata naming `name` with the `main` default branch.
+    fn metadata(fixture: &Fixture, name: &str) {
+        fixture.route(
+            &format!("/api/repos/{name}"),
+            200,
+            &serde_json::to_vec(
+                &serde_json::json!({ "full_name": name, "default_branch": "main" }),
+            )
+            .unwrap(),
+        );
+    }
+
+    /// The repositories of `names`, as a selection.
+    fn repositories(names: &[&str]) -> Selection {
+        Selection::Repositories(names.iter().map(|name| (*name).to_owned()).collect())
+    }
+
+    #[test]
+    fn named_repositories_are_scanned_without_a_listing() {
+        let fixture = Fixture::start();
+        metadata(&fixture, "a/one");
+        metadata(&fixture, "b/two");
+        empty_pins(&fixture, &["a/one", "b/two"]);
+        let dir = tempfile::tempdir().unwrap();
+        let corpus = load_with_bases(
+            &repositories(&["b/two", "a/one", "A/One"]),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
+        assert_eq!(corpus.report.coverage.failures, Vec::<String>::new());
+        assert_eq!(names(&corpus), ["b/two", "a/one"]);
+        assert_eq!(corpus.report.name, "");
+        assert_eq!(fixture.hits("/api/repos/a/one"), 1);
+        for listing in [
+            "/api/users/a",
+            "/api/users/b",
+            "/api/orgs/a/repos",
+            "/api/orgs/b/repos",
+            "/api/user",
+        ] {
+            assert_eq!(fixture.hits(listing), 0, "{listing}");
+        }
+    }
+
+    #[test]
+    fn repositories_of_one_owner_name_that_owner() {
+        let fixture = Fixture::start();
+        metadata(&fixture, "o/x");
+        metadata(&fixture, "o/y");
+        empty_pins(&fixture, &["o/x", "o/y"]);
+        let dir = tempfile::tempdir().unwrap();
+        let corpus = load_with_bases(
+            &repositories(&["o/x", "o/y"]),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
+        assert!(corpus.report.coverage.complete);
+        assert_eq!(corpus.report.name, "o");
+    }
+
+    #[test]
+    fn a_missing_repository_leaves_the_corpus_incomplete() {
+        let fixture = Fixture::start();
+        metadata(&fixture, "a/one");
+        empty_pins(&fixture, &["a/one"]);
+        fixture.route("/api/repos/a/gone", 404, b"{\"message\": \"Not Found\"}");
+        let dir = tempfile::tempdir().unwrap();
+        let corpus = load_with_bases(
+            &repositories(&["a/one", "a/gone"]),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
+        assert!(!corpus.report.coverage.complete);
+        assert_eq!(corpus.report.coverage.failures.len(), 1);
+        assert!(corpus.report.coverage.failures[0].starts_with("a/gone: "));
+        assert!(corpus.report.coverage.failures[0].contains("HTTP 404"));
+        assert_eq!(names(&corpus), ["a/one", "a/gone"]);
+        assert_eq!(corpus.report.repositories[1].commit, None);
+        assert_eq!(corpus.roots.len(), 2);
+        assert_eq!(fixture.hits("/api/repos/a/gone/git/ref/heads/main"), 0);
+    }
+
+    #[test]
+    fn invalid_repository_names_are_failures_without_a_request() {
+        let fixture = Fixture::start();
+        let dir = tempfile::tempdir().unwrap();
+        let corpus = load_with_bases(
+            &repositories(&["no-slash", "a/b/c", "-bad/x", "a/..", "/x", "a/"]),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
+        assert_eq!(corpus.report.coverage.failures.len(), 6);
+        assert!(
+            corpus
+                .report
+                .coverage
+                .failures
+                .iter()
+                .all(|failure| failure.ends_with("is not an owner/repository name"))
+        );
+        assert_eq!(corpus.report.repositories.len(), 0);
+        assert_eq!(fixture.hits("/api/repos/a/b/c"), 0);
+    }
+
+    #[test]
+    fn several_owners_join_one_corpus() {
+        let fixture = organization_fixture();
+        account(&fixture, "p", "Organization");
+        fixture.page_route("/api/orgs/o/repos", vec![listing(&[entry("o/app")])]);
+        fixture.page_route("/api/orgs/p/repos", vec![listing(&[entry("p/lib")])]);
+        empty_pins(&fixture, &["o/app", "p/lib"]);
+        let dir = tempfile::tempdir().unwrap();
+        let corpus = load_with_bases(
+            &Selection::Owners(vec!["o".to_owned(), "p".to_owned(), "O".to_owned()]),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
+        assert_eq!(corpus.report.coverage.failures, Vec::<String>::new());
+        assert_eq!(names(&corpus), ["o/app", "p/lib"]);
+        assert_eq!(corpus.report.name, "");
+        assert_eq!(fixture.hits("/api/orgs/o/repos"), 1);
+    }
+
     #[test]
     fn enumeration_paginates_to_the_last_page() {
         let fixture = organization_fixture();
@@ -885,7 +1114,12 @@ mod tests {
         let refs: Vec<&str> = names.iter().map(String::as_str).collect();
         empty_pins(&fixture, &refs);
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(corpus.report.name, "o");
         assert_eq!(corpus.report.repositories.len(), 105);
         assert_eq!(fixture.hits("/api/orgs/o/repos"), 2);
@@ -920,7 +1154,12 @@ mod tests {
         );
         empty_pins(&fixture, &["o/first", "o/last"]);
         let cache = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), cache.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            cache.path(),
+            false,
+        );
         assert!(
             corpus.report.coverage.complete,
             "{:?}",
@@ -949,7 +1188,12 @@ mod tests {
         let refs: Vec<&str> = names.iter().map(String::as_str).collect();
         empty_pins(&fixture, &refs);
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(corpus.report.repositories.len(), 50);
         assert_eq!(fixture.hits("/api/orgs/o/repos"), 2);
         assert!(!corpus.report.coverage.complete);
@@ -964,7 +1208,12 @@ mod tests {
         let fixture = organization_fixture();
         fixture.route("/api/orgs/o/repos", 404, b"[]");
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(corpus.report.repositories.len(), 0);
         assert_eq!(corpus.roots.len(), 0);
         assert!(!corpus.report.coverage.complete);
@@ -983,7 +1232,12 @@ mod tests {
         );
         empty_pins(&fixture, &["o/r1", "o/r2", "o/r3"]);
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(fixture.hits("/api/orgs/o/repos"), 2);
         let names: Vec<&str> = corpus
             .report
@@ -1004,7 +1258,12 @@ mod tests {
         );
         fixture.route("/api/repos/o/solo/git/ref/heads/main", 409, EMPTY_BODY);
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(corpus.report.repositories.len(), 1);
         assert!(corpus.report.repositories[0].commit.is_none());
         assert!(corpus.roots[0].is_none());
@@ -1025,7 +1284,12 @@ mod tests {
             b"{\"message\": \"Something else\"}",
         );
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(corpus.report.repositories.len(), 1);
         assert!(corpus.report.repositories[0].commit.is_none());
         assert!(corpus.roots[0].is_none());
@@ -1038,7 +1302,12 @@ mod tests {
     fn an_invalid_organization_login_is_rejected_without_requests() {
         let fixture = organization_fixture();
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("../evil", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("../evil"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(corpus.report.repositories.len(), 0);
         assert_eq!(corpus.roots.len(), 0);
         assert!(!corpus.report.coverage.complete);
@@ -1053,7 +1322,12 @@ mod tests {
             account(&fixture, login, "Organization");
             fixture.page_route(&format!("/api/orgs/{login}/repos"), vec![listing(&[])]);
             let dir = tempfile::tempdir().unwrap();
-            let corpus = load_with_bases(login, fixture.api_base().as_str(), dir.path(), false);
+            let corpus = load_with_bases(
+                &one_owner(login),
+                fixture.api_base().as_str(),
+                dir.path(),
+                false,
+            );
             assert_eq!(
                 corpus.report.coverage.failures,
                 Vec::<String>::new(),
@@ -1067,7 +1341,12 @@ mod tests {
         }
         for login in [String::from("-lead"), String::from("a.b"), "a".repeat(40)] {
             let dir = tempfile::tempdir().unwrap();
-            let corpus = load_with_bases(&login, fixture.api_base().as_str(), dir.path(), false);
+            let corpus = load_with_bases(
+                &one_owner(&login),
+                fixture.api_base().as_str(),
+                dir.path(),
+                false,
+            );
             assert!(
                 corpus.report.coverage.failures[0].contains("not a valid GitHub login"),
                 "{login}"
@@ -1097,7 +1376,12 @@ mod tests {
         );
         empty_pins(&fixture, &names.each_ref().map(String::as_str));
         let cache = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), cache.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            cache.path(),
+            false,
+        );
         assert!(
             corpus.report.coverage.complete,
             "{:?}",
@@ -1133,7 +1417,12 @@ mod tests {
         );
         empty_pins(&fixture, &["o/r1", "o/r2"]);
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         let names: Vec<&str> = corpus
             .report
             .repositories
@@ -1171,7 +1460,12 @@ mod tests {
             &snapshot_archive("o-app-b000000"),
         );
         let cache = tempfile::tempdir().unwrap();
-        let first = load_with_bases("o", fixture.api_base().as_str(), cache.path(), false);
+        let first = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            cache.path(),
+            false,
+        );
         assert_eq!(
             first.report.repositories[0].commit.as_deref(),
             Some(sha_a.as_str())
@@ -1188,7 +1482,12 @@ mod tests {
             "/api/orgs/o/repos",
             vec![listing(&[entry("o/app")]), (200, b"[]".to_vec())],
         );
-        let second = load_with_bases("o", fixture.api_base().as_str(), cache.path(), false);
+        let second = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            cache.path(),
+            false,
+        );
         assert_eq!(
             second.report.repositories[0].commit.as_deref(),
             Some(sha_b.as_str())
@@ -1250,7 +1549,12 @@ mod tests {
                 "/api/orgs/o/repos",
                 vec![listing(&[entry("o/app")]), (200, b"[]".to_vec())],
             );
-            let corpus = load_with_bases("o", fixture.api_base().as_str(), cache.path(), false);
+            let corpus = load_with_bases(
+                &one_owner("o"),
+                fixture.api_base().as_str(),
+                cache.path(),
+                false,
+            );
             assert_eq!(
                 corpus.report.coverage.failures,
                 ["o/app: archive link \"dangling\" cannot be resolved"],
@@ -1292,7 +1596,12 @@ mod tests {
             &package_archive("o-good-b000000"),
         );
         let cache = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), cache.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            cache.path(),
+            false,
+        );
         assert_eq!(corpus.report.repositories.len(), 2);
         assert_eq!(
             corpus.report.repositories[0].commit.as_deref(),
@@ -1340,7 +1649,12 @@ mod tests {
         fixture.redirect_route(&format!("/api/repos/o/app/tarball/{sha}"), 302, &location);
         fixture.route("/raw/payload", 200, &snapshot_archive("o-app-c000000"));
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert!(corpus.roots[0].is_some());
         assert!(corpus.report.coverage.complete);
         assert_eq!(fixture.last_auth("/raw/payload"), None);
@@ -1375,7 +1689,12 @@ mod tests {
             &snapshot_archive("o-app-d000000"),
         );
         let cache = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), cache.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            cache.path(),
+            false,
+        );
         assert!(corpus.report.coverage.complete);
         let base = cache.path().join("organization");
         let snapshot = corpus.roots[0].as_ref().expect("the cached snapshot");
@@ -1400,7 +1719,12 @@ mod tests {
                 &pin_response(&sha).1,
             );
             let cache = tempfile::tempdir().unwrap();
-            let corpus = load_with_bases("o", fixture.api_base().as_str(), cache.path(), false);
+            let corpus = load_with_bases(
+                &one_owner("o"),
+                fixture.api_base().as_str(),
+                cache.path(),
+                false,
+            );
             assert!(
                 corpus.report.coverage.failures[0].contains("has no full commit identifier"),
                 "{sha}"
@@ -1456,7 +1780,12 @@ mod tests {
             b"not a gzip stream",
         );
         let cache = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), cache.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            cache.path(),
+            false,
+        );
         assert!(!corpus.report.coverage.complete);
         let archive = private_base(cache.path(), "o/app")
             .unwrap()
@@ -1475,7 +1804,12 @@ mod tests {
         fixture.page_route("/api/users/u/repos", vec![listing(&[entry("u/app")])]);
         empty_pins(&fixture, &["u/app"]);
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("u", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("u"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(corpus.report.coverage.failures.len(), 1);
         assert!(corpus.report.coverage.failures[0].starts_with("u: "));
         assert_eq!(names(&corpus), ["u/app"]);
@@ -1496,7 +1830,12 @@ mod tests {
                 None => fixture.short_route("/api/orgs/o/repos", 64),
             }
             let dir = tempfile::tempdir().unwrap();
-            let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+            let corpus = load_with_bases(
+                &one_owner("o"),
+                fixture.api_base().as_str(),
+                dir.path(),
+                false,
+            );
             assert_eq!(corpus.report.repositories.len(), 0, "{expected}");
             assert_eq!(corpus.report.coverage.failures.len(), 1, "{expected}");
             assert!(
@@ -1519,7 +1858,12 @@ mod tests {
         );
         empty_pins(&fixture, &["o/app"]);
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(names(&corpus), ["o/app"]);
         assert_eq!(corpus.report.coverage.failures.len(), 1);
         assert!(
@@ -1550,7 +1894,12 @@ mod tests {
             vec![listing(&[serde_json::json!({ "full_name": "o/app" })])],
         );
         let dir = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
         assert_eq!(names(&corpus), ["o/app"]);
         assert_eq!(
             corpus.report.coverage.failures,
@@ -1570,7 +1919,12 @@ mod tests {
                 b"{\"message\": \"Conflict\"}",
             );
             let dir = tempfile::tempdir().unwrap();
-            let corpus = load_with_bases("o", fixture.api_base().as_str(), dir.path(), false);
+            let corpus = load_with_bases(
+                &one_owner("o"),
+                fixture.api_base().as_str(),
+                dir.path(),
+                false,
+            );
             let failures = &corpus.report.coverage.failures;
             assert_eq!(failures.len(), 1, "{status}");
             assert!(failures[0].starts_with("o/app: "), "{failures:?}");
@@ -1604,12 +1958,12 @@ mod tests {
         let fixture = pinned_fixture(&sha, (200, b"not a gzip stream"));
         let cache = tempfile::tempdir().unwrap();
         let api = fixture.api_base();
-        load_with_bases("o", &api, cache.path(), false);
+        load_with_bases(&one_owner("o"), &api, cache.path(), false);
         let archive = private_base(cache.path(), "o/app")
             .unwrap()
             .join(format!("{sha}.tar.gz"));
         std::fs::write(&archive, package_archive("o-app-e")).unwrap();
-        let corpus = load_with_bases("o", &api, cache.path(), false);
+        let corpus = load_with_bases(&one_owner("o"), &api, cache.path(), false);
         assert_eq!(corpus.report.coverage.failures, Vec::<String>::new());
         assert_eq!(fixture.hits(&format!("/api/repos/o/app/tarball/{sha}")), 1);
         assert_eq!(corpus.report.packages.len(), 1);
@@ -1624,7 +1978,12 @@ mod tests {
         let commit = private_base(cache.path(), "o/app").unwrap().join(&sha);
         std::fs::create_dir(&commit).unwrap();
         std::fs::write(commit.join(LINK_REPORT), "").unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), cache.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            cache.path(),
+            false,
+        );
         assert_eq!(corpus.report.coverage.failures.len(), 1);
         assert!(corpus.report.coverage.failures[0].starts_with("o/app: "));
         assert_eq!(corpus.roots, [None]);
@@ -1649,7 +2008,12 @@ mod tests {
         ]);
         let fixture = pinned_fixture(&sha, (200, &archive));
         let cache = tempfile::tempdir().unwrap();
-        let corpus = load_with_bases("o", fixture.api_base().as_str(), cache.path(), false);
+        let corpus = load_with_bases(
+            &one_owner("o"),
+            fixture.api_base().as_str(),
+            cache.path(),
+            false,
+        );
         assert_eq!(corpus.report.coverage.failures.len(), 1);
         assert!(
             corpus.report.coverage.failures[0].starts_with("o/app: Cargo.toml: "),

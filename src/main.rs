@@ -21,13 +21,19 @@ struct Args {
     #[arg(short, long)]
     package: Option<String>,
     /// Scan crates in every accessible repository of a GitHub organization or user, by default
-    /// the owner of the current repository.
-    #[arg(long, value_name = "ORG", num_args = 0..=1)]
-    #[expect(
-        clippy::option_option,
-        reason = "clap encodes a flag whose value may be omitted as nested options"
+    /// the owner of the current repository. Repeat it to scan several owners as one corpus.
+    #[arg(
+        long,
+        value_name = "ORG",
+        num_args = 0..=1,
+        default_missing_value = "",
+        action = clap::ArgAction::Append
     )]
-    organization: Option<Option<String>>,
+    organization: Option<Vec<String>>,
+    /// Scan exactly this GitHub repository, whoever owns it. Repeat it to scan several as one
+    /// corpus.
+    #[arg(long, value_name = "OWNER/REPO", conflicts_with = "organization")]
+    repository: Vec<String>,
     /// Scan bin and example doctests in addition to lib doctests.
     #[arg(long)]
     all_targets: bool,
@@ -167,10 +173,22 @@ fn run(args: Args) -> echoes::Result<ExitCode> {
     if let Some(config) = args.config {
         scan = scan.config(config)?;
     }
-    let report = match args.organization {
-        Some(Some(organization)) => scan.run_organization(&organization)?,
-        Some(None) => scan.run_organization(&echoes::repository_owner(".")?)?,
-        None => scan.run(Path::new("."))?,
+    let report = match (args.organization, args.repository) {
+        (Some(organizations), _) => {
+            let owners = organizations
+                .into_iter()
+                .map(|name| {
+                    if name.is_empty() {
+                        echoes::repository_owner(".")
+                    } else {
+                        Ok(name)
+                    }
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            scan.run_organizations(&owners)?
+        }
+        (None, repositories) if !repositories.is_empty() => scan.run_repositories(&repositories)?,
+        (None, _) => scan.run(Path::new("."))?,
     };
     let out = if args.json {
         echoes::json(&report)

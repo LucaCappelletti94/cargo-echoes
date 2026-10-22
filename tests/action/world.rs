@@ -39,6 +39,7 @@ pub struct World {
     rate_limit_after: usize,
     meta_root: Option<PathBuf>,
     workspace_override: Option<PathBuf>,
+    env: BTreeMap<String, String>,
     runner: Option<Runner>,
 }
 
@@ -70,6 +71,7 @@ impl World {
             rate_limit_after: 0,
             meta_root: None,
             workspace_override: None,
+            env: BTreeMap::new(),
             runner: None,
         }
     }
@@ -129,6 +131,12 @@ impl World {
     /// The inline comment posts beyond this many hit a secondary rate limit.
     pub fn rate_limit_after(mut self, allowed: usize) -> Self {
         self.rate_limit_after = allowed;
+        self
+    }
+
+    /// A variable the calling job sets, which every step inherits.
+    pub fn env(mut self, key: &str, value: &str) -> Self {
+        self.env.insert(key.to_string(), value.to_string());
         self
     }
 
@@ -244,6 +252,7 @@ impl World {
                 .to_string_lossy()
                 .into_owned(),
         );
+        scenario_env.extend(self.env.clone());
         let action_text =
             fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("action.yml"))
                 .expect("read action.yml");
@@ -268,6 +277,7 @@ impl World {
 fn github_fixture(event: &str, fork: bool) -> Value {
     json!({
         "repository": "owner/repo",
+        "token": "workflow-token",
         "event_name": event,
         "ref": if event == "pull_request" { "refs/pull/7/head" } else { "refs/heads/main" },
         "run_id": "12345",

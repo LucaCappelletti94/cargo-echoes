@@ -349,6 +349,53 @@ impl Echoes {
     /// Panics when the scan panics, a bug in this crate.
     #[cfg(feature = "std")]
     pub fn run_organization(self, organization: &str) -> Result<Report> {
+        self.run_selection(&organization_source::Selection::Owners(alloc::vec![
+            organization.to_string(),
+        ]))
+    }
+
+    /// Scan every accessible repository of each organization or user in `organizations` as
+    /// one corpus, like [`Echoes::run_organization`].
+    ///
+    /// # Errors
+    ///
+    /// Fails when `organizations` is empty, and as [`Echoes::run_organization`] does.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the scan panics, a bug in this crate.
+    #[cfg(feature = "std")]
+    pub fn run_organizations(self, organizations: &[impl AsRef<str>]) -> Result<Report> {
+        let owners = organizations.iter().map(|name| String::from(name.as_ref()));
+        self.run_selection(&organization_source::Selection::Owners(owners.collect()))
+    }
+
+    /// Scan exactly the `owner/repo` repositories in `repositories` as one corpus, whoever
+    /// owns them, without listing any owner's repositories.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `repositories` is empty, and as [`Echoes::run_organization`] does.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the scan panics, a bug in this crate.
+    #[cfg(feature = "std")]
+    pub fn run_repositories(self, repositories: &[impl AsRef<str>]) -> Result<Report> {
+        let names = repositories.iter().map(|name| String::from(name.as_ref()));
+        self.run_selection(&organization_source::Selection::Repositories(
+            names.collect(),
+        ))
+    }
+
+    #[cfg(feature = "std")]
+    fn run_selection(self, selection: &organization_source::Selection) -> Result<Report> {
+        if let organization_source::Selection::Owners(names)
+        | organization_source::Selection::Repositories(names) = selection
+            && names.is_empty()
+        {
+            return Err(Error::EmptySelection);
+        }
         if self.context_dependencies.depth.unwrap_or(0) > 0 {
             return Err(Error::OrganizationDependencies);
         }
@@ -358,7 +405,7 @@ impl Echoes {
                 .cache_dir
                 .as_deref()
                 .map(Path::new);
-            let corpus = organization_source::load(organization, cache, self.all_targets);
+            let corpus = organization_source::load(selection, cache, self.all_targets);
             self.run_organization_corpus(corpus)
         })
     }
@@ -832,6 +879,9 @@ pub enum Error {
     /// The current repository's GitHub owner could not be determined.
     #[error("organization: {0}")]
     Owner(#[from] OwnerError),
+    /// An organization scan names no organization and no repository.
+    #[error("organization: no organization or repository was named")]
+    EmptySelection,
 }
 
 /// A `Result` with [`Error`] as its default error type.

@@ -131,10 +131,37 @@ inputs:
     description: Inline comments posted per run, the omitted copies go to the review body and the run summary
     required: false
     default: '50'
+  organizations:
+    description: Scan the crates of these GitHub organizations or users instead of the workspace, one per line
+    required: false
+    default: ''
+  repositories:
+    description: Scan exactly these OWNER/REPO repositories instead of the workspace, one per line
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
   steps:
+    - name: Check the repository selection
+      if: ${{ inputs.organizations != '' || inputs.repositories != '' }}
+      shell: bash
+      env:
+        ORGANIZATIONS: ${{ inputs.organizations }}
+        REPOSITORIES: ${{ inputs.repositories }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        MODE: ${{ inputs.mode }}
+      run: |
+        if [ -n "${ORGANIZATIONS//[[:space:]]/}" ] && [ -n "${REPOSITORIES//[[:space:]]/}" ]; then
+          echo "::error title=echoes::organizations and repositories are alternatives, set one"
+          exit 2
+        fi
+        if [ -n "$PR_NUMBER" ] || [ "$DRY_RUN" = "true" ] || [ "$MODE" != "review" ]; then
+          echo "::error title=echoes::organizations and repositories only run as a gate, without pr-number, dry-run or mode"
+          exit 2
+        fi
+
     - name: Install echoes
       if: ${{ inputs.mode != 'post' && inputs.install == 'true' }}
       shell: bash
@@ -238,6 +265,9 @@ runs:
         CONTEXT_CACHE_DIR: ${{ env.echoes-context-index-dir }}
         CONTEXT_CHECK_LATEST: ${{ inputs.context-check-latest }}
         CONTEXT_FAIL: ${{ inputs.context-fail-on-reuse }}
+        ORGANIZATIONS: ${{ inputs.organizations }}
+        REPOSITORIES: ${{ inputs.repositories }}
+        WORKFLOW_TOKEN: ${{ github.token }}
       run: |
         # The runner drops step summaries over 1 MiB, so a step keeps its
         # summary writes within a safe total, the truncated tail gets a note.
@@ -254,14 +284,26 @@ runs:
             printf '\nechoes: the run summary is full, the rest is truncated\n' >> "$file"
           fi
         }
-        # Report paths are relative to the workspace root cargo resolves, the cwd or one of
-        # its ancestors. GitHub reads, matches and links paths from the repository root, so
-        # one prefix from that root projects every report path for the later steps.
-        root="$(cargo metadata --no-deps --format-version 1 2>/dev/null | jq -r '.workspace_root')" || root=''
+        selection=()
+        while read -r name; do
+          [ -n "$name" ] && selection+=(--organization "$name")
+        done <<< "$ORGANIZATIONS"
+        while read -r name; do
+          [ -n "$name" ] && selection+=(--repository "$name")
+        done <<< "$REPOSITORIES"
         prefix=''
-        if [ -n "$root" ] && [ -n "${GITHUB_WORKSPACE:-}" ]; then
-          prefix="$(realpath --relative-to="$GITHUB_WORKSPACE" "$root" 2>/dev/null)" || prefix=''
-          [ "$prefix" = "." ] && prefix=''
+        if [ "${#selection[@]}" -gt 0 ]; then
+          # A job token reaches private repositories, the workflow token the public ones.
+          export GH_TOKEN="${GH_TOKEN:-$WORKFLOW_TOKEN}"
+        else
+          # Report paths are relative to the workspace root cargo resolves, the cwd or one of
+          # its ancestors. GitHub reads, matches and links paths from the repository root, so
+          # one prefix from that root projects every report path for the later steps.
+          root="$(cargo metadata --no-deps --format-version 1 2>/dev/null | jq -r '.workspace_root')" || root=''
+          if [ -n "$root" ] && [ -n "${GITHUB_WORKSPACE:-}" ]; then
+            prefix="$(realpath --relative-to="$GITHUB_WORKSPACE" "$root" 2>/dev/null)" || prefix=''
+            [ "$prefix" = "." ] && prefix=''
+          fi
         fi
         printf '%s' "$prefix" > "$RUNNER_TEMP/echoes-prefix"
         printf '%s\n' 'if $prefix == "" then . else ((.groups[]?.sites[]?, .context_groups[]?.sites[]?) |= (.file = "\($prefix)/\(.file)")) | (if .reuse then (.reuse.groups[]?.local |= (.file = "\($prefix)/\(.file)")) else . end) end' \
@@ -288,6 +330,7 @@ runs:
           [ "$CONTEXT_CHECK_LATEST" = "false" ] && set -- --context-check-latest false "$@"
           [ "$CONTEXT_FAIL" = "true" ] && set -- --context-fail-on-reuse "$@"
         fi
+        set -- "$@" "${selection[@]}"
         if [ -n "$PR_NUMBER" ] || [ "$DRY_RUN" = "true" ]; then
           report="$RUNNER_TEMP/echoes-report.json"
           status=0
@@ -364,7 +407,8 @@ runs:
           out="$RUNNER_TEMP/echoes-gate.txt"
           status=0
           gate=()
-          [ "$ANNOTATIONS" = "true" ] && gate+=(--github)
+          # Annotations anchor to this repository's files, which a selection does not scan.
+          [ "$ANNOTATIONS" = "true" ] && [ "${#selection[@]}" -eq 0 ] && gate+=(--github)
           cargo echoes \
             --threshold "$THRESHOLD" \
             --min-tokens "$MIN_TOKENS" \

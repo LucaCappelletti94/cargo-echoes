@@ -8,7 +8,7 @@ case "$cmd" in
     if printf '%s\n' "$@" | grep -qx -- '--version'; then
       exit 0
     fi
-    { printf 'echoes\n'; printf '%s\n' "$@"; } | jq -R . | jq -cs '{cmd: "echoes", args: .}' >> "${FAKE_LOG}/cargo.jsonl"
+    { printf 'echoes\n'; printf '%s\n' "$@"; } | jq -R . | jq -cs --arg t "${GH_TOKEN:-}" '{cmd: "echoes", args: ., token: $t}' >> "${FAKE_LOG}/cargo.jsonl"
     json=0
     for a in "$@"; do [ "$a" = "--json" ] && json=1; done
     if [ "$json" = "1" ]; then
