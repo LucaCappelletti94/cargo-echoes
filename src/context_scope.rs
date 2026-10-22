@@ -123,9 +123,6 @@ impl ContextScope {
 
 /// A module path of nonempty `::`-separated segments.
 fn valid_module(value: &str) -> bool {
-    if value.is_empty() || value.starts_with(':') || value.ends_with(':') {
-        return false;
-    }
     value
         .split("::")
         .all(|segment| !segment.is_empty() && !segment.contains(':'))
@@ -206,9 +203,6 @@ fn next_component(bytes: &[u8]) -> (Option<&[u8]>, &[u8]) {
     } else {
         Some(&bytes[start..i])
     };
-    while i < bytes.len() && (bytes[i] == b'/' || bytes[i] == b'\\') {
-        i += 1;
-    }
     (component, &bytes[i..])
 }
 
@@ -299,6 +293,7 @@ mod tests {
             "module:",
             "module-exact:",
             "module:a::",
+            "module:a:",
             "module::a",
             "module-a::b",
             "module:app:::parser",

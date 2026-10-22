@@ -466,3 +466,98 @@ fn default_source_of_a_conditional_module_path_remains_selectable() {
         ]]
     );
 }
+
+#[test]
+fn a_leading_dash_module_scope_is_rejected() {
+    let dir = fixture();
+    let output = support::run_cli(
+        dir.path(),
+        &["--context-select", "module:-x", "--json", "--no-fail"],
+    );
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("invalid context scope `module:-x`"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn unlinked_files_drop_out_of_the_target_scan_under_context_expansion() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    put(
+        root,
+        "Cargo.toml",
+        "[workspace]\nresolver = \"3\"\nmembers = [\"app\"]\n",
+    );
+    put(
+        root,
+        "app/Cargo.toml",
+        "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    );
+    put(
+        root,
+        "app/src/lib.rs",
+        "pub fn a1() -> u32 { 1u32 + 1u32 }\npub fn a2() -> u32 { 1u32 + 1u32 }\n",
+    );
+    put(
+        root,
+        "app/src/dead.rs",
+        "pub fn b1() -> u32 { 2u32 + 2u32 }\npub fn b2() -> u32 { 2u32 + 2u32 }\n",
+    );
+    let output = support::run_cli(
+        root,
+        &[
+            "--functions",
+            "--fn-min-tokens",
+            "0",
+            "--context-select",
+            "workspace",
+            "--json",
+            "--no-fail",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let groups = report["groups"].as_array().unwrap();
+    let items: Vec<Vec<String>> = groups
+        .iter()
+        .map(|group| {
+            let mut items: Vec<String> = group["sites"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|site| site["item"].as_str().unwrap().to_owned())
+                .collect();
+            items.sort();
+            items
+        })
+        .collect();
+    assert!(
+        items
+            .iter()
+            .any(|items| { items == &vec!["app::a1".to_owned(), "app::a2".to_owned()] }),
+        "{groups:?}"
+    );
+}
+
+#[test]
+fn a_configured_search_scope_expands_the_context_corpus_past_the_package_filter() {
+    let dir = fixture();
+    put(
+        dir.path(),
+        ".echoes.toml",
+        "context-search = \"workspace\"\n",
+    );
+    let report = scan(dir.path(), &["--package", "app"]);
+    assert!(
+        group_items(&report)
+            .iter()
+            .any(|items| items.iter().any(|item| item == "other::available"))
+    );
+}

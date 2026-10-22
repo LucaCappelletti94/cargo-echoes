@@ -387,3 +387,83 @@ fn an_alias_membership_reports_one_context_per_module_name() {
         ]]
     );
 }
+
+#[test]
+fn a_search_scope_alone_expands_the_context_corpus_past_the_package_filter() {
+    let dir = fixture();
+    let report = scan(
+        dir.path(),
+        &["--package", "other", "--context-search", "workspace"],
+    );
+    assert!(
+        group_items(&report)
+            .iter()
+            .any(|items| items.iter().any(|item| item == "app::root_dup"))
+    );
+}
+
+#[test]
+fn a_search_scope_alone_selects_every_context_block_of_the_expanded_corpus() {
+    let dir = fixture();
+    let full = scan(
+        dir.path(),
+        &[
+            "--context-select",
+            "workspace",
+            "--context-search",
+            "workspace",
+        ],
+    );
+    let scoped = scan(
+        dir.path(),
+        &["--package", "other", "--context-search", "workspace"],
+    );
+    assert_eq!(scoped["context_blocks"], full["context_blocks"]);
+}
+
+#[test]
+fn an_explicit_select_scope_runs_context_scanning_without_the_block_flag() {
+    let dir = fixture();
+    let output = support::run_cli(
+        dir.path(),
+        &[
+            "--context-select",
+            "workspace",
+            "--context-min-tokens",
+            "0",
+            "--no-fail",
+            "--json",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let full = scan(
+        dir.path(),
+        &[
+            "--context-select",
+            "workspace",
+            "--context-search",
+            "workspace",
+        ],
+    );
+    assert_eq!(report["context_blocks"], full["context_blocks"]);
+    assert_eq!(group_items(&report), group_items(&full));
+}
+
+#[test]
+fn an_explicit_select_scope_searches_the_whole_expanded_corpus() {
+    let dir = fixture();
+    let report = scan(
+        dir.path(),
+        &["--package", "other", "--context-select", "crate:other"],
+    );
+    assert!(
+        group_items(&report)
+            .iter()
+            .any(|items| items.iter().any(|item| item == "app::root_dup"))
+    );
+}

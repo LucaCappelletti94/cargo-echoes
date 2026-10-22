@@ -289,9 +289,7 @@ impl Echoes {
                 legacy_roots.insert(target.src.to_string_lossy().into_owned());
             }
             let discovered = discover::module_tree(target, None);
-            if scan.context_dependencies.depth.unwrap_or(0) > 0
-                && scan.context_target_requested(target, &root_str)
-            {
+            if scan.context_target_requested(target, &root_str) {
                 discovery_failures.extend(
                     discovered
                         .failures
@@ -2579,6 +2577,21 @@ mod tests {
             Echoes::default()
                 .context_select(ContextScope::Crate("other".into()))
                 .context_search(ContextScope::File("src/lib.rs".into()))
+        ));
+        assert!(requested(
+            Echoes::default()
+                .package("other")
+                .context_select(ContextScope::Crate("another".into()))
+        ));
+        assert!(requested(
+            Echoes::default()
+                .context_select(ContextScope::Module("mycrate::deep".into()))
+                .context_search(ContextScope::Module("mycrate::deeper".into()))
+        ));
+        assert!(!requested(
+            Echoes::default()
+                .context_select(ContextScope::Module("other::deep".into()))
+                .context_search(ContextScope::Module("another::deep".into()))
         ));
     }
 
