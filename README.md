@@ -9,7 +9,10 @@ Whoa, deja vu. A doctest went past us, and then another that looked just like it
 
 `cargo echoes` finds duplicated Rust doctests, and optionally duplicated functions and code blocks, across a workspace or across every crate of a GitHub organization. The [wiki](https://github.com/LucaCappelletti94/cargo-echoes/wiki) explains each check, the options and the Action in depth.
 
-![A pull request review by echoes, with an inline comment on a duplicated doctest and a suggestion that removes the copy](https://raw.githubusercontent.com/LucaCappelletti94/cargo-echoes/main/docs/review.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/LucaCappelletti94/cargo-echoes/main/docs/review-dark.svg">
+  <img alt="A pull request review by echoes, with an inline comment on a rewritten copy of a function and a suggestion that deletes it" src="https://raw.githubusercontent.com/LucaCappelletti94/cargo-echoes/main/docs/review-light.svg">
+</picture>
 
 ## Usage
 
