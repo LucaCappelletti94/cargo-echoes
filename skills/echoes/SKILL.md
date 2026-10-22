@@ -66,4 +66,4 @@ The GitHub action comments on each copy to remove with a removal suggestion and 
 
 ## Library
 
-`echoes = { version = "0.7", default-features = false, features = ["std"] }`, then `echoes::Echoes::default().functions().run(".")?` returns the same `Report`, and `run_organization("org")` scans an organization.
+`echoes = { version = "0.8", default-features = false, features = ["std"] }`, then `echoes::Echoes::default().functions().run(".")?` returns the same `Report`, and `run_organization("org")` scans an organization.
