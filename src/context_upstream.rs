@@ -2449,4 +2449,150 @@ mod tests {
     fn percent_decode_maps_a_plus_to_a_space() {
         assert_eq!(percent_decode("a%2Bb+c%20d"), "a+b c d");
     }
+
+    /// A tag ref whose object is the commit itself resolves without a peel.
+    #[test]
+    fn enrich_tag_ref_of_commit_type_resolves_the_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("dep");
+        std::fs::create_dir_all(&root).unwrap();
+        write_source_file(&root, FILE, BODY);
+        let cache = dir.path().join("cache");
+        let fixture = Fixture::start();
+        fixture.route(
+            "/api/repos/o/repo/git/ref/tags/v1.2.3",
+            200,
+            serde_json::json!({"object": {"type": "commit", "sha": SHA}})
+                .to_string()
+                .as_bytes(),
+        );
+        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        fixture.route(
+            "/api/search/issues",
+            200,
+            search_json(&[]).to_string().as_bytes(),
+        );
+        let package = make_package(
+            &root,
+            Some("https://github.com/o/repo"),
+            SOURCE,
+            lib_hashes(),
+        );
+        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
+        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(
+            candidates[0].source_url.as_deref(),
+            Some(permalink(SHA).as_str())
+        );
+    }
+
+    /// A provenance entry written by an earlier run is reused when no local evidence exists.
+    #[test]
+    fn enrich_reuses_a_provenance_entry_from_an_earlier_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("dep");
+        std::fs::create_dir_all(&root).unwrap();
+        write_source_file(&root, FILE, BODY);
+        let cache = dir.path().join("cache");
+        let provenance_dir = cache.join("private/upstream");
+        std::fs::create_dir_all(&provenance_dir).unwrap();
+        let mut provenance = BTreeMap::new();
+        provenance.insert(format!("dep@1.2.3|{SOURCE}"), PIN.to_string());
+        std::fs::write(
+            provenance_dir.join("provenance.json"),
+            serde_json::to_string(&provenance).unwrap(),
+        )
+        .unwrap();
+        let fixture = Fixture::start();
+        fixture.route(&format!("/raw/o/repo/{PIN}/{FILE}"), 200, BODY.as_bytes());
+        fixture.route(
+            "/api/search/issues",
+            200,
+            search_json(&[]).to_string().as_bytes(),
+        );
+        let package = make_package(
+            &root,
+            Some("https://github.com/o/repo"),
+            SOURCE,
+            lib_hashes(),
+        );
+        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
+        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(
+            candidates[0].source_url.as_deref(),
+            Some(permalink(PIN).as_str())
+        );
+        assert_eq!(fixture.hits("/api/repos/o/repo/git/ref/tags/v1.2.3"), 0);
+    }
+
+    /// A hex `sha1` shorter than 40 digits is not a usable commit.
+    #[test]
+    fn enrich_rejects_a_vcs_sha_shorter_than_forty_hex_digits() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("dep");
+        std::fs::create_dir_all(&root).unwrap();
+        write_source_file(&root, FILE, BODY);
+        vcs_info(&root, "abc");
+        let cache = dir.path().join("cache");
+        let fixture = Fixture::start();
+        fixture.route(&format!("/raw/o/repo/abc/{FILE}"), 200, BODY.as_bytes());
+        let package = make_package(
+            &root,
+            Some("https://github.com/o/repo"),
+            SOURCE,
+            lib_hashes(),
+        );
+        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
+        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        assert!(candidates[0].source_url.is_none());
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("no verified upstream commit")),
+            "{warnings:?}"
+        );
+    }
+
+    /// A source body far under the source limit is accepted and compared by hash.
+    #[test]
+    fn enrich_source_read_accepts_a_body_well_under_the_source_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("dep");
+        std::fs::create_dir_all(&root).unwrap();
+        write_source_file(&root, FILE, BODY);
+        vcs_info(&root, SHA);
+        let cache = dir.path().join("cache");
+        let fixture = Fixture::start();
+        fixture.fill_route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, 8 * 1024 * 1024);
+        let package = make_package(
+            &root,
+            Some("https://github.com/o/repo"),
+            SOURCE,
+            lib_hashes(),
+        );
+        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
+        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        assert!(candidates[0].source_url.is_none());
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("differs from the indexed snapshot")),
+            "{warnings:?}"
+        );
+    }
+
+    /// An empty owner or repo segment is not a GitHub repository.
+    #[test]
+    fn normalize_repository_rejects_an_empty_owner_or_repo_segment() {
+        assert_eq!(
+            normalize_github_repository("https://github.com///repo"),
+            None
+        );
+        assert_eq!(
+            normalize_github_repository("https://github.com/owner//"),
+            None
+        );
+    }
 }

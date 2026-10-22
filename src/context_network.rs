@@ -925,4 +925,60 @@ pub(crate) mod tests {
         let err = json(&format!("{}/garbled", fixture.api_base())).unwrap_err();
         assert!(err.contains("invalid JSON"), "{err}");
     }
+
+    /// A response of exactly the limit bytes is accepted.
+    #[test]
+    fn get_raw_accepts_a_body_exactly_at_the_limit() {
+        let fixture = Fixture::start();
+        fixture.route("/api/edge", 200, &[0u8; 1024]);
+        let url = format!("{}/edge", fixture.api_base());
+        let response = get_raw(&url, 1024, Duration::from_secs(5))
+            .expect("accept a body exactly at the limit");
+        assert_eq!(response.body.len(), 1024);
+    }
+
+    /// A response far under the read limit is accepted in full.
+    #[test]
+    fn get_raw_accepts_a_body_well_under_the_read_limit() {
+        let fixture = Fixture::start();
+        fixture.fill_route("/api/mid", 200, 2 * 1024 * 1024);
+        let url = format!("{}/mid", fixture.api_base());
+        let response = get_raw(&url, READ_LIMIT, Duration::from_secs(30))
+            .expect("accept a body far under the read limit");
+        assert_eq!(response.body.len(), 2 * 1024 * 1024);
+    }
+
+    /// An archive of exactly the archive limit is published in full.
+    #[test]
+    fn download_accepts_an_archive_exactly_at_the_limit() {
+        let fixture = Fixture::start();
+        let dir = tempfile::tempdir().unwrap();
+        let destination = dir.path().join("edge.crate");
+        fixture.fill_route("/raw/edge", 200, ARCHIVE_LIMIT);
+        download(&format!("{}/edge", fixture.raw_base()), &destination)
+            .expect("accept an archive exactly at the limit");
+        assert_eq!(
+            std::fs::metadata(&destination)
+                .expect("read the destination")
+                .len(),
+            ARCHIVE_LIMIT
+        );
+    }
+
+    /// An archive far under the archive limit is published in full.
+    #[test]
+    fn download_accepts_an_archive_far_under_the_limit() {
+        let fixture = Fixture::start();
+        let dir = tempfile::tempdir().unwrap();
+        let destination = dir.path().join("mid.crate");
+        fixture.fill_route("/raw/mid", 200, 4 * 1024 * 1024);
+        download(&format!("{}/mid", fixture.raw_base()), &destination)
+            .expect("accept an archive far under the limit");
+        assert_eq!(
+            std::fs::metadata(&destination)
+                .expect("read the destination")
+                .len(),
+            4 * 1024 * 1024
+        );
+    }
 }

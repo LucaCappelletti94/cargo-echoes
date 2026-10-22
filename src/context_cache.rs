@@ -319,4 +319,33 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+
+    /// An empty `XDG_CACHE_HOME` falls back to the home cache directory.
+    #[test]
+    fn default_root_ignores_an_empty_xdg_cache_home() {
+        if std::env::var_os("ECHOES_COV_XDG_EMPTY_PROBE").is_some() {
+            let home = std::env::var_os("HOME").expect("the probe run sets the variable");
+            assert_eq!(
+                Store::default_root(),
+                PathBuf::from(home).join(".cache").join("echoes")
+            );
+            return;
+        }
+        let home = tempfile::tempdir().unwrap();
+        let output =
+            std::process::Command::new(std::env::current_exe().expect("the test binary path"))
+                .env("ECHOES_COV_XDG_EMPTY_PROBE", "1")
+                .env("XDG_CACHE_HOME", "")
+                .env("HOME", home.path())
+                .arg("context_cache::tests::default_root_ignores_an_empty_xdg_cache_home")
+                .arg("--exact")
+                .output()
+                .expect("the test binary runs itself");
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(output.status.success(), "the probe run failed: {text}");
+    }
 }

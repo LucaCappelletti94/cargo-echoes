@@ -911,4 +911,24 @@ mod tests {
         let value = serde_json::json!({"workspace_members": ["path+file:///tmp/ab/dep#sha"]});
         assert_eq!(remap_value(value.clone(), "/tmp/a", "/orig"), value);
     }
+
+    /// A mirror root found inside a package id remaps when the next byte is a path boundary.
+    #[test]
+    fn remap_value_remaps_a_mirror_root_at_an_inner_boundary() {
+        let value = serde_json::json!({
+            "packages": [
+                {"id": "path+file:///tmp/ab/dep", "manifest_path": "/tmp/ab/dep/Cargo.toml"},
+                {"id": "path+file:///tmp/ab"}
+            ]
+        });
+        assert_eq!(
+            remap_value(value, "/tmp/ab", "/orig"),
+            serde_json::json!({
+                "packages": [
+                    {"id": "path+file:///orig/dep", "manifest_path": "/orig/dep/Cargo.toml"},
+                    {"id": "path+file:///orig"}
+                ]
+            })
+        );
+    }
 }
