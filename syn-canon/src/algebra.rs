@@ -137,21 +137,21 @@ fn tail_expr_mut(block: &mut syn::Block) -> Option<&mut syn::Expr> {
 }
 
 impl Walker<'_> {
-    fn scalar_in_place(&self, expr: &mut syn::Expr, algebra: bool) -> Option<Lbl> {
+    fn scalar_in_place(&self, expr: &mut syn::Expr) -> Option<Lbl> {
         let owned = core::mem::replace(expr, empty_expr());
-        let (normalized, label) = self.scalar(owned, algebra);
+        let (normalized, label) = self.scalar(owned);
         *expr = normalized;
         label
     }
 
-    fn scalar(&self, expr: syn::Expr, algebra: bool) -> (syn::Expr, Option<Lbl>) {
+    fn scalar(&self, expr: syn::Expr) -> (syn::Expr, Option<Lbl>) {
         if !crate::drift::expr_attrs(&expr).is_empty() {
             return (expr, None);
         }
         match expr {
             syn::Expr::Binary(mut binary) => {
-                let left = self.scalar_in_place(&mut binary.left, algebra);
-                let right = self.scalar_in_place(&mut binary.right, algebra);
+                let left = self.scalar_in_place(&mut binary.left);
+                let right = self.scalar_in_place(&mut binary.right);
                 let (Some(left), Some(right)) = (left, right) else {
                     return (syn::Expr::Binary(binary), None);
                 };
@@ -166,15 +166,6 @@ impl Walker<'_> {
                     return (expr, Some(label));
                 }
                 match schedule::total_binary(binary.op, &left, &right) {
-                    Some(TotalBinary::Flat(op, prim)) if !algebra => {
-                        let mut leaves = Vec::new();
-                        schedule::collect_leaves(op, prim, left, &mut leaves);
-                        schedule::collect_leaves(op, prim, right, &mut leaves);
-                        (
-                            syn::Expr::Binary(binary),
-                            Some(schedule::flat_label(op, prim, leaves)),
-                        )
-                    }
                     Some(TotalBinary::Flat(op, prim)) => {
                         let span = binary.span();
                         let mut pieces = Vec::new();
@@ -202,10 +193,8 @@ impl Walker<'_> {
                     }
                     Some(TotalBinary::Ordered { tag, reverse, prim }) => {
                         let (left, right) = if let Some(reverse) = reverse {
-                            if algebra {
-                                core::mem::swap(&mut binary.left, &mut binary.right);
-                                binary.op = reverse.bin_op();
-                            }
+                            core::mem::swap(&mut binary.left, &mut binary.right);
+                            binary.op = reverse.bin_op();
                             (right, left)
                         } else {
                             (left, right)
@@ -219,12 +208,14 @@ impl Walker<'_> {
                 }
             }
             syn::Expr::Unary(mut unary) if self.dedup && matches!(unary.op, syn::UnOp::Not(_)) => {
-                if let Some(inner) = self.scalar_in_place(&mut unary.expr, algebra)
+                if let Some(inner) = self.scalar_in_place(&mut unary.expr)
                     && inner.prim() == Some(PrimTy::Bool)
                 {
                     if !matches!(
                         inner,
-                        Lbl::Not(_) | Lbl::Bool(_) | Lbl::Op('∧' | '∨', _, _, _)
+                        Lbl::Not(_)
+                            | Lbl::Bool(_)
+                            | Lbl::Op('∧' | '∨' | '<' | '≤' | '=' | '!', _, _, _)
                     ) {
                         return (syn::Expr::Unary(unary), Some(schedule::not_label(inner)));
                     }
@@ -233,8 +224,8 @@ impl Walker<'_> {
                 }
                 (syn::Expr::Unary(unary), None)
             }
-            syn::Expr::If(branch) if self.dedup => self.branch(branch, algebra),
-            syn::Expr::Group(group) => self.scalar(*group.expr, algebra),
+            syn::Expr::If(branch) if self.dedup => self.branch(branch),
+            syn::Expr::Group(group) => self.scalar(*group.expr),
             expr @ (syn::Expr::Lit(_) | syn::Expr::Path(_) | syn::Expr::Unary(_)) => {
                 let label = schedule::scalar_leaf(&self.env, &expr);
                 (expr, label)
@@ -243,13 +234,13 @@ impl Walker<'_> {
         }
     }
 
-    fn condition(&self, expr: syn::Expr, algebra: bool) -> (syn::Expr, Option<Lbl>, bool) {
+    fn condition(&self, expr: syn::Expr) -> (syn::Expr, Option<Lbl>, bool) {
         match expr {
             syn::Expr::Unary(mut unary)
                 if unary.attrs.is_empty() && matches!(unary.op, syn::UnOp::Not(_)) =>
             {
                 let owned = core::mem::replace(&mut *unary.expr, empty_expr());
-                let (expr, label, inverted) = self.condition(owned, algebra);
+                let (expr, label, inverted) = self.condition(owned);
                 if label
                     .as_ref()
                     .is_some_and(|label| label.prim() == Some(PrimTy::Bool))
@@ -260,45 +251,55 @@ impl Walker<'_> {
                     (syn::Expr::Unary(unary), None, false)
                 }
             }
-            syn::Expr::Group(group) if group.attrs.is_empty() => {
-                self.condition(*group.expr, algebra)
-            }
+            syn::Expr::Group(group) if group.attrs.is_empty() => self.condition(*group.expr),
             expr => {
-                let (expr, label) = self.scalar(expr, algebra);
+                let (expr, label) = self.scalar(expr);
                 (expr, label, false)
             }
         }
     }
 
-    fn tail(&self, block: &mut syn::Block, algebra: bool) -> Option<Lbl> {
+    fn tail(&self, block: &mut syn::Block) -> Option<Lbl> {
         let expr = tail_expr_mut(block)?;
-        self.scalar_in_place(expr, algebra)
+        self.scalar_in_place(expr)
     }
 
-    fn branch(&self, mut branch: syn::ExprIf, algebra: bool) -> (syn::Expr, Option<Lbl>) {
+    fn branch(&self, mut branch: syn::ExprIf) -> (syn::Expr, Option<Lbl>) {
         let Some((_, otherwise)) = &mut branch.else_branch else {
+            self.scalar_in_place(&mut branch.cond);
             return (syn::Expr::If(branch), None);
         };
         let syn::Expr::Block(else_block) = &mut **otherwise else {
+            self.scalar_in_place(&mut branch.cond);
+            self.scalar_in_place(otherwise);
             return (syn::Expr::If(branch), None);
         };
         if !schedule::branches_unattributed(&branch.attrs, &branch.then_branch, else_block) {
+            self.scalar_in_place(&mut branch.cond);
             return (syn::Expr::If(branch), None);
         }
-        let mut then = self.tail(&mut branch.then_branch, algebra);
-        let mut otherwise = self.tail(&mut else_block.block, algebra);
+        let mut then = self.tail(&mut branch.then_branch);
+        let mut otherwise = self.tail(&mut else_block.block);
+        let owned = core::mem::replace(&mut *branch.cond, empty_expr());
+        let (cond, label, inverted) = self.condition(owned);
+        *branch.cond = cond;
+        let Some(mut cond_label) = label.filter(|label| label.prim() == Some(PrimTy::Bool)) else {
+            return (syn::Expr::If(branch), None);
+        };
+        if inverted {
+            core::mem::swap(&mut branch.then_branch, &mut else_block.block);
+            core::mem::swap(&mut then, &mut otherwise);
+        }
         let complementary = matches!(
             (&then, &otherwise),
             (Some(Lbl::Bool(true)), Some(Lbl::Bool(false)))
                 | (Some(Lbl::Bool(false)), Some(Lbl::Bool(true)))
         );
-        let owned = core::mem::replace(&mut *branch.cond, empty_expr());
-        let (cond, label, inverted) = self.condition(owned, algebra && complementary);
-        *branch.cond = cond;
-        let Some(cond_label) = label.filter(|label| label.prim() == Some(PrimTy::Bool)) else {
-            return (syn::Expr::If(branch), None);
-        };
-        if inverted {
+        if !complementary && schedule::positive_condition(&cond_label).is_some() {
+            let owned = core::mem::replace(&mut *branch.cond, empty_expr());
+            let (cond, positive) = negate(owned, cond_label);
+            *branch.cond = cond;
+            cond_label = positive;
             core::mem::swap(&mut branch.then_branch, &mut else_block.block);
             core::mem::swap(&mut then, &mut otherwise);
         }
@@ -342,7 +343,7 @@ impl VisitMut for Walker<'_> {
             | syn::Expr::Path(_)
             | syn::Expr::Group(_) => {
                 let owned = core::mem::replace(expr, empty_expr());
-                *expr = self.scalar(owned, true).0;
+                *expr = self.scalar(owned).0;
             }
             syn::Expr::Reference(reference) => {
                 let dedup = core::mem::replace(&mut self.dedup, false);
@@ -401,6 +402,19 @@ fn negate(expr: syn::Expr, label: Lbl) -> (syn::Expr, Lbl) {
                 syn::Expr::Binary(binary),
                 Lbl::Op(tag, Box::new(left), Box::new(right), PrimTy::Bool),
             )
+        }
+        (syn::Expr::Binary(mut binary), label @ Lbl::Op('<' | '≤' | '=' | '!', ..)) => {
+            let complement = schedule::not_label(label);
+            binary.op = match &complement {
+                Lbl::Op('<', ..) => syn::BinOp::Lt(syn::token::Lt::default()),
+                Lbl::Op('≤', ..) => syn::BinOp::Le(syn::token::Le::default()),
+                Lbl::Op('=', ..) => syn::BinOp::Eq(syn::token::EqEq::default()),
+                _ => syn::BinOp::Ne(syn::token::Ne::default()),
+            };
+            if matches!(complement, Lbl::Op('<' | '≤', ..)) {
+                core::mem::swap(&mut binary.left, &mut binary.right);
+            }
+            (syn::Expr::Binary(binary), complement)
         }
         (_, Lbl::Bool(value)) => (
             syn::Expr::Lit(syn::ExprLit {
