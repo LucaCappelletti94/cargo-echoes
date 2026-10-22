@@ -102,7 +102,7 @@ inputs:
     required: false
     default: ''
   pr-number:
-    description: Post the findings as a pull request review on this PR instead of failing the job
+    description: Post the findings as a pull request review on this PR instead of failing the job, in post mode outside workflow_run the PR the payload must name
     required: false
     default: ''
   dry-run:
@@ -122,7 +122,7 @@ inputs:
     required: false
     default: 'review'
   payload:
-    description: Directory holding the prepared review, written by prepare and read by post
+    description: Directory holding the prepared scan, written by prepare and checked and rendered again by post
     required: false
     default: ''
   max-comments:
@@ -530,6 +530,12 @@ runs:
         MODE: ${{ inputs.mode }}
         PAYLOAD: ${{ inputs.payload }}
         MAX_COMMENTS: ${{ inputs.max-comments }}
+        EVENT_NAME: ${{ github.event_name }}
+        RUN_EVENT: ${{ github.event.workflow_run.event }}
+        RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        RUN_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+        RUN_HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
       run: |
         # The runner drops step summaries over 1 MiB, so a step keeps its
         # summary writes within a safe total, the truncated tail gets a note.
@@ -575,55 +581,133 @@ runs:
         inline_file="$RUNNER_TEMP/echoes-inline.tsv"
         mode="$MODE"
         payload="${PAYLOAD:-$RUNNER_TEMP/echoes-payload}"
-        comments="$payload/comments.ndjson"
-        meta="$payload/review.json"
+        comments="$RUNNER_TEMP/echoes-comments.ndjson"
         reuse_tmp="$RUNNER_TEMP/echoes-reuse.ndjson"
-        if [ "$mode" = "post" ]; then
-          reuse_tmp="$payload/reuse.ndjson"
-        fi
-        review_event=''
+        blank_file="$RUNNER_TEMP/echoes-blank.txt"
+        : > "$comments"
         mkdir -p "$payload"
         failed_sites=''
+        failed_log=''
         out_of_range=''
         omitted=0
         rate_omitted=0
         omitted_file="$RUNNER_TEMP/echoes-omitted.txt"
-        [ "$mode" = "post" ] && omitted_file="$payload/omitted.txt"
-        onlynew=0
-        [ -s "$base_report" ] && onlynew=1
-        base_sha="$(cat "$RUNNER_TEMP/echoes-base-sha" 2>/dev/null || echo '')"
         run_url="$GITHUB_SERVER_URL/$repo/actions/runs/$GITHUB_RUN_ID"
-        # Post mode consumes a payload another job prepared, so it reads no
-        # source tree and skips straight to the api calls.
+        uri() { jq -rn --arg s "$1" '$s | @uri'; }
+        # Workflow command escaping, a property also ends at `,` or `:`.
+        escape_data() {
+          local s="${1//%/%25}"
+          s="${s//$'\r'/%0D}"
+          printf '%s' "${s//$'\n'/%0A}"
+        }
+        escape_property() {
+          local s
+          s="$(escape_data "$1")"
+          s="${s//:/%3A}"
+          printf '%s' "${s//,/%2C}"
+        }
+        # Report text as a markdown code span, fenced past its longest backtick run, so
+        # no mention, link, html or fence in a path or an item renders. A line break
+        # becomes a space, since an empty line would end the span.
+        md_code() {
+          local s="${1//$'\r'/ }" fence='`'
+          s="${s//$'\n'/ }"
+          while [[ "$s" == *"$fence"* ]]; do fence="$fence\`"; done
+          case "$s" in '`'* | *'`') s=" $s " ;; esac
+          printf '%s%s%s' "$fence" "$s" "$fence"
+        }
+        # A repository path inside a url, each segment percent-encoded.
+        url_path() { jq -rn --arg s "$1" '$s | split("/") | map(@uri) | join("/")'; }
+        # Every line number a report carries is a positive integer, the shell does
+        # arithmetic with them and gh reads a value starting with @ as a file.
+        valid_report() {
+          jq -e '
+            def pos: type == "number" and . >= 1 and . == floor;
+            def site: type == "object" and (.line | pos) and ((.end == null) or (.end | pos))
+              and (.file | type == "string") and (.item | type == "string");
+            type == "object" and (.groups | type == "array")
+            and all(.groups[]; (.sites | type == "array") and all(.sites[]; site))
+            and all((.context_groups // [])[]; (.sites | type == "array") and all(.sites[]; site))
+            and all(((.reuse // {}).groups // [])[]; .local | site)' "$1" > /dev/null 2>&1
+        }
+        base_sha="$(cat "$RUNNER_TEMP/echoes-base-sha" 2>/dev/null || echo '')"
+        head_sha=''
+        changed_files=''
         if [ "$mode" = "post" ]; then
-          if [ ! -s "$meta" ]; then
-            echo "echoes: the prepared review is missing from $payload"
+          # The payload comes from a job the pull request controls, so it is data. The
+          # pull request is the one the triggering run built, or the job's pr-number.
+          reject() {
+            printf 'echoes: %s, nothing is posted\n' "$(escape_data "$1")"
+            echo "rejected" > "$status"
+            exit 1
+          }
+          stale() {
+            printf 'echoes: %s, nothing is posted\n' "$(escape_data "$1")"
+            echo "skipped-stale" > "$status"
+            exit 0
+          }
+          for f in meta.json report.json; do
+            [ -s "$payload/$f" ] || reject "the prepared review in $payload lacks $f, rerun the prepare job with this version of the action"
+          done
+          claimed_pr="$(jq -r '.pr // empty | tostring' "$payload/meta.json" 2>/dev/null)"
+          claimed_head="$(jq -r '.head_sha // empty | tostring' "$payload/meta.json" 2>/dev/null)"
+          # One line only, grep reads a newline in its pattern as a second pattern.
+          [[ "$claimed_pr" =~ ^[1-9][0-9]{0,9}$ ]] || reject "the prepared pull request number is not a number"
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            [ "$RUN_EVENT" = "pull_request" ] || reject "the triggering run came from $RUN_EVENT, not from a pull request"
+            open="$(gh api "repos/$repo/pulls?state=open&head=$(uri "$RUN_HEAD_OWNER:$RUN_HEAD_BRANCH")&per_page=100" \
+              --paginate --jq '.[]' 2>/dev/null)" || reject "the open pull requests cannot be listed"
+            built="$(printf '%s\n' "$open" | jq -r --arg sha "$RUN_HEAD_SHA" --arg full "$RUN_HEAD_REPO" \
+              'select(.head.sha == $sha and .head.repo.full_name == $full) | .number' 2>/dev/null)"
+            [ -n "$built" ] || stale "no open pull request has the head $RUN_HEAD_SHA the triggering run built"
+            grep -qx -- "$claimed_pr" <<< "$built" || reject "the prepared review names pull request $claimed_pr, which the triggering run did not build"
+            [ "$claimed_head" = "$RUN_HEAD_SHA" ] || reject "the prepared head differs from the head the triggering run built"
+            [ -z "$pr" ] || [ "$pr" = "$claimed_pr" ] || reject "the prepared review names pull request $claimed_pr, the job names $pr"
+            head_sha="$RUN_HEAD_SHA"
+          else
+            [ "$pr" = "$claimed_pr" ] || reject "outside workflow_run, the pr-number input must name the prepared pull request $claimed_pr"
+            head_sha="$(gh api "repos/$repo/pulls/$pr" --jq '.head.sha' 2>/dev/null)" || head_sha=''
+            [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || reject "pull request $pr cannot be read"
+            [ "$claimed_head" = "$head_sha" ] || stale "pull request $pr moved on from the prepared head $claimed_head"
+          fi
+          pr="$claimed_pr"
+          valid_report "$payload/report.json" || reject "the prepared report is malformed"
+          cp "$payload/report.json" "$report"
+          rm -f "$base_report"
+          if [ -s "$payload/base-report.json" ]; then
+            valid_report "$payload/base-report.json" || reject "the prepared base report is malformed"
+            cp "$payload/base-report.json" "$base_report"
+          fi
+          if [ -f "$payload/blank.txt" ]; then cp "$payload/blank.txt" "$blank_file"; else : > "$blank_file"; fi
+          version="$(jq -r '.version // empty | tostring' "$payload/meta.json")"
+          base_sha="$(jq -r '.base_sha // empty | tostring' "$payload/meta.json")"
+          [[ "$base_sha" =~ ^[0-9a-f]{40}$ ]] || base_sha=''
+          changed_files="$(gh api "repos/$repo/pulls/$pr/files" --paginate --jq '.[].filename' 2>/dev/null)" || changed_files=''
+        else
+          version="$(cargo echoes --version | awk '{ print $NF }')"
+          # The head SHA and changed file list, empty when there is no pull request.
+          if [ -n "$pr" ]; then
+            head_sha="$(gh api "repos/$repo/pulls/$pr" --jq '.head.sha' 2>/dev/null)" || head_sha=''
+            if [ -n "$head_sha" ]; then
+              changed_files="$(gh api "repos/$repo/pulls/$pr/files" --paginate --jq '.[].filename' 2>/dev/null)" || changed_files=''
+            fi
+          fi
+          if [ -n "$pr" ] && [ -z "$head_sha" ] && [ "$dry" != "true" ]; then
+            echo "echoes: cannot read pull request $pr, the review is not posted"
             echo "failed" > "$status"
             exit 1
           fi
-          pr="$(jq -r '.pr' "$meta")"
-          head_sha="$(jq -r '.head_sha' "$meta")"
-          out_of_range="$(jq -r '.out_of_range' "$meta")"
-          omitted="$(jq -r '.omitted // 0' "$meta")"
-          findings="$(jq -r '.findings' "$meta")"
-          review_event="$(jq -r '.event // empty' "$meta")"
-          findings_span=0
-          grep -qE " (on another type|and can't be deleted|under another cfg|and is public API)\$" <<< "$findings" && findings_span=1
-        else
-        # The head SHA and changed file list, empty when there is no pull request.
-        head_sha=''
-        changed_files=''
-        if [ -n "$pr" ]; then
-          head_sha="$(gh api "repos/$repo/pulls/$pr" --jq '.head.sha' 2>/dev/null)" || head_sha=''
-          if [ -n "$head_sha" ]; then
-            changed_files="$(gh api "repos/$repo/pulls/$pr/files" --paginate --jq '.[].filename' 2>/dev/null)" || changed_files=''
-          fi
+          # Blocks followed by an empty line, which a deletion suggestion removes too.
+          jq -r '.groups[].sites[] | select(.end != null) | "\(.file)\t\(.end)"' "$report" | sort -u |
+            while IFS=$'\t' read -r f e; do
+              nx="$(awk -v l="$e" 'NR == l + 1 { print "x" $0; exit }' "$f" 2>/dev/null)"
+              if [ -n "$nx" ] && [ -z "$(printf '%s' "${nx#x}" | tr -d '[:space:]')" ]; then
+                printf '%s:%s\n' "$f" "$e"
+              fi
+            done > "$blank_file"
         fi
-        if [ -n "$pr" ] && [ -z "$head_sha" ] && [ "$dry" != "true" ]; then
-          echo "echoes: cannot read pull request $pr, the review is not posted"
-          echo "failed" > "$status"
-          exit 1
-        fi
+        onlynew=0
+        [ -s "$base_report" ] && onlynew=1
         if [ "$dry" = "true" ]; then
           # A dry run renders the review as if every scanned site were in
           # the diff, so the step summary shows each comment in full.
@@ -711,29 +795,41 @@ runs:
              (if .baseitem == "" then "-" else .baseitem end), .selftypes,
              (if .s.public then "1" else "0" end)]
           | @tsv' "$report" > "$inline_file"
+        # The code span and link checks for jq programs, the same rules as md_code.
+        jq_md='
+          def md_code: (tostring | gsub("[\r\n]"; " ")) as $s
+            | ([$s | scan("`+") | length] | max // 0) as $m
+            | ("`" * ($m + 1)) as $f
+            | (if ($s | test("^`|`$")) then " " + $s + " " else $s end) as $p
+            | $f + $p + $f;
+          def safe_url: if type == "string" and test("^https://[A-Za-z0-9.-]+/[^\\s()<>`\\[\\]]*$") then . else null end;'
         # Neutral reuse and context entries, one row per local site that survives
         # the same changed-file and only-new filters as the local duplicates.
         jq -c --slurpfile changed "$changed_file" --slurpfile base "$base_file" \
-          --argjson onlynew_mode "$onlynew_mode" '
+          --argjson onlynew_mode "$onlynew_mode" "$jq_md"'
           def spath: .file;
-          def site_md: "  - `" + spath + ":" + (.line | tostring) + "`  " + .item;
+          def site_md: "  - " + ((spath + ":" + (.line | tostring)) | md_code) + "  " + (.item | md_code);
           def cand_md:
-            "  - `\(.package) \(.version)`"
-            + (if .depth > 0 then " (depth \(.depth))" else "" end)
-            + (if (.conditions | length) > 0 then " (needs \(.conditions | join(", ")))" else "" end)
-            + (if .action == "reuse-api" then ": the public item `\(.api_path // .site.item)` can be reused"
-               elif .action == "upgrade-api" then ": the public item `\(.api_path // .site.item)` is available in a newer published release"
-               elif .action == "request-extraction" then ": the internal item `\(.site.item)` can be requested for extraction"
+            "  - " + ("\(.package) \(.version)" | md_code)
+            + (if (.depth | type) == "number" and .depth > 0 then " (depth \(.depth | floor))" else "" end)
+            + (if ((.conditions // []) | length) > 0 then " (needs " + (.conditions | map(md_code) | join(", ")) + ")" else "" end)
+            + (if .action == "reuse-api" then ": the public item " + ((.api_path // .site.item) | md_code) + " can be reused"
+               elif .action == "upgrade-api" then ": the public item " + ((.api_path // .site.item) | md_code) + " is available in a newer published release"
+               elif .action == "request-extraction" then ": the internal item " + (.site.item | md_code) + " can be requested for extraction"
                elif .action == "unresolved" then ": source analysis does not establish accessibility"
                else ": the reuse path is unresolved" end)
-            + (if .source_url
-               then (if .api_path and .api_path != .site.item then " [source (\(.site.item))](\(.source_url))" else " [source](\(.source_url))" end)
-               else "" end)
-            + (if .existing_issue then " [existing request \(.existing_issue.state)](\(.existing_issue.url))"
-               elif .issue_url then " [request extraction](\(.issue_url))"
+            + ((.source_url | safe_url) as $u
+               | if $u == null then ""
+                 elif .api_path and .api_path != .site.item then " [source (" + (.site.item | md_code) + ")](" + $u + ")"
+                 else " [source](" + $u + ")" end)
+            + (if .existing_issue then
+                 ((.existing_issue.url | safe_url) as $u
+                  | ((.existing_issue.state | tostring) | if test("^[a-z]+$") then . else "unknown" end) as $st
+                  | if $u then " [existing request \($st)](\($u))" else "" end)
+               elif (.issue_url | safe_url) then " [request extraction](\(.issue_url))"
                elif .action == "request-extraction" then " (the upstream repository is not declared, so no issue link is offered)"
                else "" end)
-            + (if .lookup_warning then "\n    lookup: \(.lookup_warning)" else "" end);
+            + (if .lookup_warning then "\n    lookup: " + (.lookup_warning | md_code) else "" end);
           $changed[0] as $changed
           | $base[0] as $base
           | [ ( (.context_groups // [])
@@ -764,8 +860,6 @@ runs:
 
         # The inline posts, live mode only. The first post is the permission probe.
         # Each comment links to a prefilled wrong-review issue for its group.
-        uri() { jq -rn --arg s "$1" '$s | @uri'; }
-        version="$(cargo echoes --version | awk '{ print $NF }')"
         report_link() {
           local sites
           sites="$(jq -r --argjson g "$1" '
@@ -792,9 +886,9 @@ runs:
             label="$3"
           fi
           if [ -n "$1" ]; then
-            printf '[`%s:%s`](%s/%s/blob/%s/%s%s)' "$2" "$label" "$GITHUB_SERVER_URL" "$repo" "$1" "$2" "$anchor"
+            printf '[%s](%s/%s/blob/%s/%s%s)' "$(md_code "$2:$label")" "$GITHUB_SERVER_URL" "$repo" "$1" "$(url_path "$2")" "$anchor"
           else
-            printf '`%s:%s`' "$2" "$label"
+            md_code "$2:$label"
           fi
         }
         # The bare permalink url GitHub expands into a code preview of the
@@ -802,17 +896,17 @@ runs:
         blob_url() {
           [ -n "$1" ] || return 0
           if [ -n "${4:-}" ] && [ "$4" != "$3" ]; then
-            printf '%s/%s/blob/%s/%s#L%s-L%s' "$GITHUB_SERVER_URL" "$repo" "$1" "$2" "$3" "$4"
+            printf '%s/%s/blob/%s/%s#L%s-L%s' "$GITHUB_SERVER_URL" "$repo" "$1" "$(url_path "$2")" "$3" "$4"
           else
-            printf '%s/%s/blob/%s/%s#L%s' "$GITHUB_SERVER_URL" "$repo" "$1" "$2" "$3"
+            printf '%s/%s/blob/%s/%s#L%s' "$GITHUB_SERVER_URL" "$repo" "$1" "$(url_path "$2")" "$3"
           fi
         }
         # The inline text location of a block, `path:start` or `path:start-end`.
         loc_text() {
           if [ -n "${3:-}" ] && [ "$3" != "$2" ]; then
-            printf '`%s:%s-%s`' "$1" "$2" "$3"
+            md_code "$1:$2-$3"
           else
-            printf '`%s:%s`' "$1" "$2"
+            md_code "$1:$2"
           fi
         }
         # The permalink wrapped in a markdown link when it exists.
@@ -832,18 +926,6 @@ runs:
           else
             printf '%s' "$1"
           fi
-        }
-        # Workflow command escaping, a property also ends at `,` or `:`.
-        escape_data() {
-          local s="${1//%/%25}"
-          s="${s//$'\r'/%0D}"
-          printf '%s' "${s//$'\n'/%0A}"
-        }
-        escape_property() {
-          local s
-          s="$(escape_data "$1")"
-          s="${s//:/%3A}"
-          printf '%s' "${s//,/%2C}"
         }
         rendered=''
         findings=''
@@ -887,10 +969,13 @@ runs:
           # copy stays silent.
           [ "$removable" = "1" ] || continue
           # The annotation carries the same finding without a token, so a
-          # fork pull request shows it anchored in the diff.
+          # fork pull request shows it anchored in the diff. The post job's run
+          # is not the pull request's, so it annotates nothing.
           if [ "$ANNOTATIONS" = "true" ] && [ "$dry" != "true" ]; then
             keep="$basekeep"
             [ -z "$keep" ] && keep="$keepat"
+            annotate=1
+            [ "$mode" = "post" ] && annotate=0
             if [ "$kind" = "function" ]; then
               case "$remedy" in
                 generic-or-macro) where='on another type' share='a generic or a macro can share it' ;;
@@ -900,32 +985,31 @@ runs:
                 *) where='' share='' ;;
               esac
               if [ -n "$where" ]; then
-                printf '::error file=%s,line=%s,title=echoes::%s repeats %s at %s %s, %s, group %s\n' \
+                [ "$annotate" = "1" ] && printf '::error file=%s,line=%s,title=echoes::%s repeats %s at %s %s, %s, group %s\n' \
                   "$(escape_property "$p")" "$line" "$(escape_data "$item")" "$(escape_data "$kept_item")" "$(escape_data "$keep")" "$where" "$share" "$g"
-                findings="$findings- \`$p:$line\`  $item, repeats \`$kept_item\` at \`$keep\` $where"$'\n'
+                findings="$findings- $(md_code "$p:$line")  $(md_code "$item"), repeats $(md_code "$kept_item") at $(md_code "$keep") $where"$'\n'
                 findings_span=1
               else
-                printf '::error file=%s,line=%s,title=echoes::%s duplicates the function %s at %s, group %s\n' \
+                [ "$annotate" = "1" ] && printf '::error file=%s,line=%s,title=echoes::%s duplicates the function %s at %s, group %s\n' \
                   "$(escape_property "$p")" "$line" "$(escape_data "$item")" "$(escape_data "$kept_item")" "$(escape_data "$keep")" "$g"
-                findings="$findings- \`$p:$line\`  $item, duplicates the function \`$kept_item\` at \`$keep\`"$'\n'
+                findings="$findings- $(md_code "$p:$line")  $(md_code "$item"), duplicates the function $(md_code "$kept_item") at $(md_code "$keep")"$'\n'
               fi
             else
-              printf '::error file=%s,line=%s,title=echoes::%s duplicates the doctest at %s, group %s\n' \
+              [ "$annotate" = "1" ] && printf '::error file=%s,line=%s,title=echoes::%s duplicates the doctest at %s, group %s\n' \
                 "$(escape_property "$p")" "$line" "$(escape_data "$item")" "$(escape_data "$keep")" "$g"
-              findings="$findings- \`$p:$line\`  $item, duplicates \`$keep\`"$'\n'
+              findings="$findings- $(md_code "$p:$line")  $(md_code "$item"), duplicates $(md_code "$keep")"$'\n'
             fi
           fi
           close_line="$end"
           if [ -z "$close_line" ]; then
-            out_of_range="$out_of_range- group $g  $(blob_link "$head_sha" "$p" "$line")  $item"$'\n'
+            out_of_range="$out_of_range- group $g  $(blob_link "$head_sha" "$p" "$line")  $(md_code "$item")"$'\n'
             continue
           fi
           # The suggestion deletes the block plus the empty line right after
           # it, which would become a stray once the copy is gone.
           delete_end="$close_line"
           if [ "$remedy" = "delete" ]; then
-            nx="$(awk -v l="$close_line" 'NR == l + 1 { print "x" $0; exit }' "$p" 2>/dev/null)"
-            if [ -n "$nx" ] && [ -z "$(printf '%s' "${nx#x}" | tr -d '[:space:]')" ]; then
+            if grep -Fxq -- "$p:$close_line" "$blank_file" 2>/dev/null; then
               delete_end=$((close_line + 1))
             fi
           fi
@@ -968,14 +1052,15 @@ runs:
           else
             preview='the duplicated doctest'
           fi
+          kept_md="$(md_code "$kept_item")"
           if [ "$remedy" = "generic-or-macro" ]; then
-            note="This method repeats \`$kept_item\` at $loc on another type ($selftypes). A generic or a macro can share one body."
+            note="This method repeats $kept_md at $loc on another type ($(md_code "$selftypes")). A generic or a macro can share one body."
           elif [ "$remedy" = "helper-or-macro" ]; then
-            note="This function repeats \`$kept_item\` at $loc. A trait or an exported symbol needs it, so it can't simply be deleted, a helper or a macro can share one body."
+            note="This function repeats $kept_md at $loc. A trait or an exported symbol needs it, so it can't simply be deleted, a helper or a macro can share one body."
           elif [ "$remedy" = "public" ]; then
-            note="This function repeats \`$kept_item\` at $loc. It is public API, so deleting it breaks its callers, make it call the kept copy or deprecate it."
+            note="This function repeats $kept_md at $loc. It is public API, so deleting it breaks its callers, make it call the kept copy or deprecate it."
           elif [ "$remedy" = "merge-cfg" ]; then
-            note="This function repeats \`$kept_item\` at $loc under another \`cfg\`. Deleting either copy drops a configuration, one function under both conditions can replace them."
+            note="This function repeats $kept_md at $loc under another \`cfg\`. Deleting either copy drops a configuration, one function under both conditions can replace them."
           elif [ "$kind" = "function" ]; then
             if [ "$onlynew" = "1" ] && [ -n "$basekeep" ]; then
               note="This function was added by this pull request and duplicates a copy that already exists at $loc, $echoes_link suggests deleting the added copy, or updating it if it was meant to differ."
@@ -1097,6 +1182,15 @@ runs:
           exit 0
         fi
 
+        # Prepare hands the posting job data only, which that job checks and renders
+        # again, so nothing a pull request writes into the payload is posted as is.
+        if [ "$mode" = "prepare" ]; then
+          jq -n --arg pr "$pr" --arg head "$head_sha" --arg base "$base_sha" --arg version "$version" \
+            '{pr: $pr, head_sha: $head, base_sha: $base, version: $version}' > "$payload/meta.json"
+          cp "$report" "$payload/report.json"
+          [ "$onlynew" = "1" ] && cp "$base_report" "$payload/base-report.json"
+          cp "$blank_file" "$payload/blank.txt"
+        fi
         # The inline posts are capped per run, the omitted copies go to the
         # review body and the run summary.
         case "$MAX_COMMENTS" in
@@ -1108,31 +1202,22 @@ runs:
         local_n="$(wc -l < "$comments")"
         reuse_n="$(wc -l < "$reuse_tmp")"
         total_n=$((local_n + reuse_n))
+        unposted_list() {
+          jq -rs "$jq_md"'map("- " + ((.path + ":" + (.start_line | tostring)) | md_code) + "  " + (.item | md_code)
+            + (if .group then " (group " + (.group | tostring) + ")" else " (" + (.kind // "context") + ")" end))
+            | join("\n")'
+        }
         if [ "$total_n" -gt "$max_comments" ]; then
           omitted=$((total_n - max_comments))
           keep_local="$max_comments"
           [ "$keep_local" -gt "$local_n" ] && keep_local="$local_n"
           keep_reuse=$((max_comments - keep_local))
           { tail -n +$((keep_local + 1)) "$comments"
-            tail -n +$((keep_reuse + 1)) "$reuse_tmp"; } |
-            jq -rs 'map("- " + .path + ":" + (.start_line | tostring) + "  " + .item
-              + (if .group then " (group " + (.group | tostring) + ")" else " (" + (.kind // "context") + ")" end))
-            | join("\n")' > "$omitted_file"
+            tail -n +$((keep_reuse + 1)) "$reuse_tmp"; } | unposted_list > "$omitted_file"
           head -n "$keep_local" "$comments" > "$comments.capped"
           head -n "$keep_reuse" "$reuse_tmp" > "$reuse_tmp.capped"
           mv "$comments.capped" "$comments"
           mv "$reuse_tmp.capped" "$reuse_tmp"
-        fi
-
-          # Both lists grow with the pull request, past one argument's 128 KiB.
-          printf '%s' "$out_of_range" > "$RUNNER_TEMP/echoes-out-of-range.txt"
-          printf '%s' "$findings" > "$RUNNER_TEMP/echoes-findings.txt"
-          event='REQUEST_CHANGES'
-          [ -s "$comments" ] || [ -n "$out_of_range" ] || event='COMMENT'
-          jq -n --arg pr "$pr" --arg head "$head_sha" --arg event "$event" \
-            --argjson omitted "$omitted" \
-            --rawfile oor "$RUNNER_TEMP/echoes-out-of-range.txt" --rawfile f "$RUNNER_TEMP/echoes-findings.txt" \
-            '{pr: $pr, head_sha: $head, event: $event, omitted: $omitted, out_of_range: $oor, findings: $f}' > "$meta"
         fi
         # Nothing to post, in prepare mode the payload still exists so the
         # posting job has something to download.
@@ -1161,8 +1246,6 @@ runs:
           sum_append "$omitted_block"
         fi
         if [ "$mode" = "prepare" ]; then
-          cp "$reuse_tmp" "$payload/reuse.ndjson"
-          cp "$omitted_file" "$payload/omitted.txt"
           echo "echoes: the review is prepared in $payload for a later job"
           echo "prepared" > "$status"
           exit 0
@@ -1179,12 +1262,15 @@ runs:
         posted_reuse=0
         planned_n="$(cat "$comments" "$reuse_tmp" | wc -l)"
         post_one() {
-          local row="$1" p line err item g
+          local row="$1" p line stop err item g
           p="$(printf '%s' "$row" | jq -r '.path')"
           line="$(printf '%s' "$row" | jq -r '.start_line')"
+          stop="$(printf '%s' "$row" | jq -r '.line')"
+          item="$(printf '%s' "$row" | jq -r '.item')"
+          g="$(printf '%s' "$row" | jq -r '.group // .kind')"
           if ! err="$(printf '%s' "$row" | jq -r '.body' | gh api "repos/$repo/pulls/$pr/comments" \
             -f "commit_id=$head_sha" -f "path=$p" \
-            -F "start_line=$line" -F "line=$(printf '%s' "$row" | jq -r '.line')" \
+            -F "start_line=$line" -F "line=$stop" \
             -f start_side=RIGHT -f side=RIGHT -F 'body=@-' 2>&1)"; then
             if rate_limited_error "$err"; then
               rate_limited=1
@@ -1194,14 +1280,13 @@ runs:
               readonly=1
               return 1
             fi
-            item="$(printf '%s' "$row" | jq -r '.item')"
-            g="$(printf '%s' "$row" | jq -r '.group // .kind')"
-            printf 'echoes: %s:%s %s\n' "$p" "$line" "$item"
+            printf 'echoes: %s:%s %s\n' "$(escape_data "$p")" "$line" "$(escape_data "$item")"
             printf '%s\n' "$err" | sed 's/^/echoes: /'
             if printf '%s' "$err" | grep -qE 'HTTP 422|"status": "422"'; then
-              out_of_range="$out_of_range- group $g  $(printf '`%s:%s`' "$p" "$line")  $item"$'\n'
+              out_of_range="$out_of_range- group $g  $(md_code "$p:$line")  $(md_code "$item")"$'\n'
             else
-              failed_sites="$failed_sites  group $g  $p:$line  $item"$'\n'
+              failed_sites="$failed_sites- group $g  $(md_code "$p:$line")  $(md_code "$item")"$'\n'
+              failed_log="$failed_log  group $g  $(escape_data "$p"):$line  $(escape_data "$item")"$'\n'
             fi
           fi
           return 0
@@ -1228,10 +1313,7 @@ runs:
           rate_omitted=$((planned_n - posted_local - posted_reuse))
           rate_unposted="$(
             { tail -n +$((posted_local + 1)) "$comments"
-              tail -n +$((posted_reuse + 1)) "$reuse_tmp"; } |
-            jq -rs 'map("- " + .path + ":" + (.start_line | tostring) + "  " + .item
-              + (if .group then " (group " + (.group | tostring) + ")" else " (" + (.kind // "context") + ")" end))
-            | join("\n")'
+              tail -n +$((posted_reuse + 1)) "$reuse_tmp"; } | unposted_list
           )"
           echo "echoes: the api rate limit was reached, $rate_omitted inline copies were not posted"
         fi
@@ -1242,17 +1324,15 @@ runs:
         fi
         # A review with no comment of its own needs a body. Sites GitHub could not
         # anchor inline are listed with permalinks to the head commit.
-        if [ -z "$review_event" ]; then
-          review_event='REQUEST_CHANGES'
-          [ -s "$comments" ] || [ -n "$out_of_range" ] || review_event='COMMENT'
-        fi
+        review_event='REQUEST_CHANGES'
+        [ -s "$comments" ] || [ -n "$out_of_range" ] || review_event='COMMENT'
         review=(-f "event=$review_event")
         review_body=''
         if [ -n "$out_of_range" ]; then
           review_body="$(printf 'These duplicates are not on lines GitHub shows in this pull request diff, the inline comment cannot attach there. The links point at the copies on the head commit.\n\n%s' "$out_of_range")"
         fi
         if [ -n "$failed_sites" ]; then
-          review_body="$review_body$(printf '\n\nDuplicates echoes could not comment inline\n\n```\n%s```' "$failed_sites")"
+          review_body="$review_body$(printf '\n\nDuplicates echoes could not comment inline\n\n%s' "$failed_sites")"
         fi
         if [ "$omitted" -gt 0 ]; then
           review_body="$review_body$(printf '\n\n%s inline copies were not posted, they are listed in the run summary %s' "$omitted" "$run_url")"
@@ -1276,7 +1356,7 @@ runs:
           if [ -n "$failed_sites" ]; then
             failed_kept="$(printf '%s' "$failed_sites" | fit_lines "$budget")"
             failed_more=$(($(printf '%s' "$failed_sites" | wc -l) - $(printf '%s' "$failed_kept" | wc -l)))
-            failed_part="$(printf '\n\nDuplicates echoes could not comment inline\n\n```\n%s```' "$failed_kept")"
+            failed_part="$(printf '\n\nDuplicates echoes could not comment inline\n\n%s' "$failed_kept")"
             [ "$failed_more" -gt 0 ] && failed_part="$failed_part"$'\n'"and $failed_more more, they are in the run summary $run_url"
           fi
           review_body="$oor_part$failed_part"
@@ -1312,9 +1392,9 @@ runs:
           echo "failed" > "$status"
           exit 1
         fi
-        if [ -n "$failed_sites" ]; then
+        if [ -n "$failed_log" ]; then
           echo "echoes: the inline comments failed for the following sites"
-          printf '%s' "$failed_sites"
+          printf '%s' "$failed_log"
         fi
         echo "echoes: posted the review on pull request $pr"
         echo "posted" > "$status"

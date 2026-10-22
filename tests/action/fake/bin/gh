@@ -49,6 +49,13 @@ case "${1:-}" in
           resp='[]'
         fi
         ;;
+      "repos/$GITHUB_REPOSITORY/pulls?"*)
+        # The listing filters by the head label like the real api.
+        head="${path#*head=}"
+        head="${head%%&*}"
+        head="${head//%3A/:}"
+        resp="$(jq -c --arg h "$head" '[.[] | select(.head.label == $h)]' "${SCEN_OPEN_PRS:?}")"
+        ;;
       "repos/$GITHUB_REPOSITORY/pulls/"*)
         case "$method" in
           POST)
@@ -59,6 +66,11 @@ case "${1:-}" in
             fi
             case "$path" in
               */comments)
+                if [ -n "${SCEN_GH_FAIL:-}" ]; then
+                  echo "{\"message\":\"Failed\",\"status\":\"$SCEN_GH_FAIL\"}"
+                  echo "gh: Failed (HTTP $SCEN_GH_FAIL)" >&2
+                  exit 1
+                fi
                 # The comment posts beyond the allowed count hit a secondary rate limit.
                 if [ -n "${SCEN_GH_RATELIMIT:-}" ]; then
                   n="$(cat "$log_dir/gh-comments-done" 2>/dev/null || echo 0)"

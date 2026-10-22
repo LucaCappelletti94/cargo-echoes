@@ -375,7 +375,7 @@ fn s05_pr_reuse_only() {
         "the advice names the callable public route"
     );
     assert!(
-        text.contains("source (direct::helper)"),
+        text.contains("source (`direct::helper`)"),
         "the source evidence keeps the original site item"
     );
     assert!(
@@ -391,7 +391,7 @@ fn s05_pr_reuse_only() {
         "the unknown repository is rendered explicitly"
     );
     assert!(
-        text.contains("lookup: issue lookup unavailable: HTTP 503"),
+        text.contains("lookup: `issue lookup unavailable: HTTP 503`"),
         "the failed issue lookup is rendered explicitly"
     );
     let summary = r.summary();
@@ -652,46 +652,35 @@ fn s09_fixture() -> (Value, Value) {
     (rep, base_report)
 }
 
-/// The prepare payload files carry the prepared review.
+/// The prepare payload carries data for the posting job and no rendered text.
 fn s09_payload_checks(world: &World, r: &Runner) {
     let payload = world.workspace_path().join("echoes-payload");
     let meta: Value = serde_json::from_str(
-        &fs::read_to_string(payload.join("review.json")).expect("read the payload metadata"),
+        &fs::read_to_string(payload.join("meta.json")).expect("read the payload metadata"),
     )
     .expect("parse the payload metadata");
+    assert_eq!(meta["pr"], "7", "the payload names the pull request");
     assert_eq!(
-        meta.get("pr").and_then(Value::as_str),
-        Some("7"),
-        "the payload metadata is complete"
-    );
-    assert_eq!(
-        meta.get("head_sha").and_then(Value::as_str).map(str::len),
+        meta["head_sha"].as_str().map(str::len),
         Some(40),
-        "the payload metadata is complete"
+        "the payload names the head commit"
     );
-    assert_eq!(
-        meta.get("event").and_then(Value::as_str),
-        Some("REQUEST_CHANGES"),
-        "the payload records the review event for the posting job"
-    );
-    let comments =
-        fs::read_to_string(payload.join("comments.ndjson")).expect("read the payload comments");
-    assert_eq!(
-        comments.lines().filter(|l| !l.trim().is_empty()).count(),
-        1,
-        "the payload holds the local duplicate comment"
-    );
-    let reuse_rows =
-        fs::read_to_string(payload.join("reuse.ndjson")).expect("read the payload reuse");
-    let rows: Vec<&str> = reuse_rows
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .collect();
-    assert_eq!(rows.len(), 1, "the payload serializes the reuse entry");
+    let report: Value = serde_json::from_str(
+        &fs::read_to_string(payload.join("report.json")).expect("read the payload report"),
+    )
+    .expect("parse the payload report");
+    assert_eq!(report["groups"].as_array().map(Vec::len), Some(1));
     assert!(
-        rows.iter().any(|l| l.contains("issues/new")),
-        "the reuse entry body carries the request link"
+        payload.join("base-report.json").exists(),
+        "only-new needs the base report"
     );
+    for entry in fs::read_dir(&payload).expect("list the payload") {
+        let text = fs::read_to_string(entry.expect("payload entry").path()).unwrap_or_default();
+        assert!(
+            !text.contains("Report a wrong review"),
+            "the payload carries no rendered comment"
+        );
+    }
     assert_eq!(r.comment_posts().len(), 0, "the prepare run posts nothing");
 }
 
@@ -728,7 +717,8 @@ fn s09_prepare_post_reuse() {
         .event("pull_request")
         .workspace(payload_ws)
         .base_sha(&base)
-        .head_sha(&head);
+        .head_sha(&head)
+        .changed(&["Cargo.toml", "src/lib.rs", "src/dup.rs", "src/parser.rs"]);
     let exit2 = world2.run();
     let r2 = world2.runner();
     assert_eq!(exit2, 0, "the post run exits 0");
@@ -751,7 +741,7 @@ fn s09_prepare_post_reuse() {
             .and_then(|p| p.get("event"))
             .and_then(Value::as_str),
         Some("REQUEST_CHANGES"),
-        "the post job honors the prepared review event"
+        "the post job computes the review event"
     );
 }
 
@@ -835,7 +825,7 @@ fn s11_post_missing_payload() {
     let exit = world.run();
     let r = world.runner();
     assert_eq!(exit, 1, "a missing prepared payload fails the post job");
-    assert_eq!(r.status(), "failed", "the post job records the failure");
+    assert_eq!(r.status(), "rejected", "the post job records the rejection");
 }
 
 #[test]
@@ -1068,16 +1058,6 @@ fn s15_prepare_post_reuse_only() {
     let exit = world.run();
 
     assert_eq!(exit, 0, "the reuse-only prepare run exits 0");
-    let meta: Value = serde_json::from_str(
-        &fs::read_to_string(world.workspace_path().join("echoes-payload/review.json"))
-            .expect("read the payload metadata"),
-    )
-    .expect("parse the payload metadata");
-    assert_eq!(
-        meta.get("event").and_then(Value::as_str),
-        Some("COMMENT"),
-        "a reuse-only payload records a comment review, not request changes"
-    );
     // The posting job shares the prepare workspace so the payload survives it.
     let payload_ws = world.workspace_path().to_path_buf();
     let (base, head) = world.shas();
@@ -1090,7 +1070,8 @@ fn s15_prepare_post_reuse_only() {
         .event("pull_request")
         .workspace(payload_ws)
         .base_sha(&base)
-        .head_sha(&head);
+        .head_sha(&head)
+        .changed(&["Cargo.toml", "src/lib.rs", "src/parser.rs"]);
     let exit2 = world2.run();
     let r2 = world2.runner();
     assert_eq!(exit2, 0, "the reuse-only post run exits 0");
@@ -1222,7 +1203,7 @@ fn s17_rate_limit_403() {
         "the run summary reports the rate limit"
     );
     assert!(
-        summary.contains("src/dup2.rs:3  app::parse (group 1)"),
+        summary.contains("`src/dup2.rs:3`  `app::parse` (group 1)"),
         "the run summary lists the rate-limited copy"
     );
 }
@@ -1373,11 +1354,13 @@ fn s20_prepare_post_cap() {
             ("pr-number", "7"),
             ("mode", "post"),
             ("payload", "echoes-payload"),
+            ("max-comments", "1"),
         ])
         .event("pull_request")
         .workspace(payload_ws)
         .base_sha(&base)
-        .head_sha(&head);
+        .head_sha(&head)
+        .changed(&["src/lib.rs", "src/dup.rs", "src/parser.rs"]);
     let exit2 = world2.run();
     let r2 = world2.runner();
     assert_eq!(exit2, 0, "the post run exits 0");
@@ -1399,7 +1382,7 @@ fn s20_prepare_post_cap() {
         .unwrap_or("");
     assert!(
         body.contains("1 inline copies were not posted"),
-        "the post job carries the omitted count from the payload"
+        "the post job applies its own cap"
     );
     assert!(
         body.contains("https://github.com/owner/repo/actions/runs/1"),
@@ -1408,8 +1391,508 @@ fn s20_prepare_post_cap() {
     let summary2 = r2.summary();
     assert!(
         summary2.contains("Inline copies not posted")
-            && summary2.contains("src/parser.rs:3  app::parser::selected (reuse)"),
-        "the post summary lists the omitted copy from the payload"
+            && summary2.contains("`src/parser.rs:3`  `app::parser::selected` (reuse)"),
+        "the post summary lists the omitted copy"
+    );
+}
+
+/// A prepared payload for pull request 7 with one group of `copies` sites in the
+/// diff and the item of every site set to `item`. `kind` is `doctest`, or the
+/// remedy of a function group.
+fn prepared(name: &str, copies: usize, item: &str, kind: &str) -> World {
+    let files: Vec<String> = (0..copies).map(|i| format!("src/c{i}.rs")).collect();
+    let sites: Vec<Value> = files
+        .iter()
+        .map(|f| {
+            if kind == "doctest" {
+                doc_site(f, 3, 5, item)
+            } else {
+                site(f, 3, 5, item)
+            }
+        })
+        .collect();
+    let mut g = group("g1", "H1", &sites);
+    if kind != "doctest" {
+        g["kind"] = json!("function");
+        g["remedy"] = json!(kind);
+    }
+    let changed: Vec<&str> = files.iter().map(String::as_str).collect();
+    let mut world = World::new(name)
+        .inputs(&[
+            ("pr-number", "7"),
+            ("mode", "prepare"),
+            ("payload", "echoes-payload"),
+        ])
+        .event("pull_request")
+        .json(report(&[g], &[], None, 6, 3))
+        .changed(&changed);
+    for f in &files {
+        world.write_file(f, SRC_LIB);
+    }
+    assert_eq!(world.run(), 0, "the prepare run exits 0");
+    assert_eq!(world.runner().status(), "prepared");
+    world
+}
+
+/// The post world for a prepared payload, triggered by `event`.
+fn post_world(name: &str, prepared: &World, event: &str, inputs: &[(&str, &str)]) -> World {
+    let (base, head) = prepared.shas();
+    let mut all = vec![("mode", "post"), ("payload", "echoes-payload")];
+    all.extend_from_slice(inputs);
+    let changed: Vec<String> = (0..8).map(|i| format!("src/c{i}.rs")).collect();
+    let changed: Vec<&str> = changed.iter().map(String::as_str).collect();
+    World::new(name)
+        .inputs(&all)
+        .event(event)
+        .workspace(prepared.workspace_path().to_path_buf())
+        .base_sha(&base)
+        .head_sha(&head)
+        .changed(&changed)
+}
+
+/// Rewrites `key` in the payload metadata.
+fn forge_meta(prepared: &World, key: &str, value: Value) {
+    let path = prepared.workspace_path().join("echoes-payload/meta.json");
+    let mut meta: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    meta[key] = value;
+    fs::write(&path, meta.to_string()).unwrap();
+}
+
+/// Rewrites every line number of the payload report.
+fn forge_lines(prepared: &World, value: &str) {
+    let report = prepared.workspace_path().join("echoes-payload/report.json");
+    let mut r: Value = serde_json::from_str(&fs::read_to_string(&report).unwrap()).unwrap();
+    for g in r["groups"].as_array_mut().unwrap() {
+        for s in g["sites"].as_array_mut().unwrap() {
+            s["line"] = json!(value);
+        }
+    }
+    fs::write(&report, r.to_string()).unwrap();
+}
+
+fn posts(r: &Runner) -> usize {
+    r.comment_posts().len() + r.review_posts().len()
+}
+
+#[test]
+fn s24_post_rejects_a_forged_pull_request() {
+    let prep = prepared("s24a", 2, "app::parse", "doctest");
+    forge_meta(&prep, "pr", json!("99"));
+    let mut post = post_world("s24b", &prep, "workflow_run", &[]);
+    let exit = post.run();
+    let r = post.runner();
+    assert_ne!(
+        exit, 0,
+        "a payload naming another pull request fails the job"
+    );
+    assert_eq!(posts(r), 0, "nothing is posted for a forged payload");
+    assert_eq!(r.status(), "rejected");
+}
+
+#[test]
+fn s25_post_rejects_a_run_of_another_event() {
+    let prep = prepared("s25a", 2, "app::parse", "doctest");
+    let mut post = post_world("s25b", &prep, "workflow_run", &[]).run_event("push");
+    let exit = post.run();
+    let r = post.runner();
+    assert_ne!(exit, 0, "only a pull request run can be reviewed");
+    assert_eq!(posts(r), 0);
+    assert_eq!(r.status(), "rejected");
+}
+
+#[test]
+fn s26_post_skips_a_run_whose_head_moved_on() {
+    let prep = prepared("s26a", 2, "app::parse", "doctest");
+    let mut post = post_world("s26b", &prep, "workflow_run", &[]).open_prs(json!([]));
+    let exit = post.run();
+    let r = post.runner();
+    assert_eq!(exit, 0, "a stale run is not an error");
+    assert_eq!(
+        posts(r),
+        0,
+        "nothing is posted on a pull request that moved on"
+    );
+    assert_eq!(r.status(), "skipped-stale");
+}
+
+#[test]
+fn s27_post_computes_the_review_event() {
+    let prep = prepared("s27a", 2, "app::parse", "doctest");
+    forge_meta(&prep, "event", json!("APPROVE"));
+    let mut post = post_world("s27b", &prep, "workflow_run", &[]);
+    assert_eq!(post.run(), 0);
+    let reviews = post.runner().review_posts();
+    assert_eq!(reviews.len(), 1);
+    assert_eq!(reviews[0]["p"], "repos/owner/repo/pulls/7/reviews");
+    assert_eq!(reviews[0]["params"]["event"], "REQUEST_CHANGES");
+    assert_eq!(
+        post.runner().comment_posts()[0]["params"]["line"],
+        "6",
+        "the deletion takes the empty line the prepare job found after the block"
+    );
+}
+
+#[test]
+fn s28_post_never_hands_a_file_reference_to_gh() {
+    let prep = prepared("s28a", 2, "app::parse", "doctest");
+    forge_lines(&prep, "@/etc/hostname");
+    let mut post = post_world("s28b", &prep, "workflow_run", &[]);
+    post.run();
+    for call in post.runner().gh_calls() {
+        for (key, value) in call["params"].as_object().unwrap() {
+            let value = value.as_str().unwrap_or_default();
+            assert!(
+                !value.starts_with('@') || key == "body",
+                "{key}={value} reaches gh"
+            );
+        }
+    }
+}
+
+#[test]
+fn s29_post_applies_max_comments() {
+    let prep = prepared("s29a", 4, "app::parse", "doctest");
+    let mut post = post_world("s29b", &prep, "workflow_run", &[("max-comments", "1")]);
+    assert_eq!(post.run(), 0);
+    let r = post.runner();
+    assert_eq!(r.comment_posts().len(), 1, "the cap holds in post mode");
+    let body = r.review_posts()[0]["params"]["body"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    assert!(body.contains("2 inline copies were not posted"), "{body}");
+}
+
+#[test]
+fn s30_post_ignores_text_planted_in_the_payload() {
+    let prep = prepared("s30a", 2, "app::parse", "doctest");
+    let dir = prep.workspace_path().join("echoes-payload");
+    let planted = json!({"path": "src/c1.rs", "start_line": 3, "line": 5, "group": "1",
+        "item": "app::parse", "close_line": 5, "body": "PLANTED"});
+    fs::write(dir.join("comments.ndjson"), format!("{planted}\n")).unwrap();
+    let mut post = post_world("s30b", &prep, "workflow_run", &[]);
+    assert_eq!(post.run(), 0);
+    let r = post.runner();
+    assert_eq!(r.comment_posts().len(), 1);
+    assert!(
+        !joined_bodies(&r.body_files()).contains("PLANTED"),
+        "comment text comes from the renderer, never from the payload"
+    );
+    let out = r
+        .step_stdout("Review the findings on the pull request")
+        .unwrap_or_default();
+    assert!(
+        !out.contains("::error file="),
+        "the post run is not the pull request's run, so it annotates nothing"
+    );
+}
+
+#[test]
+fn s31_post_fences_report_text() {
+    let fenced = "`` `app::a`b @org/team` ``";
+    let kept_fenced = "`` `k`@org/kept ``";
+    for kind in ["doctest", "delete", "helper-or-macro"] {
+        let prep = prepared(&format!("s31a{kind}"), 2, "`app::a`b @org/team`", kind);
+        let report = prep.workspace_path().join("echoes-payload/report.json");
+        let mut r: Value = serde_json::from_str(&fs::read_to_string(&report).unwrap()).unwrap();
+        r["groups"][0]["sites"][0]["item"] = json!("`k`@org/kept");
+        fs::write(&report, r.to_string()).unwrap();
+        let mut post = post_world(&format!("s31b{kind}"), &prep, "workflow_run", &[]);
+        assert_eq!(post.run(), 0);
+        let summary = post.runner().summary();
+        assert!(summary.contains(fenced), "{kind}: {summary}");
+        if kind == "helper-or-macro" {
+            let bodies = joined_bodies(&post.runner().body_files());
+            assert!(bodies.contains(kept_fenced), "{bodies}");
+        }
+    }
+}
+
+#[test]
+fn s32_post_logs_no_workflow_command() {
+    let forged = "app::x\n::error::forged\n\n@org/team";
+    for code in ["422", "500"] {
+        let prep = prepared(&format!("s32a{code}"), 2, "app::parse", "doctest");
+        let report = prep.workspace_path().join("echoes-payload/report.json");
+        let mut r: Value = serde_json::from_str(&fs::read_to_string(&report).unwrap()).unwrap();
+        r["context_groups"] = json!([ctx_group(
+            "C1",
+            "HC",
+            &[
+                site("src/c0.rs", 3, 5, forged),
+                site("src/c1.rs", 3, 5, forged)
+            ]
+        )]);
+        fs::write(&report, r.to_string()).unwrap();
+        let mut post = post_world(&format!("s32b{code}"), &prep, "workflow_run", &[])
+            .env("SCEN_GH_FAIL", code);
+        post.run();
+        let r = post.runner();
+        let out = r
+            .step_stdout("Review the findings on the pull request")
+            .unwrap_or_default();
+        assert!(out.contains("forged"), "the failed site is logged: {out}");
+        assert!(
+            !out.lines()
+                .any(|l| l.trim_start().starts_with("::error::forged")),
+            "{code}: {out}"
+        );
+        let review = r.review_posts()[0]["params"]["body"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        assert!(review.contains("@org/team"), "{code}: {review}");
+        assert!(
+            !review
+                .lines()
+                .any(|l| l.trim_start().starts_with("@org/team")),
+            "{code}: {review}"
+        );
+    }
+}
+
+/// The status of a post run, which must post nothing unless it is `posted`.
+fn post_status(world: &mut World) -> (i32, String) {
+    let exit = world.run();
+    let r = world.runner();
+    if r.status() != "posted" {
+        assert_eq!(posts(r), 0, "only a posted run posts");
+    }
+    (exit, r.status())
+}
+
+#[test]
+fn s33_post_outside_workflow_run_needs_the_same_pull_request() {
+    let prep = prepared("s33a", 2, "app::parse", "doctest");
+    let mut other = post_world("s33b", &prep, "workflow_dispatch", &[("pr-number", "8")]);
+    assert_eq!(
+        post_status(&mut other),
+        (1, "rejected".into()),
+        "the payload names 7, the job names 8"
+    );
+    let mut none = post_world("s33c", &prep, "workflow_dispatch", &[]);
+    assert_eq!(
+        post_status(&mut none),
+        (1, "rejected".into()),
+        "outside workflow_run the job names the pull request"
+    );
+    let mut moved = post_world("s33d", &prep, "workflow_dispatch", &[("pr-number", "7")])
+        .head_sha(&"b".repeat(40));
+    assert_eq!(
+        post_status(&mut moved),
+        (0, "skipped-stale".into()),
+        "the pull request moved on"
+    );
+    let mut unreadable =
+        post_world("s33f", &prep, "workflow_dispatch", &[("pr-number", "7")]).head_sha("null");
+    assert_eq!(
+        post_status(&mut unreadable),
+        (1, "rejected".into()),
+        "the pull request cannot be read"
+    );
+    let mut same = post_world("s33e", &prep, "workflow_dispatch", &[("pr-number", "7")]);
+    assert_eq!(post_status(&mut same), (0, "posted".into()));
+    assert_eq!(
+        same.runner().review_posts()[0]["p"],
+        "repos/owner/repo/pulls/7/reviews"
+    );
+}
+
+#[test]
+fn s34_post_rejects_identity_mismatches_under_workflow_run() {
+    let prep = prepared("s34a", 2, "app::parse", "doctest");
+    let mut named = post_world("s34b", &prep, "workflow_run", &[("pr-number", "8")]);
+    assert_eq!(
+        post_status(&mut named),
+        (1, "rejected".into()),
+        "the job names another pull request"
+    );
+    forge_meta(&prep, "pr", json!("99\n7"));
+    let mut two_lines = post_world("s34c", &prep, "workflow_run", &[]);
+    assert_eq!(
+        post_status(&mut two_lines),
+        (1, "rejected".into()),
+        "a second line is not a second pattern"
+    );
+    forge_meta(&prep, "pr", json!("7"));
+    forge_meta(&prep, "head_sha", json!("c".repeat(40)));
+    let mut head = post_world("s34d", &prep, "workflow_run", &[]);
+    assert_eq!(
+        post_status(&mut head),
+        (1, "rejected".into()),
+        "the payload names another head"
+    );
+}
+
+#[test]
+fn s35_post_matches_the_head_repository_and_commit() {
+    let prep = prepared("s35a", 2, "app::parse", "doctest");
+    let (_, head) = prep.shas();
+    for (case, sha, repo) in [
+        ("sha", "d".repeat(40), "owner/repo"),
+        ("repo", head.clone(), "owner/elsewhere"),
+    ] {
+        let prs = json!([{"number": 7, "head": {"sha": sha, "label": "owner:feature", "repo": {"full_name": repo}}}]);
+        let mut post = post_world(&format!("s35{case}"), &prep, "workflow_run", &[]).open_prs(prs);
+        assert_eq!(
+            post_status(&mut post),
+            (0, "skipped-stale".into()),
+            "{case}"
+        );
+    }
+}
+
+#[test]
+fn s36_post_never_evaluates_report_numbers() {
+    let prep = prepared("s36a", 2, "app::parse", "doctest");
+    let marker = std::env::temp_dir().join(format!("echoes-s36-{}", std::process::id()));
+    let _ = fs::remove_file(&marker);
+    let path = prep.workspace_path().join("echoes-payload/report.json");
+    let mut r: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    r["groups"][0]["sites"][0]["line"] = json!(format!("x[$(touch {})]", marker.display()));
+    fs::write(&path, r.to_string()).unwrap();
+    let mut post = post_world("s36b", &prep, "workflow_run", &[]);
+    assert_eq!(post_status(&mut post), (1, "rejected".into()));
+    assert!(!marker.exists(), "a report number ran as shell arithmetic");
+    let prep = prepared("s36c", 2, "app::parse", "doctest");
+    let mut base = report(
+        &[group(
+            "g1",
+            "H1",
+            &[doc_site("src/base.rs", 3, 5, "app::parse")],
+        )],
+        &[],
+        None,
+        1,
+        1,
+    );
+    base["groups"][0]["sites"][0]["line"] = json!(format!("x[$(touch {})]", marker.display()));
+    fs::write(
+        prep.workspace_path()
+            .join("echoes-payload/base-report.json"),
+        base.to_string(),
+    )
+    .unwrap();
+    let mut post = post_world("s36d", &prep, "workflow_run", &[]);
+    assert_eq!(post_status(&mut post), (1, "rejected".into()));
+    assert!(
+        !marker.exists(),
+        "a base report number ran as shell arithmetic"
+    );
+}
+
+#[test]
+fn s37_post_links_only_to_a_commit() {
+    let prep = prepared("s37a", 2, "app::parse", "doctest");
+    let dir = prep.workspace_path().join("echoes-payload");
+    let base = report(
+        &[group(
+            "g1",
+            "H1",
+            &[doc_site("src/base.rs", 3, 5, "app::parse")],
+        )],
+        &[],
+        None,
+        1,
+        1,
+    );
+    fs::write(dir.join("base-report.json"), base.to_string()).unwrap();
+    forge_meta(&prep, "base_sha", json!("x) [phish](https://evil.example/"));
+    let mut post = post_world("s37b", &prep, "workflow_run", &[]);
+    assert_eq!(post_status(&mut post), (0, "posted".into()));
+    let bodies = joined_bodies(&post.runner().body_files());
+    assert!(
+        bodies.contains("`src/base.rs:3-5`"),
+        "the kept copy is named: {bodies}"
+    );
+    assert!(!bodies.contains("evil.example"), "{bodies}");
+}
+
+#[test]
+fn s38_post_encodes_paths_in_links() {
+    let prep = prepared("s38a", 3, "app::parse", "doctest");
+    let kept = "src/x) [phish](https://evil.example/y.rs";
+    let unanchored = "src/z) [phish](https://evil.example/w.rs";
+    let report = prep.workspace_path().join("echoes-payload/report.json");
+    let mut r: Value = serde_json::from_str(&fs::read_to_string(&report).unwrap()).unwrap();
+    r["groups"][0]["sites"][0]["file"] = json!(kept);
+    r["groups"][0]["sites"][2]["file"] = json!(unanchored);
+    r["groups"][0]["sites"][2]["end"] = Value::Null;
+    fs::write(&report, r.to_string()).unwrap();
+    let mut post =
+        post_world("s38b", &prep, "workflow_run", &[]).changed(&[kept, "src/c1.rs", unanchored]);
+    assert_eq!(post_status(&mut post), (0, "posted".into()));
+    let bodies = joined_bodies(&post.runner().body_files());
+    assert!(bodies.contains("/src/x%29%20%5Bphish%5D"), "{bodies}");
+    assert!(!bodies.contains("/src/x) "), "{bodies}");
+    let review = post.runner().review_posts()[0]["params"]["body"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    assert!(review.contains("/src/z%29%20%5Bphish%5D"), "{review}");
+    assert!(!review.contains("/src/z) "), "{review}");
+}
+
+#[test]
+fn s39_review_fences_candidate_text_and_checks_links() {
+    let local = site("src/parser.rs", 3, 6, "app::parser::selected");
+    let ctx = ctx_group(
+        "C1",
+        "HC",
+        &[
+            site("src/a.rs", 3, 6, "c`d"),
+            site("src/parser.rs", 10, 13, "app::other"),
+        ],
+    );
+    let mut world = World::new("s39")
+        .inputs(&[("pr-number", "7")])
+        .event("pull_request")
+        .json(report(
+            &[],
+            &[ctx],
+            Some(&reuse(
+                &[reuse_group(
+                    "R1",
+                    &local,
+                    &[
+                        Cand::new("a`b", "1.2.3", 1, "direct::helper", "reuse-api")
+                            .source_url("https://evil.example/x) [y](https://evil.example/z")
+                            .existing_issue("javascript:alert(1)", "open")
+                            .lookup_warning("`x`\n@org/team")
+                            .build(),
+                        {
+                            let mut c =
+                                Cand::new("second", "1.0.0", 1, "direct::helper", "reuse-api")
+                                    .issue_url("https://evil.example/q) x")
+                                    .build();
+                            c["depth"] = json!("1 [phish](https://evil.example)");
+                            c["conditions"] = json!(["f`g"]);
+                            c
+                        },
+                        Cand::new("third", "1.0.0", 1, "direct::helper", "reuse-api")
+                            .existing_issue("https://github.com/up/x/issues/1", "<b>x</b>")
+                            .build(),
+                    ],
+                )],
+                Some(coverage(true, 1, 1, 0, &[], &[])),
+            )),
+            6,
+            3,
+        ))
+        .changed(&["src/a.rs", "src/parser.rs"]);
+    world.write_file("src/a.rs", SRC_LIB);
+    world.write_file("src/parser.rs", SRC_LIB);
+    assert_eq!(world.run(), 0);
+    let bodies = joined_bodies(&world.runner().body_files());
+    assert!(bodies.contains("``a`b 1.2.3``"), "{bodies}");
+    assert!(bodies.contains("`` `x` @org/team ``"), "{bodies}");
+    assert!(bodies.contains("``c`d``"), "{bodies}");
+    assert!(!bodies.contains("evil.example"), "{bodies}");
+    assert!(!bodies.contains("javascript:"), "{bodies}");
+    assert!(bodies.contains("(needs ``f`g``)"), "{bodies}");
+    assert!(
+        bodies.contains("[existing request unknown](https://github.com/up/x/issues/1)"),
+        "{bodies}"
     );
 }
 
