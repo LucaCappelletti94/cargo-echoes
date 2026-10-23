@@ -1003,7 +1003,7 @@ fn a_module_failure_marks_coverage_and_keeps_the_rest() {
 fn dependency_traversal_is_rejected_in_organization_mode() {
     let err = Echoes::default()
         .context_dependency_depth(1)
-        .run_organization("org")
+        .run_selected(&["org"], &[] as &[&str])
         .unwrap_err();
     assert!(matches!(err, Error::OrganizationDependencies));
     assert!(err.to_string().contains("organization"));
@@ -1011,7 +1011,9 @@ fn dependency_traversal_is_rejected_in_organization_mode() {
 
 #[test]
 fn an_organization_scan_without_dependency_search_proceeds() {
-    let report = Echoes::default().run_organization("../evil").unwrap();
+    let report = Echoes::default()
+        .run_selected(&["../evil"], &[] as &[&str])
+        .unwrap();
     let coverage = &report.organization.as_ref().unwrap().coverage;
     assert!(!coverage.complete);
     assert!(coverage.failures[0].contains("not a valid GitHub login"));

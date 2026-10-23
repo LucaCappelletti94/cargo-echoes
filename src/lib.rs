@@ -336,76 +336,49 @@ impl Echoes {
         Ok(report)
     }
 
-    /// Scan every repository accessible for the GitHub organization `organization`, pinned
-    /// to each default branch's commit, without a local workspace.
+    /// Scan every accessible repository of each GitHub organization or user in
+    /// `organizations` together with the `owner/repo` repositories in `repositories` as one
+    /// corpus, each repository once and pinned to its default branch's commit, without a local
+    /// workspace.
     ///
     /// # Errors
     ///
-    /// Fails when dependency traversal is requested, unsupported in organization mode, or when
-    /// the package selector names no package of a completely analyzed organization.
+    /// Fails when both lists are empty, when dependency traversal is requested, unsupported in
+    /// organization mode, or when the package selector names no package of a completely
+    /// analyzed corpus.
     ///
     /// # Panics
     ///
     /// Panics when the scan panics, a bug in this crate.
     #[cfg(feature = "std")]
-    pub fn run_organization(self, organization: &str) -> Result<Report> {
-        self.run_selection(&organization_source::Selection::Owners(alloc::vec![
-            organization.to_string(),
-        ]))
-    }
-
-    /// Scan every accessible repository of each organization or user in `organizations` as
-    /// one corpus, like [`Echoes::run_organization`].
-    ///
-    /// # Errors
-    ///
-    /// Fails when `organizations` is empty, and as [`Echoes::run_organization`] does.
-    ///
-    /// # Panics
-    ///
-    /// Panics when the scan panics, a bug in this crate.
-    #[cfg(feature = "std")]
-    pub fn run_organizations(self, organizations: &[impl AsRef<str>]) -> Result<Report> {
-        let owners = organizations.iter().map(|name| String::from(name.as_ref()));
-        self.run_selection(&organization_source::Selection::Owners(owners.collect()))
-    }
-
-    /// Scan exactly the `owner/repo` repositories in `repositories` as one corpus, whoever
-    /// owns them, without listing any owner's repositories.
-    ///
-    /// # Errors
-    ///
-    /// Fails when `repositories` is empty, and as [`Echoes::run_organization`] does.
-    ///
-    /// # Panics
-    ///
-    /// Panics when the scan panics, a bug in this crate.
-    #[cfg(feature = "std")]
-    pub fn run_repositories(self, repositories: &[impl AsRef<str>]) -> Result<Report> {
-        let names = repositories.iter().map(|name| String::from(name.as_ref()));
-        self.run_selection(&organization_source::Selection::Repositories(
-            names.collect(),
-        ))
-    }
-
-    #[cfg(feature = "std")]
-    fn run_selection(self, selection: &organization_source::Selection) -> Result<Report> {
-        if let organization_source::Selection::Owners(names)
-        | organization_source::Selection::Repositories(names) = selection
-            && names.is_empty()
-        {
+    pub fn run_selected(
+        self,
+        organizations: &[impl AsRef<str>],
+        repositories: &[impl AsRef<str>],
+    ) -> Result<Report> {
+        if organizations.is_empty() && repositories.is_empty() {
             return Err(Error::EmptySelection);
         }
         if self.context_dependencies.depth.unwrap_or(0) > 0 {
             return Err(Error::OrganizationDependencies);
         }
+        let selection = organization_source::Selection {
+            owners: organizations
+                .iter()
+                .map(|name| String::from(name.as_ref()))
+                .collect(),
+            repositories: repositories
+                .iter()
+                .map(|name| String::from(name.as_ref()))
+                .collect(),
+        };
         on_large_stack(GROUP_STACK, || {
             let cache = self
                 .context_dependencies
                 .cache_dir
                 .as_deref()
                 .map(Path::new);
-            let corpus = organization_source::load(selection, cache, self.all_targets);
+            let corpus = organization_source::load(&selection, cache, self.all_targets);
             self.run_organization_corpus(corpus)
         })
     }
