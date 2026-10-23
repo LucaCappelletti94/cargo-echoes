@@ -27,7 +27,6 @@ const STANDARD_PATH: &[&str] = &[
 /// One `uses` step the runner recorded.
 pub struct Use {
     pub name: String,
-    pub uses: String,
     pub with: BTreeMap<String, String>,
 }
 
@@ -263,7 +262,7 @@ impl Runner {
                 self.steps.push((name, "skipped-after-failure"));
                 continue;
             }
-            if let Some(uses) = step.get("uses").and_then(Value::as_str) {
+            if step.get("uses").is_some() {
                 let mut with = BTreeMap::new();
                 if let Some(withs) = step.get("with").and_then(Value::as_object) {
                     for (k, v) in withs {
@@ -275,7 +274,6 @@ impl Runner {
                 }
                 self.uses.push(Use {
                     name: name.clone(),
-                    uses: uses.to_string(),
                     with,
                 });
                 self.steps.push((name, "used"));
