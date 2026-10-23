@@ -123,10 +123,6 @@ impl Runner {
         &self.uses
     }
 
-    pub fn job_env(&self) -> &BTreeMap<String, String> {
-        &self.job_env
-    }
-
     pub fn step_outputs(&self) -> &BTreeMap<String, BTreeMap<String, String>> {
         &self.step_outputs
     }

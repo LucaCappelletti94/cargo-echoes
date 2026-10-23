@@ -29,10 +29,12 @@ jobs:
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
         timeout-minutes: 3
       - name: Cache cargo downloads
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         timeout-minutes: 3
         with:
           path: |
@@ -42,7 +44,7 @@ jobs:
           key: dl-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             dl-${{ runner.os }}-
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
         timeout-minutes: 5
@@ -55,12 +57,12 @@ jobs:
           tool: cargo-mutants@27.1.0,cargo-nextest
       - name: Run mutants
         timeout-minutes: 340
-        run: >-
-          cargo mutants --workspace --jobs 2
-          --shard ${{ strategy.job-index }}/${{ strategy.job-total }}
+        env:
+          SHARD: ${{ strategy.job-index }}/${{ strategy.job-total }}
+        run: cargo mutants --workspace --jobs 2 --shard "$SHARD"
       - name: Upload mutation outcome
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         timeout-minutes: 3
         with:
           name: mutants-shard-${{ strategy.job-index }}
