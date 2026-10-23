@@ -25,7 +25,7 @@ Different paths, methods, string literals or macro arguments do separate bodies.
 cargo echoes -v                                # each group with its sites and code
 cargo echoes --functions --context-blocks      # also functions and code blocks
 cargo echoes --organization <org> --functions  # every repository of a GitHub organization or user
-cargo echoes --repository <owner/repo> --repository <owner/repo> --functions  # exactly these repositories
+cargo echoes --repository <owner/repo> --repository <owner/repo> --functions  # these repositories, also beside --organization
 cargo echoes --json                            # {groups: [{kind, id, tokens, remedy, sites}], context_groups, organization}
 ```
 
@@ -59,7 +59,7 @@ Context groups match function bodies, blocks, `match` arms and closures with ide
 
 ## Organizations
 
-`--organization` reads every repository the `GH_TOKEN` or `GITHUB_TOKEN` credential can see, pinned to its default branch, and compares functions across crates and modules. Without a name it scans the current repository's owner. Repeat it for several owners, or repeat `--repository` to scan only the named repositories. Cross-crate copies get `helper-or-macro` or `generic-or-macro`, so share them through a crate both depend on. Downloaded `.echoes.toml` files are ignored, so pass `--config`. Exit `2` with `echoes: incomplete organization analysis` lines means a repository was not analyzed.
+`--organization` reads every repository the `GH_TOKEN` or `GITHUB_TOKEN` credential can see, pinned to its default branch, and compares functions across crates and modules. Without a name it scans the current repository's owner. Repeat it for several owners, and repeat `--repository` to add named repositories of any owner, alone or beside the organizations. Cross-crate copies get `helper-or-macro` or `generic-or-macro`, so share them through a crate both depend on. Downloaded `.echoes.toml` files are ignored, so pass `--config`. Exit `2` with `echoes: incomplete organization analysis` lines means a repository was not analyzed.
 
 ## Reviews
 
@@ -67,4 +67,4 @@ The GitHub action comments on each copy to remove with a removal suggestion and 
 
 ## Library
 
-`echoes = { version = "0.8", default-features = false, features = ["std"] }`, then `echoes::Echoes::default().functions().run(".")?` returns the same `Report`, `run_organizations(&["org"])` scans organizations and `run_repositories(&["owner/repo"])` named repositories.
+`echoes = { version = "0.8", default-features = false, features = ["std"] }`, then `echoes::Echoes::default().functions().run(".")?` returns the same `Report`, and `run_selected(&["org"], &["owner/repo"])` scans organizations together with named repositories.

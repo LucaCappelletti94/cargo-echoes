@@ -349,9 +349,7 @@ impl Echoes {
     /// Panics when the scan panics, a bug in this crate.
     #[cfg(feature = "std")]
     pub fn run_organization(self, organization: &str) -> Result<Report> {
-        self.run_selection(&organization_source::Selection::Owners(alloc::vec![
-            organization.to_string(),
-        ]))
+        self.run_selected(&[organization], &[] as &[&str])
     }
 
     /// Scan every accessible repository of each organization or user in `organizations` as
@@ -366,8 +364,7 @@ impl Echoes {
     /// Panics when the scan panics, a bug in this crate.
     #[cfg(feature = "std")]
     pub fn run_organizations(self, organizations: &[impl AsRef<str>]) -> Result<Report> {
-        let owners = organizations.iter().map(|name| String::from(name.as_ref()));
-        self.run_selection(&organization_source::Selection::Owners(owners.collect()))
+        self.run_selected(organizations, &[] as &[&str])
     }
 
     /// Scan exactly the `owner/repo` repositories in `repositories` as one corpus, whoever
@@ -382,30 +379,48 @@ impl Echoes {
     /// Panics when the scan panics, a bug in this crate.
     #[cfg(feature = "std")]
     pub fn run_repositories(self, repositories: &[impl AsRef<str>]) -> Result<Report> {
-        let names = repositories.iter().map(|name| String::from(name.as_ref()));
-        self.run_selection(&organization_source::Selection::Repositories(
-            names.collect(),
-        ))
+        self.run_selected(&[] as &[&str], repositories)
     }
 
+    /// Scan every accessible repository of each owner in `organizations` together with the
+    /// `owner/repo` repositories in `repositories` as one corpus, each repository once.
+    ///
+    /// # Errors
+    ///
+    /// Fails when both lists are empty, and as [`Echoes::run_organization`] does.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the scan panics, a bug in this crate.
     #[cfg(feature = "std")]
-    fn run_selection(self, selection: &organization_source::Selection) -> Result<Report> {
-        if let organization_source::Selection::Owners(names)
-        | organization_source::Selection::Repositories(names) = selection
-            && names.is_empty()
-        {
+    pub fn run_selected(
+        self,
+        organizations: &[impl AsRef<str>],
+        repositories: &[impl AsRef<str>],
+    ) -> Result<Report> {
+        if organizations.is_empty() && repositories.is_empty() {
             return Err(Error::EmptySelection);
         }
         if self.context_dependencies.depth.unwrap_or(0) > 0 {
             return Err(Error::OrganizationDependencies);
         }
+        let selection = organization_source::Selection {
+            owners: organizations
+                .iter()
+                .map(|name| String::from(name.as_ref()))
+                .collect(),
+            repositories: repositories
+                .iter()
+                .map(|name| String::from(name.as_ref()))
+                .collect(),
+        };
         on_large_stack(GROUP_STACK, || {
             let cache = self
                 .context_dependencies
                 .cache_dir
                 .as_deref()
                 .map(Path::new);
-            let corpus = organization_source::load(selection, cache, self.all_targets);
+            let corpus = organization_source::load(&selection, cache, self.all_targets);
             self.run_organization_corpus(corpus)
         })
     }

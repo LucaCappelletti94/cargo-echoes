@@ -132,12 +132,12 @@ fn github_owner(url: &str) -> Option<&str> {
     is_github_login(owner).then_some(owner)
 }
 
-/// The GitHub repositories an organization scan reads.
-pub(crate) enum Selection {
-    /// Every accessible repository of each organization or user.
-    Owners(Vec<String>),
-    /// Exactly these `owner/repo` repositories, whoever owns them.
-    Repositories(Vec<String>),
+/// The GitHub repositories an organization scan reads, the owners' first.
+pub(crate) struct Selection {
+    /// Owners whose accessible repositories are all scanned.
+    pub(crate) owners: Vec<String>,
+    /// `owner/repo` repositories scanned as well, whoever owns them.
+    pub(crate) repositories: Vec<String>,
 }
 
 /// Load the selected repositories as a pinned snapshot corpus.
@@ -157,43 +157,37 @@ fn load_with_bases(selection: &Selection, api: &str, cache: &Path, all_targets: 
     let mut repos: Vec<RepoRef> = Vec::new();
     let mut failures: Vec<String> = Vec::new();
     let mut owners: Vec<&str> = Vec::new();
-    match selection {
-        Selection::Owners(logins) => {
-            for login in logins {
-                if owners.iter().any(|seen| seen.eq_ignore_ascii_case(login)) {
-                    continue;
-                }
-                owners.push(login);
-                if is_github_login(login) {
-                    enumerate_repos(api, login, MAX_PAGES, &mut repos, &mut failures);
-                } else {
-                    failures.push(format!(
-                        "{login}: the organization login is not a valid GitHub login"
-                    ));
-                }
-            }
+    for login in &selection.owners {
+        if owners.iter().any(|seen| seen.eq_ignore_ascii_case(login)) {
+            continue;
         }
-        Selection::Repositories(names) => {
-            for name in names {
-                let Some((owner, _)) = name
-                    .split_once('/')
-                    .filter(|(owner, repo)| is_github_login(owner) && is_repository_name(repo))
-                else {
-                    failures.push(format!("{name}: is not an owner/repository name"));
-                    continue;
-                };
-                if repos
-                    .iter()
-                    .any(|repo| repo.name.eq_ignore_ascii_case(name))
-                {
-                    continue;
-                }
-                if !owners.iter().any(|seen| seen.eq_ignore_ascii_case(owner)) {
-                    owners.push(owner);
-                }
-                repos.push(describe_repo(api, name));
-            }
+        owners.push(login);
+        if is_github_login(login) {
+            enumerate_repos(api, login, MAX_PAGES, &mut repos, &mut failures);
+        } else {
+            failures.push(format!(
+                "{login}: the organization login is not a valid GitHub login"
+            ));
         }
+    }
+    for name in &selection.repositories {
+        let Some((owner, _)) = name
+            .split_once('/')
+            .filter(|(owner, repo)| is_github_login(owner) && is_repository_name(repo))
+        else {
+            failures.push(format!("{name}: is not an owner/repository name"));
+            continue;
+        };
+        if repos
+            .iter()
+            .any(|repo| repo.name.eq_ignore_ascii_case(name))
+        {
+            continue;
+        }
+        if !owners.iter().any(|seen| seen.eq_ignore_ascii_case(owner)) {
+            owners.push(owner);
+        }
+        repos.push(describe_repo(api, name));
     }
     let mut report = crate::organization::OrganizationReport {
         name: match owners.as_slice() {
@@ -968,7 +962,10 @@ mod tests {
 
     /// A selection of one owner's repositories.
     fn one_owner(login: &str) -> Selection {
-        Selection::Owners(vec![login.to_owned()])
+        Selection {
+            owners: vec![login.to_owned()],
+            repositories: Vec::new(),
+        }
     }
 
     /// Register the repository metadata naming `name` with the `main` default branch.
@@ -985,7 +982,40 @@ mod tests {
 
     /// The repositories of `names`, as a selection.
     fn repositories(names: &[&str]) -> Selection {
-        Selection::Repositories(names.iter().map(|name| (*name).to_owned()).collect())
+        Selection {
+            owners: Vec::new(),
+            repositories: names.iter().map(|name| (*name).to_owned()).collect(),
+        }
+    }
+
+    #[test]
+    fn an_organization_and_outside_repositories_join_one_corpus() {
+        let fixture = organization_fixture();
+        fixture.page_route(
+            "/api/orgs/o/repos",
+            vec![listing(&[entry("o/app"), entry("o/lib")])],
+        );
+        metadata(&fixture, "x/tool");
+        empty_pins(&fixture, &["o/app", "o/lib", "x/tool"]);
+        let dir = tempfile::tempdir().unwrap();
+        let corpus = load_with_bases(
+            &Selection {
+                owners: vec!["o".to_owned()],
+                repositories: vec!["O/App".to_owned(), "x/tool".to_owned()],
+            },
+            fixture.api_base().as_str(),
+            dir.path(),
+            false,
+        );
+        assert_eq!(corpus.report.coverage.failures, Vec::<String>::new());
+        assert_eq!(names(&corpus), ["o/app", "o/lib", "x/tool"]);
+        assert_eq!(corpus.report.name, "");
+        assert_eq!(
+            fixture.hits("/api/repos/O/App"),
+            0,
+            "a listed repository is not fetched again"
+        );
+        assert_eq!(fixture.hits("/api/repos/x/tool"), 1);
     }
 
     #[test]
@@ -1088,7 +1118,10 @@ mod tests {
         empty_pins(&fixture, &["o/app", "p/lib"]);
         let dir = tempfile::tempdir().unwrap();
         let corpus = load_with_bases(
-            &Selection::Owners(vec!["o".to_owned(), "p".to_owned(), "O".to_owned()]),
+            &Selection {
+                owners: vec!["o".to_owned(), "p".to_owned(), "O".to_owned()],
+                repositories: Vec::new(),
+            },
             fixture.api_base().as_str(),
             dir.path(),
             false,

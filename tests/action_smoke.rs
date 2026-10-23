@@ -2158,9 +2158,21 @@ fn s22_selected_organizations_keep_the_job_token() {
 }
 
 #[test]
-fn s23_selection_is_gate_only_and_exclusive() {
+fn s49_selected_organizations_and_repositories_join() {
+    let mut world = World::new("s49").inputs(&[("organizations", "acme"), ("repositories", "o/a")]);
+    let exit = world.run();
+    let r = world.runner();
+    assert_eq!(exit, 0, "a clean selection scan exits 0");
+    let scan = r.scan_args(0);
+    assert_eq!(
+        &scan[scan.len() - 4..],
+        ["--organization", "acme", "--repository", "o/a"]
+    );
+}
+
+#[test]
+fn s23_selection_is_gate_only() {
     for (case, extra) in [
-        ("both", ("organizations", "acme")),
         ("pr", ("pr-number", "7")),
         ("dry", ("dry-run", "true")),
         ("prepare", ("mode", "prepare")),

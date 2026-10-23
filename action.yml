@@ -130,11 +130,11 @@ inputs:
     required: false
     default: '50'
   organizations:
-    description: Scan the crates of these GitHub organizations or users instead of the workspace, one per line
+    description: Scan every repository of these GitHub organizations or users instead of the workspace, one per line
     required: false
     default: ''
   repositories:
-    description: Scan exactly these OWNER/REPO repositories instead of the workspace, one per line
+    description: Scan these OWNER/REPO repositories instead of the workspace, together with any organizations, one per line
     required: false
     default: ''
 
@@ -145,16 +145,10 @@ runs:
       if: ${{ inputs.organizations != '' || inputs.repositories != '' }}
       shell: bash
       env:
-        ORGANIZATIONS: ${{ inputs.organizations }}
-        REPOSITORIES: ${{ inputs.repositories }}
         PR_NUMBER: ${{ inputs.pr-number }}
         DRY_RUN: ${{ inputs.dry-run }}
         MODE: ${{ inputs.mode }}
       run: |
-        if [ -n "${ORGANIZATIONS//[[:space:]]/}" ] && [ -n "${REPOSITORIES//[[:space:]]/}" ]; then
-          echo "::error title=echoes::organizations and repositories are alternatives, set one"
-          exit 2
-        fi
         if [ -n "$PR_NUMBER" ] || [ "$DRY_RUN" = "true" ] || [ "$MODE" != "review" ]; then
           echo "::error title=echoes::organizations and repositories only run as a gate, without pr-number, dry-run or mode"
           exit 2
