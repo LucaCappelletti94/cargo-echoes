@@ -1138,8 +1138,10 @@ impl Discovery {
             library: pkg.library,
         };
         let root = src.root.to_string_lossy().into_owned();
-        let records =
-            crate::context_index::extract(&scan, &root, self.eff.scan_generated, &self.eff.markers);
+        let scanned = |file: &crate::SourceFile| {
+            self.eff.scan_generated || !crate::is_generated(&file.text, &self.eff.markers)
+        };
+        let records = crate::context_index::extract(&scan, &root, &scanned);
         self.coverage.indexed_files += file_count;
         if complete
             && let Some(store) = &self.store
@@ -2179,7 +2181,7 @@ mod tests {
             files: sources,
             library: true,
         };
-        crate::context_index::extract(&scan, &dir.to_string_lossy(), false, &[])
+        crate::context_index::extract(&scan, &dir.to_string_lossy(), &|_| true)
     }
 
     fn app_targets(dir: &Path) -> Vec<TargetScan> {

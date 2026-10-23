@@ -280,6 +280,30 @@ fn s04_pr_local_onlynew() {
     );
 }
 
+#[test]
+fn s50_exclude_reaches_the_scan_and_the_base_scan() {
+    let mut world = World::new("s50")
+        .inputs(&[
+            ("pr-number", "7"),
+            ("exclude", "benches/**\n  examples/ \n\n"),
+        ])
+        .event("pull_request")
+        .git()
+        .json(report(&[], &[], None, 6, 3))
+        .base_json(report(&[], &[], None, 1, 1));
+    assert_eq!(world.run(), 0);
+    let r = world.runner();
+    for call in 0..2 {
+        let args = r.scan_args(call);
+        let excludes: Vec<&str> = args
+            .windows(2)
+            .filter(|pair| pair[0] == "--exclude")
+            .map(|pair| pair[1].as_str())
+            .collect();
+        assert_eq!(excludes, ["benches/**", "examples/"], "scan {call}");
+    }
+}
+
 /// The reuse report of the four candidate shapes the rendering covers.
 fn s05_report() -> Value {
     let local = site("src/parser.rs", 3, 6, "app::parser::selected");

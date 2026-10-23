@@ -28,7 +28,7 @@ cargo echoes --organization --functions
 | Functions | `--functions` | `30` weighted body tokens | `--fn-min-tokens` |
 | Contexts | `--context-blocks` | `30` canonical weighted tokens | `--context-min-tokens` |
 
-Options can also live in `.echoes.toml` at the workspace root, and `cargo echoes --help` lists them all. Keep an intentional copy with a `rust,echoes` fence or a `// echoes: allow` line above the function. The wiki lists [what counts as the same code](https://github.com/LucaCappelletti94/cargo-echoes/wiki/What-counts-as-the-same-code).
+Options can also live in `.echoes.toml` at the workspace root, and `cargo echoes --help` lists them all. Leave out whole paths, such as benchmarks, with gitignore-style `exclude` globs or `--exclude`, and keep an intentional copy with a `rust,echoes` fence or a `// echoes: allow` line above the function. The wiki lists [what counts as the same code](https://github.com/LucaCappelletti94/cargo-echoes/wiki/What-counts-as-the-same-code).
 
 `--organization` scans the default branch of every repository of a GitHub organization or user that the `GH_TOKEN` or `GITHUB_TOKEN` credential can read, private ones included, and compares functions across crates and modules. Without a name it scans the owner of the current repository, from `GITHUB_REPOSITORY_OWNER` or the `origin` remote. Repeat it to join several owners, and pass `--repository OWNER/REPO` once per repository to add repositories of any owner, alone or beside the organizations. Downloaded repositories never configure the scan or run code, so pass `--config` for options, and the exit status is `2` whenever a repository could not be analyzed, even with `--no-fail`.
 

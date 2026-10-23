@@ -171,10 +171,7 @@ fn load_with_bases(selection: &Selection, api: &str, cache: &Path, all_targets: 
         }
     }
     for name in &selection.repositories {
-        let Some((owner, _)) = name
-            .split_once('/')
-            .filter(|(owner, repo)| is_github_login(owner) && is_repository_name(repo))
-        else {
+        let Some((owner, _)) = name.split_once('/').filter(|_| is_repository(name)) else {
             failures.push(format!("{name}: is not an owner/repository name"));
             continue;
         };
@@ -295,6 +292,12 @@ fn is_repository_name(name: &str) -> bool {
         && name
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
+}
+
+/// Whether `name` is an `owner/repo` repository name.
+pub(crate) fn is_repository(name: &str) -> bool {
+    name.split_once('/')
+        .is_some_and(|(owner, repo)| is_github_login(owner) && is_repository_name(repo))
 }
 
 /// The first listing page of `owner`, chosen by its account kind, recording a failure when

@@ -183,6 +183,39 @@ fn organization_functions_group_across_crate_and_module_names() {
 }
 
 #[test]
+fn exclusions_apply_per_repository_or_to_every_repository() {
+    let dir = tempfile::tempdir().unwrap();
+    let alpha = format!("fn shared{BODY}");
+    let beta = format!("fn shared{BODY}");
+    let functions = |pattern: &str| {
+        let corpus = corpus(
+            dir.path(),
+            "org",
+            &[
+                lib_repo("org/alpha", "alpha", &alpha),
+                lib_repo("org/beta", "beta", &beta),
+            ],
+        );
+        let report = Echoes::default()
+            .functions()
+            .exclude(pattern)
+            .unwrap()
+            .run_organization_corpus(corpus)
+            .unwrap();
+        (report.functions, fn_groups(&report).len())
+    };
+    assert_eq!(functions("tests/**"), (2, 1), "nothing matches");
+    assert_eq!(functions("Org/Beta:src/**"), (1, 0), "one repository");
+    assert_eq!(functions("org/gamma:src/**"), (2, 1), "another repository");
+    assert_eq!(functions("src/lib.rs"), (0, 0), "every repository");
+    assert_eq!(
+        functions("beta/src/**"),
+        (2, 1),
+        "paths start inside the repository"
+    );
+}
+
+#[test]
 fn organization_doctests_group_across_repositories() {
     let dir = tempfile::tempdir().unwrap();
     let alpha = format!(

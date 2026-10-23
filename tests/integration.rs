@@ -359,6 +359,38 @@ fn binary_runs_end_to_end() {
 
 #[test]
 #[cfg(feature = "cli")]
+fn an_excluded_member_leaves_the_scan() {
+    let bin = env!("CARGO_BIN_EXE_cargo-echoes");
+    let files = |extra: &[&str]| {
+        let out = Command::new(bin)
+            .current_dir(FIXTURE)
+            .args(["echoes", "--json", "--no-fail"])
+            .args(extra)
+            .output()
+            .expect("run echoes binary");
+        assert_eq!(out.status.code(), Some(0), "{extra:?}");
+        let value: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        let mut files: Vec<String> = value["groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|group| group["sites"].as_array().unwrap().iter())
+            .map(|site| site["file"].as_str().unwrap().to_string())
+            .collect();
+        files.sort();
+        files.dedup();
+        files
+    };
+    assert!(files(&[]).iter().any(|file| file.starts_with("beta/")));
+    let kept = files(&["--exclude", "beta/", "--exclude", "*.md"]);
+    assert!(
+        kept.iter().all(|file| !file.starts_with("beta/")),
+        "{kept:?}"
+    );
+}
+
+#[test]
+#[cfg(feature = "cli")]
 fn binary_prints_annotations_beside_the_report() {
     let bin = env!("CARGO_BIN_EXE_cargo-echoes");
     let out = Command::new(bin)
