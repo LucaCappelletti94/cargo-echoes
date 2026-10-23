@@ -1450,6 +1450,27 @@ fn post_world(name: &str, prepared: &World, event: &str, inputs: &[(&str, &str)]
         .changed(&changed)
 }
 
+#[test]
+fn s48_prepare_writes_a_payload_for_a_clean_scan() {
+    let mut prep = World::new("s48a")
+        .inputs(&[
+            ("pr-number", "7"),
+            ("mode", "prepare"),
+            ("payload", "echoes-payload"),
+        ])
+        .event("pull_request")
+        .json(report(&[], &[], None, 6, 3));
+    assert_eq!(prep.run(), 0, "a clean prepare run exits 0");
+    let payload = prep.workspace_path().join("echoes-payload");
+    for file in ["meta.json", "report.json"] {
+        assert!(payload.join(file).is_file(), "{file}");
+    }
+    let mut post = post_world("s48b", &prep, "workflow_run", &[]);
+    let (exit, status) = post_status(&mut post);
+    assert_eq!(exit, 0, "a clean payload is no error");
+    assert!(status.starts_with("skipped-"), "{status}");
+}
+
 /// Rewrites `key` in the payload metadata.
 fn forge_meta(prepared: &World, key: &str, value: Value) {
     let path = prepared.workspace_path().join("echoes-payload/meta.json");

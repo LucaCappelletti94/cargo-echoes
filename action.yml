@@ -520,7 +520,8 @@ runs:
         rm -f "$base_report.raw"
 
     - name: Review the findings on the pull request
-      if: ${{ inputs.mode == 'post' || (steps.scan.outputs.found == 'true' && (inputs.pr-number != '' || inputs.dry-run == 'true')) }}
+      # A prepare run writes its payload even for a clean scan, the posting job downloads it.
+      if: ${{ inputs.mode == 'post' || (inputs.mode == 'prepare' && inputs.pr-number != '') || (steps.scan.outputs.found == 'true' && (inputs.pr-number != '' || inputs.dry-run == 'true')) }}
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
