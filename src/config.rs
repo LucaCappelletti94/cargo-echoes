@@ -38,6 +38,8 @@ pub(crate) struct Config {
     /// More phrases that mark a file generated in its first lines.
     #[serde(rename = "generated-markers")]
     pub(crate) generated_markers: Option<alloc::vec::Vec<alloc::string::String>>,
+    /// Gitignore-style globs of the files the scan leaves out.
+    pub(crate) exclude: Option<alloc::vec::Vec<alloc::string::String>>,
 }
 
 /// Load `path`, or the default config when the file is absent.

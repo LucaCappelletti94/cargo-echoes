@@ -97,6 +97,11 @@ struct Args {
     /// Include dependency reuse findings in the duplicate gate.
     #[arg(long)]
     context_fail_on_reuse: bool,
+    /// Leave out files matching this gitignore-style glob, relative to the workspace or every
+    /// repository root, or to one repository after an `owner/repo:` prefix. Repeat it for
+    /// several, they add to the config file's `exclude`.
+    #[arg(long, value_name = "GLOB")]
+    exclude: Vec<String>,
     /// Explicit `.echoes.toml` location.
     #[arg(long, value_name = "PATH")]
     config: Option<PathBuf>,
@@ -156,6 +161,9 @@ fn run(args: Args) -> echoes::Result<ExitCode> {
     }
     if let Some(scope) = args.context_search {
         scan = scan.context_search(scope);
+    }
+    for pattern in &args.exclude {
+        scan = scan.exclude(pattern)?;
     }
     scan = scan.context_dependencies(echoes::DependencySearch {
         depth: args.context_dependency_depth,

@@ -38,23 +38,19 @@ pub struct IndexedContext {
     pub extraction_notes: Vec<String>,
 }
 
-/// The indexed contexts of `target`, one record per context and module membership.
+/// The indexed contexts of the files of `target` that `scanned` keeps, one record per context
+/// and module membership.
 #[must_use]
 pub fn extract(
     target: &TargetScan,
     root: &str,
-    scan_generated: bool,
-    generated_markers: &[String],
+    scanned: &dyn Fn(&crate::SourceFile) -> bool,
 ) -> Vec<IndexedContext> {
     let layout = crate_layout(target);
     let model = CrateModel::new(target, &layout);
     let crate_root = workspace_relative(target.files.first().map_or("", |f| f.path.as_str()), root);
     let mut out = Vec::new();
-    for file in target
-        .files
-        .iter()
-        .filter(|file| scan_generated || !crate::is_generated(&file.text, generated_markers))
-    {
+    for file in target.files.iter().filter(|file| scanned(file)) {
         let path = workspace_relative(&file.path, root);
         let memberships = layout
             .memberships
@@ -1913,7 +1909,7 @@ mod tests {
 
     fn records(code: &str) -> Vec<IndexedContext> {
         let file = file("src/lib.rs", &[], code);
-        extract(&target(&[file], true), "", false, &[])
+        extract(&target(&[file], true), "", &|_| true)
     }
 
     fn one<'a>(record: &'a [IndexedContext], module: &str) -> &'a IndexedContext {
@@ -2111,7 +2107,7 @@ mod tests {
                 "use crate::Box;\nimpl Box { pub fn pack(&self) -> u32 { 1u32 } }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::store");
         assert_eq!(record.access, ContextAccess::PublicMethod);
         assert_eq!(record.api_path.as_deref(), Some("app::Box::pack"));
@@ -2165,7 +2161,7 @@ mod tests {
             &[],
             "pub fn helper(x: u32) -> u32 { x + 1u32 }",
         );
-        let out = extract(&target(&[file], false), "", false, &[]);
+        let out = extract(&target(&[file], false), "", &|_| true);
         assert_eq!(out[0].access, ContextAccess::Unresolved);
         assert!(
             out[0]
@@ -2185,7 +2181,7 @@ mod tests {
                 "fn helper(x: u32) -> u32 { x + 1u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::leaf");
         assert_eq!(record.access, ContextAccess::Unresolved);
         assert!(
@@ -2206,7 +2202,7 @@ mod tests {
             ),
             file("src/leaf.rs", &["leaf"], ""),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let helper = out.iter().find(|r| r.site.item == "app::helper").unwrap();
         assert_eq!(helper.access, ContextAccess::PublicFunction);
     }
@@ -2241,7 +2237,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 1u32 }\n",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let default = out
             .iter()
             .find(|r| r.site.file == "src/m.rs" && r.module == "app::m")
@@ -2277,7 +2273,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 1u32 }\n",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let base = out
             .iter()
             .find(|r| r.site.file == "src/base.rs" && r.module == "app::m")
@@ -2322,7 +2318,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 1u32 }\n",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let default = out
             .iter()
             .find(|r| r.site.file == "src/m.rs" && r.module == "app::m")
@@ -2360,7 +2356,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 1u32 }\n",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let site_files: Vec<&str> = out.iter().map(|r| r.site.file.as_str()).collect();
         assert!(site_files.contains(&"src/m/child.rs"));
         assert!(site_files.contains(&"src/alt/child.rs"));
@@ -2384,7 +2380,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 1u32 }\n",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::api");
         assert_eq!(record.access, ContextAccess::PublicFunction);
         assert_eq!(record.api_path.as_deref(), Some("app::helper"));
@@ -2441,7 +2437,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 1u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         assert_eq!(out.len(), 2);
         let by_a = one(&out, "app::a");
         let by_b = one(&out, "app::b");
@@ -2461,19 +2457,6 @@ mod tests {
     }
 
     #[test]
-    fn generated_files_are_skipped() {
-        let files = vec![file(
-            "src/lib.rs",
-            &[],
-            "// @generated\npub fn helper(x: u32) -> u32 { x + 1u32 }",
-        )];
-        let skipped = extract(&target(&files, true), "", false, &[]);
-        assert_eq!(skipped, Vec::<IndexedContext>::new());
-        let scanned = extract(&target(&files, true), "", true, &[]);
-        assert_eq!(scanned.len(), 1);
-    }
-
-    #[test]
     fn shared_file_records_keep_their_crate() {
         let file = file(
             "src/shared.rs",
@@ -2490,8 +2473,8 @@ mod tests {
             library: true,
             files: vec![file],
         };
-        let first = extract(&first_target, "", false, &[]);
-        let second = extract(&two, "", false, &[]);
+        let first = extract(&first_target, "", &|_| true);
+        let second = extract(&two, "", &|_| true);
         assert_eq!(first[0].crate_name, "one");
         assert_eq!(second[0].crate_name, "two");
         assert_eq!(first[0].site.file, second[0].site.file);
@@ -2517,7 +2500,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 1u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::leaf");
         assert_eq!(record.site.file, "src/alt_leaf.rs");
         assert_eq!(record.access, ContextAccess::PublicFunction);
@@ -2542,7 +2525,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 1u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::boxy::child");
         assert_eq!(record.site.file, "src/altbox/child.rs");
         assert_eq!(record.access, ContextAccess::PublicFunction);
@@ -2571,7 +2554,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 7u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let main = out
             .iter()
             .find(|r| r.site.file == "src/main_leaf.rs")
@@ -2612,7 +2595,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 7u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let main = out
             .iter()
             .find(|r| r.site.file == "src/main_leaf.rs")
@@ -2636,8 +2619,7 @@ mod tests {
                 false,
             ),
             "",
-            false,
-            &[],
+            &|_| true,
         );
         let method = out.iter().find(|r| r.site.item == "app::A::m").unwrap();
         let default = out.iter().find(|r| r.site.item == "app::T::d").unwrap();
@@ -2669,8 +2651,7 @@ mod tests {
                 true,
             ),
             "",
-            false,
-            &[],
+            &|_| true,
         );
         let items: Vec<&str> = out.iter().map(|r| r.site.item.as_str()).collect();
         assert!(
@@ -2733,8 +2714,7 @@ mod tests {
                 true,
             ),
             "",
-            false,
-            &[],
+            &|_| true,
         );
         let record = one(&out, "app::a::b");
         assert_eq!(record.access, ContextAccess::Unresolved);
@@ -2841,7 +2821,7 @@ mod tests {
             &[],
             "mod store { pub fn helper(x: u32) -> u32 { x + 1u32 } pub fn other(x: u32) -> u32 { x + 2u32 } }\nuse crate::store as P;\npub mod n { pub use P::helper; pub use Q::missing; }",
         )];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let helper = out
             .iter()
             .find(|r| r.site.item == "app::store::helper")
@@ -2887,7 +2867,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 1u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::a::name::sub");
         assert_eq!(record.access, ContextAccess::Unresolved);
         assert!(
@@ -2908,7 +2888,7 @@ mod tests {
             ),
             file("m.rs", &["m"], "pub fn other(x: u32) -> u32 { x + 2u32 }"),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let helper = out.iter().find(|r| r.site.item == "app::helper").unwrap();
         let other = out.iter().find(|r| r.site.item == "app::m::other").unwrap();
         assert_eq!(helper.site.file, "lib.rs");
@@ -2930,8 +2910,7 @@ mod tests {
                 true,
             ),
             "",
-            false,
-            &[],
+            &|_| true,
         );
         let record = one(&out, "app::m");
         assert_eq!(record.site.file, "m");
@@ -2956,8 +2935,7 @@ mod tests {
                 true,
             ),
             "",
-            false,
-            &[],
+            &|_| true,
         );
         let record = one(&out, "app::m");
         assert_eq!(record.site.file, "src/m/mod.rs");
@@ -2984,7 +2962,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 1u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::m::child");
         assert_eq!(record.site.file, "m/m/x.rs");
         assert_eq!(record.api_path.as_deref(), Some("app::m::child::helper"));
@@ -2996,7 +2974,7 @@ mod tests {
             file("lib.rs", &[], "#[path = \"m\"]\npub mod m;"),
             file("m", &["m"], "pub fn helper(x: u32) -> u32 { x + 1u32 }"),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::m");
         assert_eq!(record.site.file, "m");
         assert_eq!(record.api_path.as_deref(), Some("app::m::helper"));
@@ -3022,7 +3000,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 1u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::m");
         assert_eq!(record.site.file, "src/m.rs");
         assert_eq!(record.access, ContextAccess::PublicFunction);
@@ -3042,7 +3020,7 @@ mod tests {
             file("b.rs", &["b"], "pub fn helper(x: u32) -> u32 { x + 1u32 }"),
             file("c.rs", &["c"], "pub fn helper(x: u32) -> u32 { x + 1u32 }"),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         for module in ["app::a", "app::b", "app::c"] {
             let record = one(&out, module);
             assert_eq!(record.access, ContextAccess::PublicFunction, "{module}");
@@ -3068,7 +3046,7 @@ mod tests {
                 "pub fn helper(x: u32) -> u32 { x + 2u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let default = out
             .iter()
             .find(|r| r.site.file == "m.rs" && r.module == "app::m")
@@ -3224,7 +3202,7 @@ mod tests {
                 "impl Box { pub fn pack(&self) -> u32 { 1u32 } }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::store");
         assert_eq!(record.access, ContextAccess::PublicMethod);
         assert_eq!(record.api_path.as_deref(), Some("app::Box::pack"));
@@ -3250,7 +3228,7 @@ mod tests {
                 "pub fn third(x: u32) -> u32 { x + 3u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let record = out
             .iter()
             .find(|r| r.site.file == "src/u.rs" && r.module == "app::m")
@@ -3368,7 +3346,7 @@ mod tests {
                 "pub fn other(x: u32) -> u32 { x + 2u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let helper = one(&out, "app::thing");
         assert_eq!(helper.access, ContextAccess::InternalFunction);
         let other = one(&out, "app::thing::inner");
@@ -3389,7 +3367,7 @@ mod tests {
                 "pub fn other(x: u32) -> u32 { x + 2u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let other = one(&out, "app::h::inner");
         assert_eq!(other.access, ContextAccess::PublicFunction);
         assert_eq!(other.api_path.as_deref(), Some("app::h::inner::other"));
@@ -3408,7 +3386,7 @@ mod tests {
                 "pub fn other(x: u32) -> u32 { x + 2u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         let other = one(&out, "app::h::inner");
         assert_eq!(other.access, ContextAccess::PublicFunction);
         assert_eq!(other.api_path.as_deref(), Some("app::h::inner::other"));
@@ -3437,7 +3415,7 @@ mod tests {
                 "pub fn other(x: u32) -> u32 { x + 2u32 }",
             ),
         ];
-        let out = extract(&target(&files, true), "", false, &[]);
+        let out = extract(&target(&files, true), "", &|_| true);
         assert!(
             out.iter().any(|r| r.module == "app::child"),
             "the unclaimed mod file links its child"

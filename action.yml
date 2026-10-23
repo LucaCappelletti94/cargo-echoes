@@ -129,6 +129,10 @@ inputs:
     description: Inline comments posted per run, the omitted copies go to the review body and the run summary
     required: false
     default: '50'
+  exclude:
+    description: Leave out files matching these gitignore-style globs, one per line, relative to the workspace or every repository root, or to one repository after an owner/repo prefix with a colon
+    required: false
+    default: ''
   organizations:
     description: Scan every repository of these GitHub organizations or users instead of the workspace, one per line
     required: false
@@ -259,6 +263,7 @@ runs:
         CONTEXT_CACHE_DIR: ${{ steps.cache-dir.outputs.dir }}
         CONTEXT_CHECK_LATEST: ${{ inputs.context-check-latest }}
         CONTEXT_FAIL: ${{ inputs.context-fail-on-reuse }}
+        EXCLUDE: ${{ inputs.exclude }}
         ORGANIZATIONS: ${{ inputs.organizations }}
         REPOSITORIES: ${{ inputs.repositories }}
         WORKFLOW_TOKEN: ${{ github.token }}
@@ -324,6 +329,9 @@ runs:
           [ "$CONTEXT_CHECK_LATEST" = "false" ] && set -- --context-check-latest false "$@"
           [ "$CONTEXT_FAIL" = "true" ] && set -- --context-fail-on-reuse "$@"
         fi
+        while read -r pattern; do
+          [ -n "$pattern" ] && set -- "$@" --exclude "$pattern"
+        done <<< "$EXCLUDE"
         set -- "$@" "${selection[@]}"
         if [ -n "$PR_NUMBER" ] || [ "$DRY_RUN" = "true" ]; then
           report="$RUNNER_TEMP/echoes-report.json"
@@ -462,6 +470,7 @@ runs:
         CONTEXT_CACHE_DIR: ${{ steps.cache-dir.outputs.dir }}
         CONTEXT_CHECK_LATEST: ${{ inputs.context-check-latest }}
         CONTEXT_FAIL: ${{ inputs.context-fail-on-reuse }}
+        EXCLUDE: ${{ inputs.exclude }}
       run: |
         # The base report lets the review ignore duplicates that already exist on the
         # base commit. Any failure degrades to reviewing the full report.
@@ -500,6 +509,9 @@ runs:
           [ "$CONTEXT_CHECK_LATEST" = "false" ] && set -- --context-check-latest false "$@"
           [ "$CONTEXT_FAIL" = "true" ] && set -- --context-fail-on-reuse "$@"
         fi
+        while read -r pattern; do
+          [ -n "$pattern" ] && set -- "$@" --exclude "$pattern"
+        done <<< "$EXCLUDE"
         # Threshold 1 inventories every base site, a group the pull request
         # completes from a single existing copy must still be reported.
         # The base tree has the head's layout, so the head's prefix roots its paths.

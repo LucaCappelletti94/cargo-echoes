@@ -34,6 +34,8 @@ mod contexts;
 mod dependencies;
 #[cfg(feature = "std")]
 mod discover;
+#[cfg(feature = "std")]
+mod exclude;
 pub mod extract;
 mod fence;
 mod functions;
@@ -84,6 +86,8 @@ pub struct Echoes {
     context_dependencies: DependencySearch,
     scan_generated: bool,
     generated_markers: Vec<String>,
+    #[cfg(feature = "std")]
+    exclude: Vec<exclude::Exclude>,
 }
 
 impl Echoes {
@@ -191,20 +195,37 @@ impl Echoes {
         self
     }
 
+    /// Leave out the files matching the gitignore-style glob `pattern`, relative to the
+    /// workspace root or to the root of every scanned repository, or of the one repository an
+    /// `owner/repo:` prefix names.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `pattern` negates, names no path or is not a valid glob.
+    #[cfg(feature = "std")]
+    pub fn exclude(mut self, pattern: &str) -> Result<Self> {
+        self.exclude.push(exclude::Exclude::new(pattern)?);
+        Ok(self)
+    }
+
     /// Fill unset parameters from the `.echoes.toml` at `path`, before the workspace root one under `run`.
     ///
     /// # Errors
     ///
-    /// Fails when the file cannot be read or is not valid TOML.
+    /// Fails when the file cannot be read, is not valid TOML or holds an invalid `exclude`.
     #[cfg(feature = "std")]
     pub fn config(self, path: impl Into<PathBuf>) -> Result<Self> {
-        Ok(self.fill_from(&config::load(&path.into())?))
+        self.fill_from(&config::load(&path.into())?)
     }
 
     /// Fill unset parameters from `file`.
     #[cfg(feature = "std")]
-    fn fill_from(self, file: &config::Config) -> Self {
-        Self {
+    fn fill_from(self, file: &config::Config) -> Result<Self> {
+        let mut exclude = self.exclude;
+        for pattern in file.exclude.iter().flatten() {
+            exclude.push(exclude::Exclude::new(pattern)?);
+        }
+        Ok(Self {
             threshold: self.threshold.or(file.threshold),
             min_tokens: self.min_tokens.or(file.min_tokens),
             functions: self.functions || file.functions == Some(true),
@@ -222,8 +243,9 @@ impl Echoes {
                 .into_iter()
                 .chain(file.generated_markers.iter().flatten().cloned())
                 .collect(),
+            exclude,
             ..self
-        }
+        })
     }
 
     /// Scan the workspace containing `root` on a large stack and report enabled duplicate categories.
@@ -248,7 +270,7 @@ impl Echoes {
     fn run_here(self, root: &Path) -> Result<Report> {
         let workspace = discover::workspace(root, None, self.all_targets)?;
         let cfg = config::load(&workspace.root.join(".echoes.toml"))?;
-        let scan = self.fill_from(&cfg);
+        let scan = self.fill_from(&cfg)?;
         if let Some(name) = scan.package.as_deref()
             && !workspace
                 .targets
@@ -419,8 +441,15 @@ impl Echoes {
             })
             .collect();
         let threshold = self.threshold.unwrap_or(DEFAULT_THRESHOLD);
+        #[cfg(feature = "std")]
+        let kept = |file: &SourceFile| {
+            !exclude::excluded(&self.exclude, mode.organization(), root, &file.path)
+        };
+        #[cfg(not(feature = "std"))]
+        let kept = |_: &SourceFile| true;
         let scanned = |file: &SourceFile| {
-            self.scan_generated || !is_generated(&file.text, &self.generated_markers)
+            (self.scan_generated || !is_generated(&file.text, &self.generated_markers))
+                && kept(file)
         };
         let mut report = group_doctests(
             &extract_all(targets.iter().copied(), root, read, &scanned),
@@ -475,6 +504,7 @@ impl Echoes {
             all_targets,
             &targets,
             mode.discover_dependencies(),
+            &scanned,
             &mut report,
         );
         report
@@ -592,6 +622,7 @@ impl Echoes {
         all_targets: &[TargetScan],
         targets: &[&TargetScan],
         discover_dependencies: bool,
+        scanned: &dyn Fn(&SourceFile) -> bool,
         report: &mut Report,
     ) {
         let threshold = self.threshold.unwrap_or(DEFAULT_THRESHOLD);
@@ -602,14 +633,7 @@ impl Echoes {
         {
             let entries: Vec<_> = all_targets
                 .iter()
-                .flat_map(|target| {
-                    context_index::extract(
-                        target,
-                        root,
-                        self.scan_generated,
-                        &self.generated_markers,
-                    )
-                })
+                .flat_map(|target| context_index::extract(target, root, scanned))
                 .collect();
             let explicit_scope = self.context_select.is_some() || self.context_search.is_some();
             let legacy_crates: BTreeSet<Cow<'_, str>> = targets
@@ -855,6 +879,14 @@ pub enum Error {
     /// An organization scan names no organization and no repository.
     #[error("organization: no organization or repository was named")]
     EmptySelection,
+    /// An `exclude` pattern cannot be compiled.
+    #[error("exclude: `{pattern}` {reason}")]
+    InvalidExclude {
+        /// The pattern as written.
+        pattern: String,
+        /// Why it is refused.
+        reason: String,
+    },
 }
 
 /// A `Result` with [`Error`] as its default error type.
@@ -1740,6 +1772,104 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
+    fn excluded_files_leave_every_check() {
+        let src = format!("/// Doc.\n///\n/// ```\n/// fn dup() {{}}\n/// ```\npub fn one{BODY}\n");
+        let scan = |echoes: Echoes| {
+            echoes
+                .functions()
+                .context_blocks()
+                .context_min_tokens(0)
+                .run_targets(
+                    "/ws",
+                    &[
+                        target_from("a", "/ws/benches/deep/a.rs", &[], &src),
+                        target_from("b", "/ws/src/lib.rs", &[], &src),
+                    ],
+                    &|_f, _i| None,
+                )
+        };
+        let all = scan(Echoes::default());
+        assert_eq!((all.total, all.functions), (2, 2));
+        assert!(!all.groups.is_empty() && !all.context_groups.is_empty());
+        for pattern in [
+            "benches/",
+            "benches/**",
+            "/benches",
+            "deep/",
+            "a.rs",
+            "benches/*/a.rs",
+            "*.rs",
+        ] {
+            let kept = scan(Echoes::default().exclude(pattern).unwrap());
+            let expected = if pattern == "*.rs" { (0, 0) } else { (1, 1) };
+            assert_eq!((kept.total, kept.functions), expected, "{pattern}");
+            assert!(kept.groups.is_empty(), "{pattern}");
+            assert!(kept.context_groups.is_empty(), "{pattern}");
+        }
+        for pattern in [
+            "deep/a.rs",
+            "/a.rs",
+            "bench",
+            "benches/*.rs",
+            "org/repo:benches/**",
+        ] {
+            let kept = scan(Echoes::default().exclude(pattern).unwrap());
+            assert_eq!((kept.total, kept.functions), (2, 2), "{pattern}");
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn invalid_exclude_patterns_fail() {
+        for pattern in ["", "/", "!src/**", "src/[a"] {
+            assert!(
+                matches!(
+                    Echoes::default().exclude(pattern),
+                    Err(Error::InvalidExclude { .. })
+                ),
+                "{pattern:?}"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn config_and_builder_excludes_add_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("echoes.toml");
+        std::fs::write(&file, "exclude = [\"benches/**\"]\n").unwrap();
+        let target = |path: &str| {
+            target_from(
+                "t",
+                path,
+                &[],
+                "/// ```\n/// fn dup() {}\n/// ```\npub fn f() {}\n",
+            )
+        };
+        let report = Echoes::default()
+            .exclude("examples/**")
+            .unwrap()
+            .config(&file)
+            .unwrap()
+            .run_targets(
+                "",
+                &[
+                    target("benches/a.rs"),
+                    target("examples/b.rs"),
+                    target("src/c.rs"),
+                ],
+                &|_f, _i| None,
+            );
+        assert_eq!(report.total, 1);
+        std::fs::write(&file, "exclude = [\"src/[a\"]\n").unwrap();
+        assert!(matches!(
+            Echoes::default().config(&file),
+            Err(Error::InvalidExclude { .. })
+        ));
+    }
+
+    #[test]
     fn a_pub_function_or_method_of_a_library_is_public() {
         let public = |src: &str, library: bool| -> Vec<bool> {
             let mut target = target_from("c", "src/lib.rs", &[], src);
@@ -1848,18 +1978,29 @@ mod tests {
             let target = target_from("c", "src/lib.rs", &[], &format!("{header}{body}"));
             let report = echoes
                 .functions()
+                .context_blocks()
+                .context_min_tokens(0)
                 .run_targets("", &[target], &|_f, _i| None);
-            (report.total, report.functions, report.groups.len())
+            (
+                report.total,
+                report.functions,
+                report.groups.len(),
+                report.context_blocks > 0,
+            )
         };
         for header in [
             "// This file is @generated by syn-internal-codegen.\n",
             "\n\n\n\n// @generated\n",
             "// Code generated by software.amazon.smithy.rust.codegen.smithy-rs. DO NOT EDIT.\n",
         ] {
-            assert_eq!(scan(header, Echoes::default()), (0, 0, 0), "{header}");
+            assert_eq!(
+                scan(header, Echoes::default()),
+                (0, 0, 0, false),
+                "{header}"
+            );
             assert_eq!(
                 scan(header, Echoes::default().scan_generated()),
-                (2, 2, 2),
+                (2, 2, 2, true),
                 "{header}"
             );
         }
@@ -1868,7 +2009,7 @@ mod tests {
             "// Code generated by hand, edit freely.\n",
             "/* automatically generated by rust-bindgen 0.72.1 */\n",
         ] {
-            assert_eq!(scan(header, Echoes::default()), (2, 2, 2), "{header}");
+            assert_eq!(scan(header, Echoes::default()), (2, 2, 2, true), "{header}");
         }
         let bindgen = "/* automatically generated by rust-bindgen 0.72.1 */\n";
         assert_eq!(
@@ -1876,7 +2017,7 @@ mod tests {
                 bindgen,
                 Echoes::default().generated_marker("by rust-bindgen")
             ),
-            (0, 0, 0)
+            (0, 0, 0, false)
         );
     }
 

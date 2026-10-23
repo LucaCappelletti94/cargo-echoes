@@ -29,7 +29,7 @@ cargo echoes --repository <owner/repo> --repository <owner/repo> --functions  # 
 cargo echoes --json                            # {groups: [{kind, id, tokens, remedy, sites}], context_groups, organization}
 ```
 
-`-p <member>`, `--all-targets`, `-t <sites>`, `--min-tokens <n>`, `--fn-min-tokens <n>`, `--context-min-tokens <n>`, `--no-fail`, `--github` for workflow annotations.
+`-p <member>`, `--all-targets`, `-t <sites>`, `--min-tokens <n>`, `--fn-min-tokens <n>`, `--context-min-tokens <n>`, `--exclude <glob>` (gitignore-style, `owner/repo:` prefix for one repository), `--no-fail`, `--github` for workflow annotations.
 
 ## Resolve a doctest group
 
