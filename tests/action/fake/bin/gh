@@ -54,11 +54,7 @@ case "${1:-}" in
         fi
         ;;
       "repos/$GITHUB_REPOSITORY/pulls?"*)
-        # The listing filters by the head label like the real api.
-        head="${path#*head=}"
-        head="${head%%&*}"
-        head="${head//%3A/:}"
-        resp="$(jq -c --arg h "$head" '[.[] | select(.head.label == $h)]' "${SCEN_OPEN_PRS:?}")"
+        resp="$(jq -c '.' "${SCEN_OPEN_PRS:?}")"
         ;;
       "repos/$GITHUB_REPOSITORY/pulls/"*)
         case "$method" in

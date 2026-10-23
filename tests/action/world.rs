@@ -240,7 +240,7 @@ impl World {
                 "head": {
                     "sha": self.head_sha,
                     "label": format!("{head_owner}:feature"),
-                    "repo": { "full_name": format!("{head_owner}/repo") }
+                    "repo": { "id": repo_id(self.fork), "full_name": format!("{head_owner}/repo") }
                 }
             }])
         });
@@ -306,6 +306,11 @@ impl World {
     }
 }
 
+/// The repository id of the base repository, or of the fork.
+pub fn repo_id(fork: bool) -> u64 {
+    if fork { 2 } else { 1 }
+}
+
 /// The fake `github` context of a scenario.
 fn github_fixture(event: &str, fork: bool, head_sha: &str, run_event: &str) -> Value {
     let head_owner = if fork { "fork" } else { "owner" };
@@ -330,6 +335,7 @@ fn github_fixture(event: &str, fork: bool, head_sha: &str, run_event: &str) -> V
                 "head_sha": head_sha,
                 "head_branch": "feature",
                 "head_repository": {
+                    "id": repo_id(fork),
                     "full_name": format!("{head_owner}/repo"),
                     "owner": { "login": head_owner }
                 }

@@ -15,7 +15,7 @@ use action::fix::{
     Cand, coverage, ctx_group, doc_site, group, issue_url, report, reuse, reuse_group, site,
 };
 use action::runner::{Runner, Use};
-use action::world::{SRC_DUP, SRC_LIB, SRC_PARSER, World};
+use action::world::{SRC_DUP, SRC_LIB, SRC_PARSER, World, repo_id};
 use serde_json::{Value, json};
 
 // actions/cache v4 and actions/cache save v4 resolve to this commit, verified
@@ -1728,17 +1728,55 @@ fn s34_post_rejects_identity_mismatches_under_workflow_run() {
 fn s35_post_matches_the_head_repository_and_commit() {
     let prep = prepared("s35a", 2, "app::parse", "doctest");
     let (_, head) = prep.shas();
-    for (case, sha, repo) in [
-        ("sha", "d".repeat(40), "owner/repo"),
-        ("repo", head.clone(), "owner/elsewhere"),
+    for (case, sha, id) in [
+        ("sha", "d".repeat(40), repo_id(false)),
+        ("repo", head.clone(), 3),
     ] {
-        let prs = json!([{"number": 7, "head": {"sha": sha, "label": "owner:feature", "repo": {"full_name": repo}}}]);
+        let prs = json!([{"number": 7, "head": {"sha": sha, "label": "owner:feature", "repo": {"id": id, "full_name": "owner/repo"}}}]);
         let mut post = post_world(&format!("s35{case}"), &prep, "workflow_run", &[]).open_prs(prs);
         assert_eq!(
             post_status(&mut post),
             (0, "skipped-stale".into()),
             "{case}"
         );
+    }
+}
+
+#[test]
+fn s45_post_finds_the_pull_request_whatever_its_branch() {
+    let prep = prepared("s45a", 2, "app::parse", "doctest");
+    let (_, head) = prep.shas();
+    let prs = json!([{"number": 7, "head": {"sha": head, "label": "owner:renamed", "repo": {"id": repo_id(false), "full_name": "owner/repo"}}}]);
+    let mut post = post_world("s45b", &prep, "workflow_run", &[]).open_prs(prs);
+    assert_eq!(post_status(&mut post), (0, "posted".into()));
+}
+
+#[test]
+fn s46_post_rejects_a_run_head_that_is_not_a_commit() {
+    let prep = prepared("s46a", 2, "app::parse", "doctest");
+    let sha = "g".repeat(40);
+    forge_meta(&prep, "head_sha", json!(sha));
+    let mut post = post_world("s46b", &prep, "workflow_run", &[]).head_sha(&sha);
+    assert_eq!(post_status(&mut post), (1, "rejected".into()));
+}
+
+/// The largest payload file post mode reads, in bytes.
+const PAYLOAD_LIMIT: u64 = 128 << 20;
+
+#[test]
+fn s47_post_rejects_an_oversized_payload_file() {
+    for file in ["meta.json", "report.json", "base-report.json", "blank.txt"] {
+        let prep = prepared(&format!("s47a{file}"), 2, "app::parse", "doctest");
+        let path = prep.workspace_path().join("echoes-payload").join(file);
+        fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .set_len(PAYLOAD_LIMIT + 1)
+            .unwrap();
+        let mut post = post_world(&format!("s47b{file}"), &prep, "workflow_run", &[]);
+        assert_eq!(post_status(&mut post), (1, "rejected".into()), "{file}");
     }
 }
 

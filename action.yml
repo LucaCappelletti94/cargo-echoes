@@ -533,9 +533,7 @@ runs:
         EVENT_NAME: ${{ github.event_name }}
         RUN_EVENT: ${{ github.event.workflow_run.event }}
         RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-        RUN_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
-        RUN_HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
+        RUN_HEAD_REPO_ID: ${{ github.event.workflow_run.head_repository.id }}
       run: |
         # The runner drops step summaries over 1 MiB, so a step keeps its
         # summary writes within a safe total, the truncated tail gets a note.
@@ -673,6 +671,12 @@ runs:
           for f in meta.json report.json; do
             [ -s "$payload/$f" ] || reject "the prepared review in $payload lacks $f, rerun the prepare job with this version of the action"
           done
+          for f in meta.json report.json base-report.json blank.txt; do
+            [ -e "$payload/$f" ] || continue
+            size="$(wc -c < "$payload/$f" 2>/dev/null | tr -d ' ')" || size=''
+            [[ "$size" =~ ^[0-9]+$ ]] && [ "$size" -le $((128 * 1024 * 1024)) ] \
+              || reject "the prepared $f is not a file of at most 128 MiB"
+          done
           meta="$RUNNER_TEMP/echoes-meta.json"
           jq -c -s '.[0] | if type == "object" then . else error("malformed") end' "$payload/meta.json" > "$meta" 2>/dev/null \
             || reject "the prepared metadata is malformed"
@@ -682,10 +686,13 @@ runs:
           [[ "$claimed_pr" =~ ^[1-9][0-9]{0,9}$ ]] || reject "the prepared pull request number is not a number"
           if [ "$EVENT_NAME" = "workflow_run" ]; then
             [ "$RUN_EVENT" = "pull_request" ] || reject "the triggering run came from $RUN_EVENT, not from a pull request"
-            open="$(gh api "repos/$repo/pulls?state=open&head=$(uri "$RUN_HEAD_OWNER:$RUN_HEAD_BRANCH")&per_page=100" \
+            # Only ids from the event, the pull request itself comes from the API.
+            [[ "$RUN_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || reject "the triggering run did not build a commit"
+            [[ "$RUN_HEAD_REPO_ID" =~ ^[1-9][0-9]{0,19}$ ]] || reject "the triggering run has no head repository"
+            open="$(gh api "repos/$repo/pulls?state=open&per_page=100" \
               --paginate --jq '.[]' 2>/dev/null)" || reject "the open pull requests cannot be listed"
-            built="$(printf '%s\n' "$open" | jq -r --arg sha "$RUN_HEAD_SHA" --arg full "$RUN_HEAD_REPO" \
-              'select(.head.sha == $sha and .head.repo.full_name == $full) | .number' 2>/dev/null)"
+            built="$(printf '%s\n' "$open" | jq -r --arg sha "$RUN_HEAD_SHA" --arg id "$RUN_HEAD_REPO_ID" \
+              'select(.head.sha == $sha and (.head.repo.id | tostring) == $id) | .number' 2>/dev/null)"
             [ -n "$built" ] || stale "no open pull request has the head $RUN_HEAD_SHA the triggering run built"
             grep -qx -- "$claimed_pr" <<< "$built" || reject "the prepared review names pull request $claimed_pr, which the triggering run did not build"
             [ "$claimed_head" = "$RUN_HEAD_SHA" ] || reject "the prepared head differs from the head the triggering run built"
