@@ -184,8 +184,9 @@ fn s03_gate_reuse_gated() {
         "the valid index is saved after the findings gate failure"
     );
     let cache_dir = r
-        .job_env()
-        .get("echoes-context-index-dir")
+        .step_outputs()
+        .get("cache-dir")
+        .and_then(|o| o.get("dir"))
         .map_or("", String::as_str);
     assert!(
         !cache_dir.is_empty() && Path::new(cache_dir).join("public").is_dir(),
@@ -864,8 +865,9 @@ fn s12_cache_trusted_save() {
         "the save uses the SHA-pinned save action"
     );
     let cache_dir = r
-        .job_env()
-        .get("echoes-context-index-dir")
+        .step_outputs()
+        .get("cache-dir")
+        .and_then(|o| o.get("dir"))
         .map_or("", String::as_str);
     assert!(
         !cache_dir.is_empty() && Path::new(cache_dir).join("public").is_dir(),
