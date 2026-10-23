@@ -5,8 +5,7 @@ on:
     branches: [main]
   pull_request:
 
-permissions:
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,10 +15,16 @@ jobs:
   dogfood:
     name: Dogfood the action on the fixture
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: ./
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: $/
         with:
           cwd: ${{ startsWith(github.head_ref, 'dogfood-api-check-') && 'tests/fixtures/apicheck' || 'tests/fixtures/dupws' }}
           # The check branch adds a function copy, so its review needs the function check.
@@ -123,9 +128,13 @@ jobs:
     if: ${{ github.event_name == 'pull_request' }}
     permissions: {}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: ./
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: $/
         with:
           # The scheduled check branch adds copies to apicheck, dupws stays as the integration tests pin it.
           cwd: ${{ startsWith(github.head_ref, 'dogfood-api-check-') && 'tests/fixtures/apicheck' || 'tests/fixtures/dupws' }}
@@ -173,11 +182,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
       # The released binary predates the code under review, so this job scans with the branch build.
       - run: cargo install --path . --locked
-      - uses: ./
+      - uses: $/
         with:
           cwd: tests/fixtures/fnws
           install: false
@@ -223,11 +236,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
       # The released binary predates the code under review, so this job scans with the branch build.
       - run: cargo install --path . --locked
-      - uses: ./
+      - uses: $/
         with:
           cwd: tests/fixtures/dupws/alpha
           install: false
@@ -246,7 +263,7 @@ jobs:
             echo "a site path repeats the member directory"
             exit 1
           fi
-      - uses: ./
+      - uses: $/
         with:
           cwd: tests/fixtures/procws
           install: false

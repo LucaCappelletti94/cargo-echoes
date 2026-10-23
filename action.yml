@@ -198,8 +198,11 @@ runs:
             bin=cargo-echoes
             [ "$RUNNER_OS" = Windows ] && bin=cargo-echoes.exe
             tar -xzf "$dest/$asset" -C "$dest"
-            chmod +x "$dest/$bin" 2>/dev/null || true
-            echo "$dest" >> "$GITHUB_PATH"
+            # Cargo also finds subcommands in its own bin directory, so PATH stays untouched.
+            bin_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
+            mkdir -p "$bin_dir"
+            cp "$dest/$bin" "$bin_dir/$bin"
+            chmod +x "$bin_dir/$bin" 2>/dev/null || true
             echo "echoes: installed the prebuilt $asset from $tag"
             exit 0
           fi
@@ -223,13 +226,12 @@ runs:
         dir="${CONTEXT_CACHE_DIR:-$RUNNER_TEMP/echoes-context-index}"
         mkdir -p "$dir/public"
         echo "dir=$dir" >> "$GITHUB_OUTPUT"
-        echo "echoes-context-index-dir=$dir" >> "$GITHUB_ENV"
 
     - name: Restore the dependency index
       if: ${{ inputs.mode != 'post' && inputs.context-dependency-depth > 0 }}
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
-        path: ${{ env.echoes-context-index-dir }}/public
+        path: ${{ steps.cache-dir.outputs.dir }}/public
         key: echoes-context-index-${{ runner.os }}-${{ inputs.context-target != '' && inputs.context-target || 'any' }}-v1
         restore-keys: echoes-context-index-${{ runner.os }}-
 
@@ -260,7 +262,7 @@ runs:
         CONTEXT_ALL_FEATURES: ${{ inputs.context-all-features }}
         CONTEXT_NO_DEFAULT: ${{ inputs.context-no-default-features }}
         CONTEXT_TARGET: ${{ inputs.context-target }}
-        CONTEXT_CACHE_DIR: ${{ env.echoes-context-index-dir }}
+        CONTEXT_CACHE_DIR: ${{ steps.cache-dir.outputs.dir }}
         CONTEXT_CHECK_LATEST: ${{ inputs.context-check-latest }}
         CONTEXT_FAIL: ${{ inputs.context-fail-on-reuse }}
         ORGANIZATIONS: ${{ inputs.organizations }}
@@ -463,7 +465,7 @@ runs:
         CONTEXT_ALL_FEATURES: ${{ inputs.context-all-features }}
         CONTEXT_NO_DEFAULT: ${{ inputs.context-no-default-features }}
         CONTEXT_TARGET: ${{ inputs.context-target }}
-        CONTEXT_CACHE_DIR: ${{ env.echoes-context-index-dir }}
+        CONTEXT_CACHE_DIR: ${{ steps.cache-dir.outputs.dir }}
         CONTEXT_CHECK_LATEST: ${{ inputs.context-check-latest }}
         CONTEXT_FAIL: ${{ inputs.context-fail-on-reuse }}
       run: |
@@ -1433,5 +1435,5 @@ runs:
       if: ${{ always() && !cancelled() && inputs.mode != 'post' && inputs.context-dependency-depth > 0 && steps.scan.outputs.index-ok == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
       uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
-        path: ${{ env.echoes-context-index-dir }}/public
+        path: ${{ steps.cache-dir.outputs.dir }}/public
         key: echoes-context-index-${{ runner.os }}-${{ inputs.context-target != '' && inputs.context-target || 'any' }}-v1-${{ github.run_id }}-${{ github.run_attempt }}

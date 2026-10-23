@@ -19,14 +19,18 @@ jobs:
     name: Exercise the pull request review surface
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # The check branch is pushed with this credential.
+          persist-credentials: true
 
       - name: Mint an app token to open the check pull request
         id: app-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.DOGFOOD_APP_ID }}
           private-key: ${{ secrets.DOGFOOD_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
 
       # A failed run leaves its pull request open; this step keeps the repository free of them.
       - name: Close the previous check pull request
@@ -106,4 +110,5 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr close "${{ steps.open.outputs.number }}"
+          PR_NUMBER: ${{ steps.open.outputs.number }}
+        run: gh pr close "$PR_NUMBER"
