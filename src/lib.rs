@@ -336,58 +336,16 @@ impl Echoes {
         Ok(report)
     }
 
-    /// Scan every repository accessible for the GitHub organization `organization`, pinned
-    /// to each default branch's commit, without a local workspace.
+    /// Scan every accessible repository of each GitHub organization or user in
+    /// `organizations` together with the `owner/repo` repositories in `repositories` as one
+    /// corpus, each repository once and pinned to its default branch's commit, without a local
+    /// workspace.
     ///
     /// # Errors
     ///
-    /// Fails when dependency traversal is requested, unsupported in organization mode, or when
-    /// the package selector names no package of a completely analyzed organization.
-    ///
-    /// # Panics
-    ///
-    /// Panics when the scan panics, a bug in this crate.
-    #[cfg(feature = "std")]
-    pub fn run_organization(self, organization: &str) -> Result<Report> {
-        self.run_selected(&[organization], &[] as &[&str])
-    }
-
-    /// Scan every accessible repository of each organization or user in `organizations` as
-    /// one corpus, like [`Echoes::run_organization`].
-    ///
-    /// # Errors
-    ///
-    /// Fails when `organizations` is empty, and as [`Echoes::run_organization`] does.
-    ///
-    /// # Panics
-    ///
-    /// Panics when the scan panics, a bug in this crate.
-    #[cfg(feature = "std")]
-    pub fn run_organizations(self, organizations: &[impl AsRef<str>]) -> Result<Report> {
-        self.run_selected(organizations, &[] as &[&str])
-    }
-
-    /// Scan exactly the `owner/repo` repositories in `repositories` as one corpus, whoever
-    /// owns them, without listing any owner's repositories.
-    ///
-    /// # Errors
-    ///
-    /// Fails when `repositories` is empty, and as [`Echoes::run_organization`] does.
-    ///
-    /// # Panics
-    ///
-    /// Panics when the scan panics, a bug in this crate.
-    #[cfg(feature = "std")]
-    pub fn run_repositories(self, repositories: &[impl AsRef<str>]) -> Result<Report> {
-        self.run_selected(&[] as &[&str], repositories)
-    }
-
-    /// Scan every accessible repository of each owner in `organizations` together with the
-    /// `owner/repo` repositories in `repositories` as one corpus, each repository once.
-    ///
-    /// # Errors
-    ///
-    /// Fails when both lists are empty, and as [`Echoes::run_organization`] does.
+    /// Fails when both lists are empty, when dependency traversal is requested, unsupported in
+    /// organization mode, or when the package selector names no package of a completely
+    /// analyzed corpus.
     ///
     /// # Panics
     ///
