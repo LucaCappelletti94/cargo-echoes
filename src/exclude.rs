@@ -76,11 +76,14 @@ pub(crate) fn excluded(excludes: &[Exclude], organization: bool, root: &str, pat
         .trim_start_matches(['/', '\\'])
         .replace('\\', "/");
     let (repository, relative) = if organization {
+        // Every organization scan path starts with its `owner/repo`.
         let mut parts = relative.splitn(3, '/');
-        match (parts.next(), parts.next(), parts.next()) {
-            (Some(owner), Some(name), Some(rest)) => (Some(format!("{owner}/{name}")), rest),
-            _ => return false,
-        }
+        let owner = parts.next().unwrap_or_default();
+        let name = parts.next().unwrap_or_default();
+        (
+            Some(format!("{owner}/{name}")),
+            parts.next().unwrap_or_default(),
+        )
     } else {
         (None, relative.as_str())
     };
