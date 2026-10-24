@@ -439,6 +439,10 @@ impl Runner {
         env.insert("RUNNER_TEMP".into(), self.run_temp.clone());
         env.insert("GITHUB_WORKSPACE".into(), self.workspace.clone());
         env.insert(
+            "GITHUB_ACTION_PATH".into(),
+            env!("CARGO_MANIFEST_DIR").to_string(),
+        );
+        env.insert(
             "GITHUB_REPOSITORY".into(),
             self.github
                 .get("repository")
