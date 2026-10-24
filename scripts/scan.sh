@@ -1,20 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
-# The runner drops step summaries over 1 MiB, so a step keeps its
-# summary writes within a safe total, the truncated tail gets a note.
-sum_append() {
-  local text="$1" file="$GITHUB_STEP_SUMMARY"
-  local cap=$((900 * 1024)) size=0 room len
-  [ -f "$file" ] && size="$(wc -c < "$file")"
-  room=$((cap - size))
-  len="$(printf '%s' "$text" | wc -c)"
-  if [ "$room" -gt 200 ] && [ "$len" -le "$((room - 200))" ]; then
-    printf '%s\n' "$text" >> "$file"
-  elif [ "$room" -gt 200 ]; then
-    head -c "$((room - 200))" <<< "$text" >> "$file"
-    printf '\nechoes: the run summary is full, the rest is truncated\n' >> "$file"
-  fi
-}
+# shellcheck source=scripts/lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 selection=()
 while read -r name; do
   [ -n "$name" ] && selection+=(--organization "$name")

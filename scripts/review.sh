@@ -1,39 +1,9 @@
 #!/usr/bin/env bash
 set -eo pipefail
-# The runner drops step summaries over 1 MiB, so a step keeps its
-# summary writes within a safe total, the truncated tail gets a note.
-sum_append() {
-  local text="$1" file="$GITHUB_STEP_SUMMARY"
-  local cap=$((900 * 1024)) size=0 room len
-  [ -f "$file" ] && size="$(wc -c < "$file")"
-  room=$((cap - size))
-  len="$(printf '%s' "$text" | wc -c)"
-  if [ "$room" -gt 200 ] && [ "$len" -le "$((room - 200))" ]; then
-    printf '%s\n' "$text" >> "$file"
-  elif [ "$room" -gt 200 ]; then
-    head -c "$((room - 200))" <<< "$text" >> "$file"
-    printf '\nechoes: the run summary is full, the rest is truncated\n' >> "$file"
-  fi
-}
-# A 429 is a rate limit, and a 403 naming a rate limit is one too.
-rate_limited_error() {
-  local err="$1"
-  if printf '%s' "$err" | grep -qE 'HTTP 429|"status": "429"'; then
-    return 0
-  fi
-  if printf '%s' "$err" | grep -qE 'HTTP 403|"status": "403"'; then
-    if printf '%s' "$err" | grep -qiE 'rate limit|x-ratelimit-remaining: 0'; then
-      return 0
-    fi
-  fi
-  return 1
-}
-# Whole lines within a byte budget, for the review body truncation.
-fit_lines() {
-  LC_ALL=C awk -v cap="$1" 'BEGIN { b = 0 } { if (b < cap && b + length($0) + 1 <= cap) { print; b += length($0) + 1 } }'
-}
-# No set -e here. Each step checks its own status and writes an outcome file, so a
-# failed api call degrades to a skipped review instead of aborting the run.
+# shellcheck source=scripts/lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# Each api call checks its own status and writes an outcome file, so a failed
+# call degrades to a skipped review instead of aborting the run.
 pr="$PR_NUMBER"
 dry="$DRY_RUN"
 repo="$GITHUB_REPOSITORY"
@@ -59,31 +29,6 @@ omitted=0
 rate_omitted=0
 omitted_file="$RUNNER_TEMP/echoes-omitted.txt"
 run_url="$GITHUB_SERVER_URL/$repo/actions/runs/$GITHUB_RUN_ID"
-uri() { jq -rn --arg s "$1" '$s | @uri'; }
-# Workflow command escaping, a property also ends at `,` or `:`.
-escape_data() {
-  local s="${1//%/%25}"
-  s="${s//$'\r'/%0D}"
-  printf '%s' "${s//$'\n'/%0A}"
-}
-escape_property() {
-  local s
-  s="$(escape_data "$1")"
-  s="${s//:/%3A}"
-  printf '%s' "${s//,/%2C}"
-}
-# Report text as a markdown code span, fenced past its longest backtick run, so
-# no mention, link, html or fence in a path or an item renders. A line break
-# becomes a space, since an empty line would end the span.
-md_code() {
-  local s="${1//$'\r'/ }" fence='`'
-  s="${s//$'\n'/ }"
-  while [[ "$s" == *"$fence"* ]]; do fence="$fence\`"; done
-  case "$s" in '`'* | *'`') s=" $s " ;; esac
-  printf '%s%s%s' "$fence" "$s" "$fence"
-}
-# A repository path inside a url, each segment percent-encoded.
-url_path() { jq -rn --arg s "$1" '$s | split("/") | map(@uri) | join("/")'; }
 # The prepared report rebuilt from its first JSON document, keeping only the fields
 # the renderer reads. Each check below is one the renderer needs, a string it
 # concatenates, a line it compares or a list it iterates or indexes. Picking a
@@ -488,7 +433,7 @@ cleanup() {
   while IFS= read -r id; do
     [ -n "$id" ] || continue
     if ! err="$(gh api -X PUT "repos/$repo/pulls/$pr/reviews/$id/dismissals" -f "message=$message" -f event=DISMISS 2>&1)"; then
-      if printf '%s' "$err" | grep -qE 'HTTP 403|"status": "403"'; then
+      if is_forbidden "$err"; then
         refused=1
         break
       fi
@@ -511,60 +456,6 @@ cleanup() {
   [ "$n" -gt 0 ] && echo "echoes: dismissed $n earlier echoes reviews of this workspace"
   [ "$refused" = "1" ] && echo "echoes: dismissing a review needs pull-requests: write on this job, earlier requests for changes stay"
   return 0
-}
-# A permalink to lines $3 to $4 of path $2 at commit $1, GitHub shows
-# and highlights those lines. Without a sha it falls back to plain text.
-blob_link() {
-  local anchor label
-  if [ -n "${4:-}" ] && [ "$4" != "$3" ]; then
-    anchor="#L$3-L$4"
-    label="$3-$4"
-  else
-    anchor="#L$3"
-    label="$3"
-  fi
-  if [ -n "$1" ]; then
-    printf '[%s](%s/%s/blob/%s/%s%s)' "$(md_code "$2:$label")" "$GITHUB_SERVER_URL" "$repo" "$1" "$(url_path "$2")" "$anchor"
-  else
-    md_code "$2:$label"
-  fi
-}
-# The bare permalink url GitHub expands into a code preview of the
-# cited lines, empty when no commit is known.
-blob_url() {
-  [ -n "$1" ] || return 0
-  if [ -n "${4:-}" ] && [ "$4" != "$3" ]; then
-    printf '%s/%s/blob/%s/%s#L%s-L%s' "$GITHUB_SERVER_URL" "$repo" "$1" "$(url_path "$2")" "$3" "$4"
-  else
-    printf '%s/%s/blob/%s/%s#L%s' "$GITHUB_SERVER_URL" "$repo" "$1" "$(url_path "$2")" "$3"
-  fi
-}
-# The inline text location of a block, `path:start` or `path:start-end`.
-loc_text() {
-  if [ -n "${3:-}" ] && [ "$3" != "$2" ]; then
-    md_code "$1:$2-$3"
-  else
-    md_code "$1:$2"
-  fi
-}
-# The permalink wrapped in a markdown link when it exists.
-loc_md() {
-  if [ -n "$2" ]; then
-    printf '[%s](%s)' "$1" "$2"
-  else
-    printf '%s' "$1"
-  fi
-}
-# The bare url GitHub previews as code, collapsed in a details block
-# when the block spans more than ten lines. Report numbers stay out of shell
-# arithmetic, which would run a command substitution inside them.
-preview_of() {
-  local n="${3:-$2}" label="${4:-the duplicated doctest}"
-  if [ "$(awk -v s="$2" -v e="$n" 'BEGIN { print (e - s + 1 > 10) }')" = 1 ]; then
-    printf '<details>\n<summary>Show %s</summary>\n\n%s\n\n</details>' "$label" "$1"
-  else
-    printf '%s' "$1"
-  fi
 }
 rendered=''
 findings=''
@@ -975,7 +866,7 @@ post_one() {
       rate_limited=1
       return 1
     fi
-    if printf '%s' "$err" | grep -qE 'HTTP 403|"status": "403"'; then
+    if is_forbidden "$err"; then
       readonly=1
       return 1
     fi
@@ -1080,7 +971,7 @@ if ! resp="$(gh api -X POST "repos/$repo/pulls/$pr/reviews" "${review[@]}" 2>&1)
     echo "failed" > "$status"
     exit 1
   fi
-  if printf '%s' "$resp" | grep -qE 'HTTP 403|"status": "403"'; then
+  if is_forbidden "$resp"; then
     readonly_notice
     echo "skipped-readonly" > "$status"
     exit 0
