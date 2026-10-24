@@ -423,7 +423,11 @@ fn s05_pr_reuse_only() {
             && text.contains("direct%201.2.3%20%20direct%3A%3Ahelper"),
         "the reuse advice links a wrong-review issue naming the local site and the candidates"
     );
-    let summary = r.summary();
+    s05_summary_checks(&r.summary());
+}
+
+/// The run summary of the reuse report, its section, candidate order and coverage.
+fn s05_summary_checks(summary: &str) {
     assert!(
         summary.contains("### Dependency reuse"),
         "the run summary reports the reuse groups"
