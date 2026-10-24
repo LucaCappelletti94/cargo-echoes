@@ -5,7 +5,7 @@
 [![crates.io](https://img.shields.io/crates/v/echoes.svg)](https://crates.io/crates/echoes)
 [![docs.rs](https://docs.rs/echoes/badge.svg)](https://docs.rs/echoes)
 
-Whoa, deja vu. A doctest went past us, and then another that looked just like it.
+By chance two separate functions meet, and I am you and what I see is me.
 
 `cargo echoes` finds duplicated Rust doctests, and optionally duplicated functions and code blocks, across a workspace or across every crate of a GitHub organization. The [wiki](https://github.com/LucaCappelletti94/cargo-echoes/wiki) explains each check, the options and the Action in depth.
 
