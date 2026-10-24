@@ -32,6 +32,7 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo fmt --all --check
+      - run: shellcheck -x -S warning scripts/*.sh tests/action/fake/bin/gh tests/action/fake/bin/cargo .clusterfuzzlite/build.sh
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo clippy --workspace --lib --no-default-features --locked -- -D warnings
       - run: cargo clippy -p echoes --all-targets --no-default-features --features std --locked -- -D warnings

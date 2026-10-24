@@ -272,10 +272,6 @@ fn s04_pr_local_onlynew() {
         "the base scan inventories every site"
     );
     assert!(
-        !base_args.iter().any(|a| a == "--context-dependency-depth"),
-        "the base scan inherits no dependency depth"
-    );
-    assert!(
         r.summary().contains("Copies to remove"),
         "the summary lists the copies to remove"
     );
@@ -2671,5 +2667,153 @@ fn s65_post_mode_cleans_up_the_payload_scope() {
     assert!(
         forged.runner().resolved_threads().is_empty(),
         "a rejected payload touches no thread"
+    );
+}
+
+#[test]
+fn s66_scan_summary_escapes_report_text() {
+    let forged = "app::x`<b>@org/team";
+    let local = site("src/parser.rs", 3, 6, forged);
+    let rep = report(
+        &[],
+        &[ctx_group(
+            "c1",
+            "C1",
+            &[local.clone(), site("src/mod.rs", 10, 13, forged)],
+        )],
+        Some(&reuse(
+            &[reuse_group(
+                "R1",
+                &local,
+                &[Cand::new("direct", "1.2.3", 1, forged, "reuse-api")
+                    .source_url("javascript:alert(1)")
+                    .build()],
+            )],
+            Some(coverage(true, 1, 1, 0, &[], &[])),
+        )),
+        6,
+        3,
+    );
+    let mut world = World::new("s66")
+        .inputs(&[("pr-number", "7"), ("context-dependency-depth", "2")])
+        .event("pull_request")
+        .json(rep);
+    world.run();
+    let summary = world.runner().summary();
+    assert!(
+        summary.contains("``app::x`<b>@org/team``"),
+        "report items render as code spans in the run summary: {summary}"
+    );
+    assert!(
+        !summary.contains("javascript:"),
+        "a source url that is not https stays out of the run summary"
+    );
+}
+
+#[test]
+fn s67_base_scan_takes_the_head_scan_flags() {
+    let mut world = World::new("s67")
+        .inputs(&[
+            ("pr-number", "7"),
+            ("functions", "true"),
+            ("all-targets", "true"),
+            ("context-blocks", "true"),
+            ("context-dependency-depth", "2"),
+            ("context-dev-dependencies", "true"),
+            ("exclude", "benches/**\nsrc/gen.rs"),
+        ])
+        .event("pull_request")
+        .git()
+        .json(report(&[], &[], None, 6, 3))
+        .base_json(report(&[], &[], None, 1, 1));
+    world.run();
+    let r = world.runner();
+    let without_threshold = |args: Vec<String>| {
+        let at = args
+            .iter()
+            .position(|a| a == "--threshold")
+            .expect("a threshold");
+        let mut rest = args;
+        rest.drain(at..at + 2);
+        rest
+    };
+    let head = without_threshold(r.scan_args(0));
+    assert!(
+        head.iter().any(|a| a == "--context-dependency-depth"),
+        "the head scan searches dependencies: {head:?}"
+    );
+    assert_eq!(
+        without_threshold(r.scan_args(1)),
+        head,
+        "the base scan passes the head scan's flags, only the threshold differs"
+    );
+}
+
+#[test]
+fn s68_a_second_copy_of_a_base_context_counts_as_added() {
+    let old = site("src/parser.rs", 3, 6, "app::parser::selected");
+    let added = site("src/parser.rs", 12, 15, "app::parser::selected");
+    let mut world = World::new("s68")
+        .inputs(&[("pr-number", "7"), ("context-select", "crate:app")])
+        .event("pull_request")
+        .git()
+        .json(report(
+            &[],
+            &[ctx_group("c1", "C1", &[old.clone(), added])],
+            None,
+            6,
+            3,
+        ))
+        .base_json(report(&[], &[ctx_group("c1", "C1", &[old])], None, 6, 3))
+        .changed(&["src/parser.rs"]);
+    assert_eq!(world.run(), 0, "the review run exits 0");
+    let posts = world.runner().comment_posts();
+    assert_eq!(
+        posts.len(),
+        1,
+        "the copy beyond the base's one is added by the pull request"
+    );
+    assert_eq!(
+        posts[0]
+            .pointer("/params/start_line")
+            .and_then(Value::as_str),
+        Some("12"),
+        "the comment lands on the added copy"
+    );
+}
+
+#[test]
+fn s69_annotation_names_the_group_first_copy_outside_only_new() {
+    let mut world = World::new("s69")
+        .inputs(&[("pr-number", "7"), ("only-new", "false")])
+        .event("pull_request")
+        .git()
+        .json(report(
+            &[group(
+                "g1",
+                "H1",
+                &[
+                    doc_site("src/lib.rs", 3, 5, "app::parse"),
+                    doc_site("src/dup.rs", 3, 5, "app::parse"),
+                ],
+            )],
+            &[],
+            None,
+            6,
+            3,
+        ))
+        .changed(&["src/dup.rs"]);
+    assert_eq!(world.run(), 0, "the review run exits 0");
+    let out = world
+        .runner()
+        .step_stdout("Review the findings on the pull request")
+        .unwrap_or_default();
+    let note = out
+        .lines()
+        .find(|l| l.starts_with("::error file=src/dup.rs"))
+        .unwrap_or_default();
+    assert!(
+        note.contains("duplicates the doctest at src/lib.rs:3"),
+        "the copy's annotation points at the group's first copy, not at itself: {note}"
     );
 }

@@ -171,28 +171,25 @@ impl Runner {
         out
     }
 
-    pub fn comment_posts(&self) -> Vec<Value> {
+    /// The POST calls whose path ends with `suffix`, in call order.
+    fn posts_to(&self, suffix: &str) -> Vec<Value> {
         self.gh_calls()
             .into_iter()
             .filter(|c| {
                 c.get("m").and_then(Value::as_str) == Some("POST")
                     && c.get("p")
                         .and_then(Value::as_str)
-                        .is_some_and(|p| p.ends_with("/comments"))
+                        .is_some_and(|p| p.ends_with(suffix))
             })
             .collect()
     }
 
+    pub fn comment_posts(&self) -> Vec<Value> {
+        self.posts_to("/comments")
+    }
+
     pub fn review_posts(&self) -> Vec<Value> {
-        self.gh_calls()
-            .into_iter()
-            .filter(|c| {
-                c.get("m").and_then(Value::as_str) == Some("POST")
-                    && c.get("p")
-                        .and_then(Value::as_str)
-                        .is_some_and(|p| p.ends_with("/reviews"))
-            })
-            .collect()
+        self.posts_to("/reviews")
     }
 
     /// The thread ids the run resolved, in call order.
@@ -438,6 +435,10 @@ impl Runner {
         env.insert("RUNNER_ARCH".into(), "X64".into());
         env.insert("RUNNER_TEMP".into(), self.run_temp.clone());
         env.insert("GITHUB_WORKSPACE".into(), self.workspace.clone());
+        env.insert(
+            "GITHUB_ACTION_PATH".into(),
+            env!("CARGO_MANIFEST_DIR").to_string(),
+        );
         env.insert(
             "GITHUB_REPOSITORY".into(),
             self.github
