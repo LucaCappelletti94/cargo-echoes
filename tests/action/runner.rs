@@ -195,6 +195,37 @@ impl Runner {
             .collect()
     }
 
+    /// The thread ids the run resolved, in call order.
+    pub fn resolved_threads(&self) -> Vec<String> {
+        self.gh_calls()
+            .into_iter()
+            .filter(|c| {
+                c.get("p").and_then(Value::as_str) == Some("graphql")
+                    && c.pointer("/params/query")
+                        .and_then(Value::as_str)
+                        .is_some_and(|q| q.contains("resolveReviewThread"))
+            })
+            .filter_map(|c| {
+                c.pointer("/params/threadId")
+                    .and_then(Value::as_str)
+                    .map(String::from)
+            })
+            .collect()
+    }
+
+    /// The review ids the run dismissed, in call order.
+    pub fn dismissed_reviews(&self) -> Vec<String> {
+        self.gh_calls()
+            .into_iter()
+            .filter(|c| c.get("m").and_then(Value::as_str) == Some("PUT"))
+            .filter_map(|c| {
+                let path = c.get("p").and_then(Value::as_str)?;
+                let rest = path.strip_suffix("/dismissals")?;
+                rest.rsplit('/').next().map(String::from)
+            })
+            .collect()
+    }
+
     pub fn scan_calls(&self) -> Vec<Value> {
         self.cargo_calls()
             .into_iter()

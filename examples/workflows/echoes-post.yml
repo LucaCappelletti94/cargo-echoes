@@ -8,6 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read
+      # Resolving the review threads of copies that are gone needs contents: write.
+      contents: write
       pull-requests: write
     # This job holds a write token, so it must never check out or run pull-request code.
     # The action reviews only the open pull request whose head the triggering run built.

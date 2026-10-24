@@ -528,8 +528,9 @@ runs:
         rm -f "$base_report.raw"
 
     - name: Review the findings on the pull request
-      # A prepare run writes its payload even for a clean scan, the posting job downloads it.
-      if: ${{ inputs.mode == 'post' || (inputs.mode == 'prepare' && inputs.pr-number != '') || (steps.scan.outputs.found == 'true' && (inputs.pr-number != '' || inputs.dry-run == 'true')) }}
+      # A prepare run writes its payload even for a clean scan, the posting job downloads it, and a
+      # clean review run still cleans up the threads and reviews of earlier heads.
+      if: ${{ inputs.mode == 'post' || (inputs.pr-number != '' && inputs.dry-run != 'true') || (steps.scan.outputs.found == 'true' && (inputs.pr-number != '' || inputs.dry-run == 'true')) }}
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -591,6 +592,9 @@ runs:
         comments="$RUNNER_TEMP/echoes-comments.ndjson"
         reuse_tmp="$RUNNER_TEMP/echoes-reuse.ndjson"
         blank_file="$RUNNER_TEMP/echoes-blank.txt"
+        dirs_file="$RUNNER_TEMP/echoes-dirs.json"
+        echo '{"owned": [], "foreign": []}' > "$dirs_file"
+        scope=''
         : > "$comments"
         mkdir -p "$payload"
         failed_sites=''
@@ -723,6 +727,18 @@ runs:
           version="$(jq -r '.version // empty | tostring' "$meta")"
           base_sha="$(jq -r '.base_sha // empty | tostring' "$meta")"
           [[ "$base_sha" =~ ^[0-9a-f]{40}$ ]] || base_sha=''
+          # The workspace the payload scanned, whose threads and reviews of earlier heads
+          # this job may clean up. An absent workspace leaves them as they are.
+          scope="$(jq -r 'if has("scope") then (.scope | if type == "string" then . else error("malformed") end) else "" end' "$meta" 2>/dev/null)" \
+            || reject "the prepared workspace is malformed"
+          if [ -n "$scope" ]; then
+            [[ "$scope" =~ ^[A-Za-z0-9._@+/-]{1,512}$ ]] || reject "the prepared workspace is malformed"
+          fi
+          jq -c 'def dirs: if . == null then []
+              elif type == "array" and length <= 10000 and all(.[]; type == "string" and test("^[A-Za-z0-9._@+/-]{1,512}$")) then .
+              else error("malformed") end;
+            {owned: (.owned_dirs | dirs), foreign: (.foreign_dirs | dirs)}' "$meta" > "$dirs_file" 2>/dev/null \
+            || reject "the prepared workspace directories are malformed"
           changed_files="$(gh api "repos/$repo/pulls/$pr/files" --paginate --jq '.[].filename' 2>/dev/null)" \
             || reject "the changed files of pull request $pr cannot be listed"
           [ "$dry" != "true" ] || reject "dry-run does not apply to post mode"
@@ -748,8 +764,28 @@ runs:
                 printf '%s:%s\n' "$f" "$e"
               fi
             done > "$blank_file"
+          # The workspace this run scanned, the root and member package directories it owns, and
+          # every other directory with a tracked manifest, which another workspace owns.
+          scope="$(cat "$RUNNER_TEMP/echoes-prefix" 2>/dev/null)"
+          [ -n "$scope" ] || scope='.'
+          [[ "$scope" =~ ^[A-Za-z0-9._@+/-]{1,512}$ ]] || scope=''
+          if [ -n "$scope" ]; then
+            owned="$( { printf '%s\n' "$scope"
+              (cd "$GITHUB_WORKSPACE/$scope" 2>/dev/null && cargo metadata --no-deps --format-version 1 2>/dev/null) |
+                jq -r '.packages[]?.manifest_path' 2>/dev/null |
+                while IFS= read -r m; do realpath -m --relative-to="$GITHUB_WORKSPACE" "$(dirname "$m")" 2>/dev/null; done
+            } | sort -u)" || true
+            tracked="$(git -C "$GITHUB_WORKSPACE" ls-files -- '*Cargo.toml' 2>/dev/null |
+              while IFS= read -r f; do [ "${f##*/}" != Cargo.toml ] || dirname "$f"; done | sort -u)" || tracked=''
+            jq -n --arg owned "$owned" --arg tracked "$tracked" '
+              def lines: split("\n") | map(select(test("^[A-Za-z0-9._@+/-]{1,512}$")));
+              ($owned | lines) as $o | {owned: $o, foreign: (($tracked | lines) - $o)}' > "$dirs_file"
+          fi
         fi
         onlynew=0
+        scope_uri=''
+        [ -n "$scope" ] && scope_uri="$(uri "$scope")"
+        oor_local=0
         [ -s "$base_report" ] && onlynew=1
         if [ "$dry" = "true" ]; then
           # A dry run renders the review as if every scanned site were in
@@ -931,6 +967,96 @@ runs:
             | join("\n")' "$report"
         }
         support_link='[❤️ Support echoes](https://github.com/sponsors/LucaCappelletti94)'
+        # The hidden marks that tie a comment to its workspace and finding, and a review to
+        # its workspace, so a later head finds what this run posted.
+        thread_mark() { printf '<!-- echoes:v1 scope=%s key=%s -->' "$scope_uri" "$1"; }
+        review_mark() { printf '<!-- echoes:v1 scope=%s review -->' "$scope_uri"; }
+        finding_key() { uri "$1:$2:$3:$4"; }
+        # The ownership of a repository path, by its nearest directory holding a manifest,
+        # and the finding class a comment posted before the marks opens with.
+        jq_own='
+          def depth: if . == "." then 0 else (split("/") | length) end;
+          def under($d): $d == "." or startswith($d + "/");
+          def owned($dirs): . as $p
+            | ([($dirs.owned[] | {d: ., o: true}), ($dirs.foreign[] | {d: ., o: false})]
+               | map(select(.d as $d | $p | under($d))) | max_by(.d | depth)) as $n
+            | ($n != null and $n.o);
+          def legacy_class: if startswith("This context is repeated") then "context"
+            elif startswith("This context matches") then "reuse"
+            elif (startswith("This doctest") or startswith("This function") or startswith("This method repeats")
+                  or startswith("This pull request adds")) then "local"
+            else null end;'
+        # Every review thread of the pull request, one JSON object per line.
+        list_threads() {
+          gh api graphql --paginate \
+            -f query='query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
+              repository(owner: $owner, name: $name) { pullRequest(number: $number) {
+                reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor }
+                  nodes { id isResolved path line comments(first: 1) { nodes { author { login } body } } } } } } }' \
+            -f "owner=${repo%%/*}" -f "name=${repo#*/}" -F "number=$pr" \
+            --jq '.data.repository.pullRequest.reviewThreads.nodes[] | @json'
+        }
+        # This workspace's earlier threads and reviews, cleaned up once the run knows its findings.
+        # $1 is the review this run posted, which stays.
+        cleanup() {
+          local keep="${1:-}" id err refused=0 n=0 message reviews
+          if [ -z "$scope" ]; then
+            echo "echoes: the review names no workspace, the threads and reviews of earlier commits are left as they are"
+            return 0
+          fi
+          if [ "$threads_ok" = "1" ]; then
+            while IFS= read -r id; do
+              [ -n "$id" ] || continue
+              if ! err="$(gh api graphql -f query='mutation($threadId: ID!) { resolveReviewThread(input: {threadId: $threadId}) { thread { isResolved } } }' \
+                -F "threadId=$id" 2>&1)"; then
+                if printf '%s' "$err" | grep -qiE 'not accessible|FORBIDDEN|HTTP 403'; then
+                  refused=1
+                  break
+                fi
+                printf 'echoes: resolving thread %s failed\n' "$(escape_data "$id")"
+                printf '%s\n' "$err" | sed 's/^/echoes: /'
+                continue
+              fi
+              n=$((n + 1))
+            done < "$gone_file"
+            [ "$n" -gt 0 ] && echo "echoes: resolved $n review threads whose finding is gone"
+            [ "$refused" = "1" ] && echo "echoes: resolving a review thread needs contents: write on this job, the threads of findings that are gone stay open"
+          fi
+          if ! reviews="$(gh api "repos/$repo/pulls/$pr/reviews" --paginate --jq '.[] | @json' 2>/dev/null)"; then
+            echo "echoes: the reviews cannot be listed, earlier requests for changes stay"
+            return 0
+          fi
+          message="No echoes finding of this workspace remains at $head_sha."
+          [ -n "$keep" ] && message="Superseded by the echoes review of $head_sha."
+          n=0
+          refused=0
+          while IFS= read -r id; do
+            [ -n "$id" ] || continue
+            if ! err="$(gh api -X PUT "repos/$repo/pulls/$pr/reviews/$id/dismissals" -f "message=$message" -f event=DISMISS 2>&1)"; then
+              if printf '%s' "$err" | grep -qE 'HTTP 403|"status": "403"'; then
+                refused=1
+                break
+              fi
+              printf 'echoes: dismissing review %s failed\n' "$id"
+              printf '%s\n' "$err" | sed 's/^/echoes: /'
+              continue
+            fi
+            n=$((n + 1))
+          done < <(printf '%s\n' "$reviews" | jq -r --slurpfile dirs "$dirs_file" --arg mark "$(review_mark)" --arg keep "$keep" "$jq_own"'
+            select(type == "object" and .user.login == "github-actions[bot]" and .state == "CHANGES_REQUESTED" and (.id | tostring) != $keep)
+            | (.body // "") as $b
+            | select(($b | contains($mark))
+                or (($b | contains("<!-- echoes:v1") | not)
+                    and ($b == "" or ($b | startswith("These duplicates are not on lines"))
+                         or ($b | startswith("Duplicates echoes could not comment inline"))
+                         or ($b | test("^[0-9]+ inline copies were not posted")))
+                    and (([$b | match("`([^`]+):[0-9]+(-[0-9]+)?`").captures[0].string] | .[0]) as $path
+                         | ($path == null or ($path | owned($dirs[0]))))))
+            | .id | tostring | select(test("^[0-9]{1,20}$"))')
+          [ "$n" -gt 0 ] && echo "echoes: dismissed $n earlier echoes reviews of this workspace"
+          [ "$refused" = "1" ] && echo "echoes: dismissing a review needs pull-requests: write on this job, earlier requests for changes stay"
+          return 0
+        }
         # A permalink to lines $3 to $4 of path $2 at commit $1, GitHub shows
         # and highlights those lines. Without a sha it falls back to plain text.
         blob_link() {
@@ -1063,6 +1189,7 @@ runs:
           close_line="$end"
           if [ -z "$close_line" ]; then
             out_of_range="$out_of_range- group $g  $(blob_link "$head_sha" "$p" "$line")  $(md_code "$item")"$'\n'
+            oor_local=1
             continue
           fi
           # The suggestion deletes the block plus the empty line right after
@@ -1148,10 +1275,12 @@ runs:
           fi
           # One row per comment, so a later job can post it without the
           # source tree it was computed from.
+          key="$(finding_key "$kind" "$(jq -r --argjson g "$g" '.groups[$g - 1].hash' "$report")" "$p" "$item")"
+          [ -n "$scope" ] && comment="$comment"$'\n\n'"$(thread_mark "$key")"
           jq -cn --arg path "$p" --arg start "$line" --arg stop "$delete_end" \
-            --arg group "$g" --arg item "$item" --arg close "$close_line" --arg body "$comment" \
+            --arg group "$g" --arg item "$item" --arg close "$close_line" --arg key "$key" --arg body "$comment" \
             '{path: $path, start_line: ($start | tonumber), line: ($stop | tonumber),
-              group: $group, item: $item, close_line: ($close | tonumber), body: $body}' \
+              group: $group, item: $item, close_line: ($close | tonumber), key: $key, body: $body}' \
             >> "$comments"
         done < "$inline_file"
         # The neutral reuse and context entries, the local comment minus the
@@ -1185,10 +1314,12 @@ runs:
               reuse_rendered+="$comment"$'\n\n'
               continue
             fi
+            key="$(finding_key "$kind" "$(printf '%s' "$row" | jq -r '.hash')" "$p" "$item")"
+            [ -n "$scope" ] && comment="$comment"$'\n\n'"$(thread_mark "$key")"
             jq -cn --arg path "$p" --arg start "$line" --arg stop "$end" \
-              --arg item "$item" --arg kind "$kind" --arg body "$comment" \
+              --arg item "$item" --arg kind "$kind" --arg key "$key" --arg body "$comment" \
               '{path: $path, start_line: ($start | tonumber), line: ($stop | tonumber),
-                item: $item, kind: $kind, body: $body}' >> "$reuse_built"
+                item: $item, kind: $kind, key: $key, body: $body}' >> "$reuse_built"
           done < "$reuse_tmp"
           mv "$reuse_built" "$reuse_tmp"
         fi
@@ -1246,10 +1377,57 @@ runs:
         # again, so nothing a pull request writes into the payload is posted as is.
         if [ "$mode" = "prepare" ]; then
           jq -n --arg pr "$pr" --arg head "$head_sha" --arg base "$base_sha" --arg version "$version" \
-            '{pr: $pr, head_sha: $head, base_sha: $base, version: $version}' > "$payload/meta.json"
+            --arg scope "$scope" --slurpfile dirs "$dirs_file" \
+            '{pr: $pr, head_sha: $head, base_sha: $base, version: $version,
+              scope: $scope, owned_dirs: $dirs[0].owned, foreign_dirs: $dirs[0].foreign}' > "$payload/meta.json"
           cp "$report" "$payload/report.json"
           [ "$onlynew" = "1" ] && cp "$base_report" "$payload/base-report.json"
           cp "$blank_file" "$payload/blank.txt"
+        fi
+        # The threads of earlier heads. A finding with a thread of this workspace, open or
+        # resolved, or with an open thread from before the marks on its lines, is not posted
+        # again, and the open threads whose finding is gone are resolved once the run is done.
+        threads_ok=0
+        gone_file="$RUNNER_TEMP/echoes-gone.txt"
+        : > "$gone_file"
+        touch "$comments" "$reuse_tmp"
+        local_found="$oor_local"
+        [ -s "$comments" ] && local_found=1
+        found_n="$(cat "$comments" "$reuse_tmp" | wc -l)"
+        if [ "$mode" != "prepare" ] && [ -n "$scope" ] && [ -n "$pr" ]; then
+          threads_raw="$RUNNER_TEMP/echoes-threads.ndjson"
+          threads="$RUNNER_TEMP/echoes-threads.json"
+          rows_all="$RUNNER_TEMP/echoes-rows.json"
+          if list_threads > "$threads_raw" 2>/dev/null; then
+            threads_ok=1
+            jq -s --slurpfile dirs "$dirs_file" --arg scope "$scope_uri" "$jq_own"'
+              map(select(type == "object")
+                | (.comments.nodes[0] // {}) as $c | ($c.body // "" | tostring) as $b
+                | select(($c.author.login // "") == "github-actions")
+                | ([$b | capture("<!-- echoes:v1 scope=(?<s>[^ ]+) key=(?<k>[^ ]+) -->")] | .[0]) as $m
+                | if $m != null then (if $m.s == $scope then {id, resolved: (.isResolved == true), key: $m.k} else empty end)
+                  elif ($b | legacy_class) != null and ((.path // "" | tostring) | owned($dirs[0]))
+                  then {id, resolved: (.isResolved == true), legacy: ($b | legacy_class), path, line}
+                  else empty end)' "$threads_raw" > "$threads"
+            cat "$comments" "$reuse_tmp" | jq -s 'map({key, cls: (if .group then "local" else .kind end), path, start_line, line})' > "$rows_all"
+            jq -r --slurpfile rows "$rows_all" '
+              def covers($t): .path == $t.path and .cls == $t.legacy and ($t.line | type) == "number"
+                and .start_line <= $t.line and $t.line <= .line;
+              $rows[0] as $r | .[] | select(.resolved | not)
+              | select(if .key then (.key as $k | $r | any(.[]; .key == $k) | not)
+                       else (. as $t | $r | any(.[]; covers($t)) | not) end)
+              | .id' "$threads" > "$gone_file"
+            for f in "$comments" "$reuse_tmp"; do
+              jq -c --slurpfile t "$threads" '
+                (if .group then "local" else .kind end) as $cls | . as $row
+                | select($t[0] | any(.[]; .key and .key == $row.key) | not)
+                | select($t[0] | any(.[]; .legacy and (.resolved | not) and .path == $row.path and .legacy == $cls
+                    and (.line | type) == "number" and $row.start_line <= .line and .line <= $row.line) | not)' "$f" > "$f.new"
+              mv "$f.new" "$f"
+            done
+          else
+            echo "echoes: the review threads cannot be listed, findings that already have a thread may be posted again and no thread is resolved"
+          fi
         fi
         # The inline posts are capped per run, the omitted copies go to the
         # review body and the run summary.
@@ -1279,16 +1457,22 @@ runs:
           mv "$comments.capped" "$comments"
           mv "$reuse_tmp.capped" "$reuse_tmp"
         fi
-        # Nothing to post, in prepare mode the payload still exists so the
-        # posting job has something to download.
-        if [ ! -s "$comments" ] && [ -z "$out_of_range" ] && [ ! -s "$reuse_tmp" ] && [ "$omitted" -eq 0 ]; then
-          if [ "$onlynew" = "1" ]; then
+        # Nothing to post. In prepare mode the payload still exists so the posting job has
+        # something to download. A posting run cleans up, and goes on to renew its request
+        # for changes when local copies remain whose threads already exist.
+        if [ ! -s "$comments" ] && [ -z "$out_of_range" ] && [ ! -s "$reuse_tmp" ] && [ "$omitted" -eq 0 ] \
+          && { [ "$mode" = "prepare" ] || [ "$local_found" != "1" ]; }; then
+          if [ "$found_n" -gt 0 ]; then
+            echo "echoes: every finding of this pull request already has a review thread, nothing new is posted"
+            echo "skipped-existing" > "$status"
+          elif [ "$onlynew" = "1" ]; then
             echo "echoes: no duplicate was introduced by this pull request, the review is not posted"
             echo "skipped-existing" > "$status"
           else
             echo "echoes: no duplicate is in the pull request diff, the review is not posted"
             echo "skipped-nodiff" > "$status"
           fi
+          [ "$mode" = "prepare" ] || cleanup
           exit 0
         fi
         # The reported copies in the run summary, beside the whole scan the
@@ -1343,7 +1527,7 @@ runs:
             printf 'echoes: %s:%s %s\n' "$(escape_data "$p")" "$line" "$(escape_data "$item")"
             printf '%s\n' "$err" | sed 's/^/echoes: /'
             if printf '%s' "$err" | grep -qE 'HTTP 422|"status": "422"'; then
-              out_of_range="$out_of_range- group $g  $(md_code "$p:$line")  $(md_code "$item")"$'\n'
+              out_of_range="$out_of_range- group $g  $(blob_link "$head_sha" "$p" "$line" "$(printf '%s' "$row" | jq -r '.close_line // .line')")  $(md_code "$item")"$'\n'
             else
               failed_sites="$failed_sites- group $g  $(md_code "$p:$line")  $(md_code "$item")"$'\n'
               failed_log="$failed_log  group $g  $(escape_data "$p"):$line  $(escape_data "$item")"$'\n'
@@ -1385,7 +1569,7 @@ runs:
         # A review with no comment of its own needs a body. Sites GitHub could not
         # anchor inline are listed with permalinks to the head commit.
         review_event='REQUEST_CHANGES'
-        [ -s "$comments" ] || [ -n "$out_of_range" ] || review_event='COMMENT'
+        [ "$local_found" = "1" ] || review_event='COMMENT'
         review=(-f "event=$review_event")
         review_body=''
         if [ -n "$out_of_range" ]; then
@@ -1423,9 +1607,17 @@ runs:
           [ "$omitted" -gt 0 ] && review_body="$review_body$(printf '\n\n%s inline copies were not posted, they are listed in the run summary %s' "$omitted" "$run_url")"
           [ "$rate_omitted" -gt 0 ] && review_body="$review_body$(printf '\n\n%s inline copies were not posted because the api rate limit was reached, they are listed in the run summary %s' "$rate_omitted" "$run_url")"
         fi
-        if [ -n "$review_body" ]; then
-          review+=(-f "body=$review_body")
+        if [ -z "$review_body" ]; then
+          if [ "$posted_local" -eq 0 ] && [ "$posted_reuse" -eq 0 ]; then
+            review_body='The duplicates echoes reported on earlier commits are still in this pull request, their review threads stay open.'
+          elif [ "$review_event" = "COMMENT" ]; then
+            review_body='echoes found repeated code in this pull request, the inline comments name it.'
+          else
+            review_body='echoes found duplicates in this pull request, the inline comments name them.'
+          fi
         fi
+        [ -n "$scope" ] && review_body="$review_body"$'\n\n'"$(review_mark)"
+        review+=(-f "body=$review_body")
         if ! resp="$(gh api -X POST "repos/$repo/pulls/$pr/reviews" "${review[@]}" 2>&1)"; then
           if rate_limited_error "$resp"; then
             echo "echoes: the api rate limit was reached, the review was not posted"
@@ -1458,6 +1650,8 @@ runs:
         fi
         echo "echoes: posted the review on pull request $pr"
         echo "posted" > "$status"
+        # The rate limit already stopped the posts, the cleanup waits for the next head.
+        [ "$rate_limited" = "1" ] || cleanup "$(printf '%s' "$resp" | jq -r '.id // empty | tostring' 2>/dev/null)"
 
     - name: Save the dependency index
       if: ${{ always() && !cancelled() && inputs.mode != 'post' && inputs.context-dependency-depth > 0 && steps.scan.outputs.index-ok == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}

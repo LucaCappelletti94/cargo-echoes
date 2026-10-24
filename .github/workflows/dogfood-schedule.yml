@@ -31,6 +31,8 @@ jobs:
           app-id: ${{ secrets.DOGFOOD_APP_ID }}
           private-key: ${{ secrets.DOGFOOD_APP_PRIVATE_KEY }}
           permission-pull-requests: write
+          # The revert commit must come from the app, a push with the workflow token starts no run.
+          permission-contents: write
 
       # A failed run leaves its pull request open; this step keeps the repository free of them.
       - name: Close the previous check pull request
@@ -81,30 +83,40 @@ jobs:
           url="$(gh pr create --head "$branch" --title "echoes API check, $(date -u +%F)" --body 'Opened by the scheduled dogfood to exercise the pull request review surface against the GitHub API. It closes itself when the check passes.')"
           echo "number=${url##*/}" >> "$GITHUB_OUTPUT"
 
-      # The pull request run of the dogfood workflow posts the review and asserts it; the wait correlates on the head sha and workflow path.
-      - name: Wait for the dogfood run
+      # The pull request runs of the dogfood workflow post the review, then clean it up after the
+      # copies are reverted, and assert both. Each wait correlates on the head sha and workflow path.
+      - name: Wait for the dogfood runs
         env:
           GH_TOKEN: ${{ github.token }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          sha="$(git rev-parse HEAD)"
-          for i in $(seq 1 20); do
-            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&per_page=50" --jq '[.workflow_runs[] | select(.path == ".github/workflows/dogfood.yml")] | first // empty' 2>/dev/null)"
-            if [ -n "$run_json" ]; then
-              status="$(printf '%s' "$run_json" | jq -r '.status')"
-              conclusion="$(printf '%s' "$run_json" | jq -r '.conclusion // empty')"
-              if [ "$status" = "completed" ]; then
-                if [ "$conclusion" = "success" ]; then
-                  echo "the dogfood run succeeded"
-                  exit 0
+          wait_run() {
+            local sha="$1" what="$2" i run_json status conclusion
+            for i in $(seq 1 20); do
+              run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&per_page=50" --jq '[.workflow_runs[] | select(.path == ".github/workflows/dogfood.yml")] | first // empty' 2>/dev/null)"
+              if [ -n "$run_json" ]; then
+                status="$(printf '%s' "$run_json" | jq -r '.status')"
+                conclusion="$(printf '%s' "$run_json" | jq -r '.conclusion // empty')"
+                if [ "$status" = "completed" ]; then
+                  if [ "$conclusion" = "success" ]; then
+                    echo "the dogfood run $what succeeded"
+                    return 0
+                  fi
+                  echo "the dogfood run $what finished with $conclusion, the check pull request stays open for inspection"
+                  return 1
                 fi
-                echo "the dogfood run finished with $conclusion, the check pull request stays open for inspection"
-                exit 1
               fi
-            fi
-            [ "$i" -lt 20 ] && sleep 90
-          done
-          echo "the dogfood run did not finish within the 30 minute window, the check pull request stays open for inspection"
-          exit 1
+              [ "$i" -lt 20 ] && sleep 90
+            done
+            echo "the dogfood run $what did not finish within the 30 minute window, the check pull request stays open for inspection"
+            return 1
+          }
+          wait_run "$(git rev-parse HEAD)" "on the copies" || exit 1
+          git revert --no-edit HEAD
+          # The checkout persisted the workflow token as a header, which would override the app token.
+          git -c 'http.https://github.com/.extraheader=' push \
+            "https://x-access-token:$APP_TOKEN@github.com/$GITHUB_REPOSITORY.git" "HEAD:dogfood-api-check-$GITHUB_RUN_ID"
+          wait_run "$(git rev-parse HEAD)" "on the revert" || exit 1
 
       - name: Close the check pull request
         if: success()

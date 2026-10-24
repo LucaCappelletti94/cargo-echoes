@@ -16,6 +16,8 @@ jobs:
     name: Dogfood the action on the fixture
     runs-on: ubuntu-latest
     permissions:
+      # Resolving the review threads of copies that are gone needs contents: write.
+      contents: write
       pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,6 +45,27 @@ jobs:
           status="$(cat "$RUNNER_TEMP/echoes-post-status" 2>/dev/null || echo missing)"
           body="$RUNNER_TEMP/echoes-review.md"
           repo="$GITHUB_REPOSITORY"
+          # The scheduled check reverts its copies in a second commit, whose run must resolve
+          # the threads of the first and dismiss its request for changes.
+          if [ -n "$EXPECTED_ROWS" ] && ! gh api "repos/$repo/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' \
+            | grep -qx 'tests/fixtures/apicheck/src/lib.rs'; then
+            case "$status" in
+              skipped-*) ;;
+              *) echo "the reverted check branch adds no copy, so nothing must post, got $status"; exit 1 ;;
+            esac
+            # shellcheck disable=SC2016 # GraphQL variables, not shell ones
+            open_threads="$(gh api graphql -f query='query($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) { pullRequest(number: $number) {
+                  reviewThreads(first: 100) { nodes { isResolved comments(first: 1) { nodes { author { login } } } } } } } }' \
+              -f "owner=${repo%%/*}" -f "name=${repo#*/}" -F "number=$PR_NUMBER" \
+              --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.comments.nodes[0].author.login == "github-actions" and (.isResolved | not))] | length')"
+            [ "$open_threads" = "0" ] || { echo "$open_threads echoes threads stay open after their copies were removed"; exit 1; }
+            requests="$(gh api "repos/$repo/pulls/$PR_NUMBER/reviews" --paginate \
+              --jq '.[] | select(.user.login == "github-actions[bot]" and .state == "CHANGES_REQUESTED") | .id' | wc -l)"
+            [ "$requests" -eq 0 ] || { echo "$requests echoes requests for changes stay after their copies were removed"; exit 1; }
+            echo "the reverted check branch resolved every echoes thread and dismissed every request for changes"
+            exit 0
+          fi
           if [ -n "$EXPECTED_ROWS" ] && [ "$status" != "posted" ]; then
             echo "the check branch adds new copies, so the review must post, got $status"
             exit 1
