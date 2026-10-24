@@ -4,6 +4,14 @@ set -eo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # Each api call checks its own status and writes an outcome file, so a failed
 # call degrades to a skipped review instead of aborting the run.
+# Ends the step with the status $1 and the exit code $2, after printing the rest.
+finish() {
+  local outcome="$1" code="$2"
+  shift 2
+  [ "$#" -eq 0 ] || printf '%s\n' "$@"
+  echo "$outcome" > "$status"
+  exit "$code"
+}
 pr="$PR_NUMBER"
 dry="$DRY_RUN"
 repo="$GITHUB_REPOSITORY"
@@ -70,16 +78,8 @@ changed_files=''
 if [ "$mode" = "post" ]; then
   # The payload comes from a job the pull request controls, so it is data. The
   # pull request is the one the triggering run built, or the job's pr-number.
-  reject() {
-    printf 'echoes: %s, nothing is posted\n' "$(escape_data "$1")"
-    echo "rejected" > "$status"
-    exit 1
-  }
-  stale() {
-    printf 'echoes: %s, nothing is posted\n' "$(escape_data "$1")"
-    echo "skipped-stale" > "$status"
-    exit 0
-  }
+  reject() { finish rejected 1 "echoes: $(escape_data "$1"), nothing is posted"; }
+  stale() { finish skipped-stale 0 "echoes: $(escape_data "$1"), nothing is posted"; }
   for f in meta.json report.json; do
     [ -s "$payload/$f" ] || reject "the prepared review in $payload lacks $f, rerun the prepare job with this version of the action"
   done
@@ -151,9 +151,7 @@ else
     fi
   fi
   if [ -n "$pr" ] && [ -z "$head_sha" ] && [ "$dry" != "true" ]; then
-    echo "echoes: cannot read pull request $pr, the review is not posted"
-    echo "failed" > "$status"
-    exit 1
+    finish failed 1 "echoes: cannot read pull request $pr, the review is not posted"
   fi
   # Blocks followed by an empty line, which a deletion suggestion removes too.
   jq -r '.groups[].sites[] | select(.end != null) | "\(.file)\t\(.end)"' "$report" | sort -u |
@@ -189,10 +187,7 @@ oor_local=0
 if [ "$dry" = "true" ]; then
   # A dry run renders the review as if every scanned site were in
   # the diff, so the step summary shows each comment in full.
-  changed_json="$(jq -r '
-    ([.groups[].sites[].file]
-     + [(.context_groups // [])[] | .sites[].file]
-     + [((.reuse // {}).groups // [])[] | .local.file]) | unique' "$report")"
+  changed_json="$(ejq 'include "echoes"; [report_sites | .s.file] | unique' "$report")"
 elif [ -n "$pr" ] && [ -n "$head_sha" ] && [ -n "$changed_files" ]; then
   changed_json="$(printf '%s\n' "$changed_files" | jq -R . | jq -s .)"
 else
@@ -202,16 +197,12 @@ fi
 # Base site identity, a site exists on the base when the same hash, item and
 # path were already there, and the first base copy is the kept original.
 if [ "$onlynew" = "1" ]; then
-  base_json="$(jq '
-    { keys: ([.groups[] | .hash as $h | .sites[] | "\($h)\t\(.item)\t\(.file)"]
-             + [(.context_groups // [])[] | .hash as $h | .sites[] | "\($h)\t\(.item)\t\(.file)"]
-             + [((.reuse // {}).groups // [])[] | .hash as $h | .local as $l | "\($h)\t\($l.item)\t\($l.file)"]),
-      keep: (reduce .groups[] as $gr ({};
-        .[$gr.hash] = ($gr.sites[0].file + ":" + ($gr.sites[0].line | tostring)))),
-      keep_ctx: (reduce (.context_groups // [])[] as $gr ({};
-        .[$gr.hash] = ($gr.sites[0].file + ":" + ($gr.sites[0].line | tostring)))),
-      keep_end: (reduce .groups[] as $gr ({}; .[$gr.hash] = ($gr.sites[0].end // null))),
-      keep_item: (reduce .groups[] as $gr ({}; .[$gr.hash] = $gr.sites[0].item)) }' "$base_report")"
+  base_json="$(ejq 'include "echoes";
+    { keys: [report_sites | .h as $h | .s | site_key($h)],
+      keep: (first_sites(.groups) | map_values(loc)),
+      keep_ctx: (first_sites(.context_groups // []) | map_values(loc)),
+      keep_end: (first_sites(.groups) | map_values(.end // null)),
+      keep_item: (first_sites(.groups) | map_values(.item)) }' "$base_report")"
 else
   base_json='{"keys": [], "keep": {}, "keep_ctx": {}, "keep_end": {}, "keep_item": {}}'
 fi
@@ -234,11 +225,10 @@ printf '%s' "$base_json" > "$base_file"
 ejq -c --slurpfile changed "$changed_file" --slurpfile base "$base_file" \
   --argjson onlynew_mode "$onlynew_mode" --arg sha "$head_sha" \
   --arg blob "$GITHUB_SERVER_URL/$repo/blob" 'include "echoes";
-  def loc: .file + ":" + (.line | tostring);
   def site_rows($h; $keys):
-    [ .sites[] | [$h, .item, .file] | join("\t") ] as $ks
+    [ .sites[] | site_key($h) ] as $ks
     | [ .sites | to_entries[]
-        | ([$h, .value.item, .value.file] | join("\t")) as $k
+        | (.value | site_key($h)) as $k
         | { c: (.key + 1), s: .value,
             isNew: ((([$ks[: .key][] | select(. == $k)] | length) + 1) > ([$keys[] | select(. == $k)] | length)) } ]
     | (map(select(.isNew)) | length) as $knew
@@ -508,16 +498,13 @@ while IFS= read -r row; do
   [ -n "$scope" ] && comment="$comment"$'\n\n'"$(thread_mark "$key")"
   # One row per comment, so a later job can post it without the
   # source tree it was computed from.
-  if [ "$cls" = "local" ]; then
-    jq -cn --arg path "$p" --argjson start "$line" --argjson stop "$stop" --arg group "$g" \
-      --arg item "$item" --argjson close "$end" --arg key "$key" --arg body "$comment" \
-      '{path: $path, start_line: $start, line: $stop, group: $group, item: $item, close_line: $close, key: $key, body: $body}' \
-      >> "$comments"
-  else
-    jq -cn --arg path "$p" --argjson start "$line" --argjson stop "$stop" \
-      --arg item "$item" --arg kind "$kind" --arg key "$key" --arg body "$comment" \
-      '{path: $path, start_line: $start, line: $stop, item: $item, kind: $kind, key: $key, body: $body}' >> "$reuse_tmp"
-  fi
+  out="$reuse_tmp"
+  [ "$cls" = "local" ] && out="$comments"
+  jq -cn --arg cls "$cls" --arg path "$p" --argjson start "$line" --argjson stop "$stop" --arg group "$g" \
+    --arg item "$item" --arg kind "$kind" --arg close "$end" --arg key "$key" --arg body "$comment" \
+    '{path: $path, start_line: $start, line: $stop}
+     + (if $cls == "local" then {group: $group, item: $item, close_line: ($close | tonumber)} else {item: $item, kind: $kind} end)
+     + {key: $key, body: $body}' >> "$out"
 done < "$rows_file"
 
 if [ "$dry" = "true" ]; then
@@ -565,8 +552,7 @@ if [ "$dry" = "true" ]; then
   sum_append "$(cat "$body")"
   echo "echoes dry run, the review is not posted"
   cat "$body"
-  echo "dry-run" > "$status"
-  exit 0
+  finish dry-run 0
 fi
 
 # Prepare hands the posting job data only, which that job checks and renders
@@ -659,17 +645,15 @@ fi
 if [ ! -s "$comments" ] && [ -z "$out_of_range" ] && [ ! -s "$reuse_tmp" ] && [ "$omitted" -eq 0 ] \
   && { [ "$mode" = "prepare" ] || [ "$local_found" != "1" ]; }; then
   if [ "$found_n" -gt 0 ]; then
-    echo "echoes: every finding of this pull request already has a review thread, nothing new is posted"
-    echo "skipped-existing" > "$status"
+    outcome=skipped-existing message="echoes: every finding of this pull request already has a review thread, nothing new is posted"
   elif [ "$onlynew" = "1" ]; then
-    echo "echoes: no duplicate was introduced by this pull request, the review is not posted"
-    echo "skipped-existing" > "$status"
+    outcome=skipped-existing message="echoes: no duplicate was introduced by this pull request, the review is not posted"
   else
-    echo "echoes: no duplicate is in the pull request diff, the review is not posted"
-    echo "skipped-nodiff" > "$status"
+    outcome=skipped-nodiff message="echoes: no duplicate is in the pull request diff, the review is not posted"
   fi
+  echo "$message"
   [ "$mode" = "prepare" ] || cleanup
-  exit 0
+  finish "$outcome" 0
 fi
 # The reported copies in the run summary, beside the whole scan the
 # scan step wrote there.
@@ -686,9 +670,7 @@ if [ "$omitted" -gt 0 ]; then
   sum_append "$omitted_block"
 fi
 if [ "$mode" = "prepare" ]; then
-  echo "echoes: the review is prepared in $payload for a later job"
-  echo "prepared" > "$status"
-  exit 0
+  finish prepared 0 "echoes: the review is prepared in $payload for a later job"
 fi
 
 readonly_notice() {
@@ -728,22 +710,22 @@ post_one() {
   fi
   return 0
 }
-while IFS= read -r row; do
-  [ -n "$row" ] || continue
-  post_one "$row" || break
-  posted_local=$((posted_local + 1))
-done < "$comments"
-if [ "$readonly" != "1" ] && [ "$rate_limited" != "1" ]; then
+# Posts the rows of file $1 until one fails for good, counting them in the variable named $2.
+post_rows() {
+  local -n posted="$2"
   while IFS= read -r row; do
     [ -n "$row" ] || continue
     post_one "$row" || break
-    posted_reuse=$((posted_reuse + 1))
-  done < "$reuse_tmp"
+    posted=$((posted + 1))
+  done < "$1"
+}
+post_rows "$comments" posted_local
+if [ "$readonly" != "1" ] && [ "$rate_limited" != "1" ]; then
+  post_rows "$reuse_tmp" posted_reuse
 fi
 if [ "$readonly" = "1" ]; then
   readonly_notice
-  echo "skipped-readonly" > "$status"
-  exit 0
+  finish skipped-readonly 0
 fi
 # The rows the rate limit left unposted, listed like the omitted ones.
 if [ "$rate_limited" = "1" ]; then
@@ -803,29 +785,19 @@ fi
 review+=(-f "body=$review_body")
 if ! resp="$(gh api -X POST "repos/$repo/pulls/$pr/reviews" "${review[@]}" 2>&1)"; then
   if rate_limited_error "$resp"; then
-    echo "echoes: the api rate limit was reached, the review was not posted"
-    printf '%s\n' "$resp"
-    echo "failed" > "$status"
-    exit 1
+    finish failed 1 "echoes: the api rate limit was reached, the review was not posted" "$resp"
   fi
   if is_forbidden "$resp"; then
     readonly_notice
-    echo "skipped-readonly" > "$status"
-    exit 0
+    finish skipped-readonly 0
   fi
-  echo "echoes: posting the review failed"
-  printf '%s\n' "$resp"
-  echo "failed" > "$status"
-  exit 1
+  finish failed 1 "echoes: posting the review failed" "$resp"
 fi
 posted_state="$(printf '%s' "$resp" | jq -r '.state' 2>/dev/null)" || posted_state=''
 expected_state='CHANGES_REQUESTED'
 [ "$review_event" = "COMMENT" ] && expected_state='COMMENTED'
 if [ "$posted_state" != "$expected_state" ]; then
-  echo "echoes: the review response is unexpected"
-  printf '%s\n' "$resp"
-  echo "failed" > "$status"
-  exit 1
+  finish failed 1 "echoes: the review response is unexpected" "$resp"
 fi
 if [ -n "$failed_log" ]; then
   echo "echoes: the inline comments failed for the following sites"
