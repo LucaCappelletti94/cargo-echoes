@@ -2673,3 +2673,43 @@ fn s65_post_mode_cleans_up_the_payload_scope() {
         "a rejected payload touches no thread"
     );
 }
+
+#[test]
+fn s66_scan_summary_escapes_report_text() {
+    let forged = "app::x`<b>@org/team";
+    let local = site("src/parser.rs", 3, 6, forged);
+    let rep = report(
+        &[],
+        &[ctx_group(
+            "c1",
+            "C1",
+            &[local.clone(), site("src/mod.rs", 10, 13, forged)],
+        )],
+        Some(&reuse(
+            &[reuse_group(
+                "R1",
+                &local,
+                &[Cand::new("direct", "1.2.3", 1, forged, "reuse-api")
+                    .source_url("javascript:alert(1)")
+                    .build()],
+            )],
+            Some(coverage(true, 1, 1, 0, &[], &[])),
+        )),
+        6,
+        3,
+    );
+    let mut world = World::new("s66")
+        .inputs(&[("pr-number", "7"), ("context-dependency-depth", "2")])
+        .event("pull_request")
+        .json(rep);
+    world.run();
+    let summary = world.runner().summary();
+    assert!(
+        summary.contains("``app::x`<b>@org/team``"),
+        "report items render as code spans in the run summary: {summary}"
+    );
+    assert!(
+        !summary.contains("javascript:"),
+        "a source url that is not https stays out of the run summary"
+    );
+}

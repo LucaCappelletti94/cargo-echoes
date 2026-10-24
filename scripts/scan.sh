@@ -65,49 +65,29 @@ if [ -n "$PR_NUMBER" ] || [ "$DRY_RUN" = "true" ]; then
   fi
   jq --arg prefix "$prefix" -f "$RUNNER_TEMP/echoes-root.jq" "$report.raw" > "$report"
   rm -f "$report.raw"
-  jq -r '. as $r | "\($r.total) doctests, \($r.unique) unique, \($r.functions // 0) functions, \($r.unique_functions // 0) unique functions, \($r.groups | length) duplicated groups"' "$report"
+  ejq -r 'include "echoes"; stats' "$report"
   # The whole scan in the run summary, which needs no token, so a
   # fork pull request has it whatever the review can do.
   sum_append "$(
-    jq -r '"### echoes\n\n\(.total) doctests, \(.unique) unique, \(.functions // 0) functions, \(.unique_functions // 0) unique functions, \(.groups | length) duplicated groups"' "$report"
-    jq -r '
+    ejq -r 'include "echoes"; "### echoes\n\n" + stats' "$report"
+    ejq -r 'include "echoes";
       .groups[] | "\n- group `\(.id)`, \(.kind // "doctest"), \(.sites | length) copies\n"
-        + (.sites | map("  - `" + .file + ":" + (.line | tostring) + "`  " + .item)
-           | join("\n"))' "$report"
+        + ([.sites[] | site_md(""; "")] | join("\n"))' "$report"
   )"
   # Context groups and dependency reuse, grouped by local context with
   # the accessible APIs first, in the same public report.
-  context_summary="$(jq -r '
-    def sp: .file;
-    def site_md: "  - `" + sp + ":" + (.line | tostring) + "`  " + .item;
-    def cand_md:
-      "  - `\(.package) \(.version)`"
-      + (if .depth > 0 then " (depth \(.depth))" else "" end)
-      + (if (.conditions | length) > 0 then " (needs \(.conditions | join(", ")))" else "" end)
-      + (if .action == "reuse-api" then ": the public item `\(.api_path // .site.item)` can be reused"
-         elif .action == "upgrade-api" then ": the public item `\(.api_path // .site.item)` is available in a newer published release"
-         elif .action == "request-extraction" then ": the internal item `\(.site.item)` can be requested for extraction"
-         elif .action == "unresolved" then ": source analysis does not establish accessibility"
-         else ": the reuse path is unresolved" end)
-      + (if .source_url
-         then (if .api_path and .api_path != .site.item then " [source (\(.site.item))](\(.source_url))" else " [source](\(.source_url))" end)
-         else "" end)
-      + (if .existing_issue then " [existing request \(.existing_issue.state)](\(.existing_issue.url))"
-         elif .issue_url then " [request extraction](\(.issue_url))"
-         elif .action == "request-extraction" then " (the upstream repository is not declared, so no issue link is offered)"
-         else "" end)
-      + (if .lookup_warning then "\n    lookup: \(.lookup_warning)" else "" end);
+  context_summary="$(ejq -r 'include "echoes";
     (if (.context_groups | length) > 0
      then "### Context groups\n\n"
           + ([ .context_groups[]
               | "- group `\(.id)`, \(.sites | length) copies\n"
-                + ([ .sites[] | site_md ] | join("\n"))
+                + ([ .sites[] | site_md(""; "") ] | join("\n"))
             ] | join("\n"))
      else "" end)
     + (if ((.reuse // {}) | (.groups // []) | length) > 0
        then "### Dependency reuse\n\n"
             + ([ (.reuse.groups // [])[]
-                | "- local `" + (.local | sp) + ":" + (.local.line | tostring) + "`  " + .local.item + "\n"
+                | "- local " + (.local | site_md(""; "") | ltrimstr("  - ")) + "\n"
                   + ([ .candidates[] | cand_md ] | join("\n"))
               ] | join("\n"))
             + "Dependency coverage: \(.reuse.coverage.packages) packages, \(.reuse.coverage.indexed_files) files indexed, \(.reuse.coverage.cached_files) from cache"

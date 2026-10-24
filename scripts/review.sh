@@ -274,52 +274,13 @@ jq -r --slurpfile changed "$changed_file" --slurpfile base "$base_file" \
      (if .baseitem == "" then "-" else .baseitem end), .selftypes,
      (if .s.public then "1" else "0" end)]
   | map(if . == null then "" else tostring | gsub("[\u001f\r\n]"; " ") end) | join("\u001f")' "$report" > "$inline_file"
-# The code span and link checks for jq programs, the same rules as md_code.
-jq_md='
-  def md_code: (tostring | gsub("[\r\n]"; " ")) as $s
-    | ([$s | scan("`+") | length] | max // 0) as $m
-    | ("`" * ($m + 1)) as $f
-    | (if ($s | test("^`|`$")) then " " + $s + " " else $s end) as $p
-    | $f + $p + $f;
-  def safe_url: if type == "string" and test("^https://[A-Za-z0-9.-]+/[^\\s()<>`\\[\\]]*$") then . else null end;'
 # Neutral reuse and context entries, one row per local site that survives
 # the same changed-file and only-new filters as the local duplicates.
-jq -c --slurpfile changed "$changed_file" --slurpfile base "$base_file" \
+ejq -c --slurpfile changed "$changed_file" --slurpfile base "$base_file" \
   --argjson onlynew_mode "$onlynew_mode" --arg sha "$head_sha" \
-  --arg blob "$GITHUB_SERVER_URL/$repo/blob" "$jq_md"'
+  --arg blob "$GITHUB_SERVER_URL/$repo/blob" 'include "echoes";
+  def site_md: site_md($sha; $blob);
   def spath: .file;
-  def span: (.line | tostring) + (if .end and .end != .line then "-\(.end)" else "" end);
-  def anchor: "#L\(.line)" + (if .end and .end != .line then "-L\(.end)" else "" end);
-  def site_md:
-    ((spath + ":" + span) | md_code) as $text
-    | "  - "
-    + (if ($sha | test("^[0-9a-f]{40}$"))
-       then "[\($text)](\($blob)/\($sha)/\(spath | split("/") | map(@uri) | join("/"))\(anchor))"
-       else $text end)
-    + "  " + (.item | md_code);
-  def site_line: "\(spath):\(.line)  \(.item)";
-  def capped: .[:12] + (if length > 12 then ["and \(length - 12) more"] else [] end) | join("\n");
-  def cand_md:
-    "  - " + ("\(.package) \(.version)" | md_code)
-    + (if (.depth | type) == "number" and .depth > 0 then " (depth \(.depth | floor))" else "" end)
-    + (if ((.conditions // []) | length) > 0 then " (needs " + (.conditions | map(md_code) | join(", ")) + ")" else "" end)
-    + (if .action == "reuse-api" then ": the public item " + ((.api_path // .site.item) | md_code) + " can be reused"
-       elif .action == "upgrade-api" then ": the public item " + ((.api_path // .site.item) | md_code) + " is available in a newer published release"
-       elif .action == "request-extraction" then ": the internal item " + (.site.item | md_code) + " can be requested for extraction"
-       elif .action == "unresolved" then ": source analysis does not establish accessibility"
-       else ": the reuse path is unresolved" end)
-    + ((.source_url | safe_url) as $u
-       | if $u == null then ""
-         elif .api_path and .api_path != .site.item then " [source (" + (.site.item | md_code) + ")](" + $u + ")"
-         else " [source](" + $u + ")" end)
-    + (if .existing_issue then
-         ((.existing_issue.url | safe_url) as $u
-          | ((.existing_issue.state | tostring) | if test("^[a-z]+$") then . else "unknown" end) as $st
-          | if $u then " [existing request \($st)](\($u))" else "" end)
-       elif (.issue_url | safe_url) then " [request extraction](\(.issue_url))"
-       elif .action == "request-extraction" then " (the upstream repository is not declared, so no issue link is offered)"
-       else "" end)
-    + (if .lookup_warning then "\n    lookup: " + (.lookup_warning | md_code) else "" end);
   $changed[0] as $changed
   | $base[0] as $base
   | [ ( (.context_groups // [])
@@ -360,11 +321,7 @@ report_link() {
     "$(uri "$2")"
 }
 group_sites() {
-  jq -r --argjson g "$1" '
-    .groups[$g - 1].sites as $s
-    | [$s[:12][] | "\(.file):\(.line)  \(.item)"]
-      + (if ($s | length) > 12 then ["and \(($s | length) - 12) more"] else [] end)
-    | join("\n")' "$report"
+  ejq -r --argjson g "$1" 'include "echoes"; [.groups[$g - 1].sites[] | site_line] | capped' "$report"
 }
 support_link='[❤️ Support echoes](https://github.com/sponsors/LucaCappelletti94)'
 # The hidden marks that tie a comment to its workspace and finding, and a review to
@@ -372,20 +329,6 @@ support_link='[❤️ Support echoes](https://github.com/sponsors/LucaCappellett
 thread_mark() { printf '<!-- echoes:v1 scope=%s key=%s -->' "$scope_uri" "$1"; }
 review_mark() { printf '<!-- echoes:v1 scope=%s review -->' "$scope_uri"; }
 finding_key() { uri "$1:$2:$3:$4"; }
-# The ownership of a repository path, by its nearest directory holding a manifest,
-# and the finding class a comment posted before the marks opens with.
-jq_own='
-  def depth: if . == "." then 0 else (split("/") | length) end;
-  def under($d): $d == "." or startswith($d + "/");
-  def owned($dirs): . as $p
-    | ([($dirs.owned[] | {d: ., o: true}), ($dirs.foreign[] | {d: ., o: false})]
-       | map(select(.d as $d | $p | under($d))) | max_by(.d | depth)) as $n
-    | ($n != null and $n.o);
-  def legacy_class: if startswith("This context is repeated") then "context"
-    elif startswith("This context matches") then "reuse"
-    elif (startswith("This doctest") or startswith("This function") or startswith("This method repeats")
-          or startswith("This pull request adds")) then "local"
-    else null end;'
 # Every review thread of the pull request, one JSON object per line.
 list_threads() {
   gh api graphql --paginate \
@@ -442,7 +385,7 @@ cleanup() {
       continue
     fi
     n=$((n + 1))
-  done < <(printf '%s\n' "$reviews" | jq -r --slurpfile dirs "$dirs_file" --arg mark "$(review_mark)" --arg keep "$keep" "$jq_own"'
+  done < <(printf '%s\n' "$reviews" | ejq -r --slurpfile dirs "$dirs_file" --arg mark "$(review_mark)" --arg keep "$keep" 'include "echoes";
     select(type == "object" and .user.login == "github-actions[bot]" and .state == "CHANGES_REQUESTED" and (.id | tostring) != $keep)
     | (.body // "") as $b
     | select(($b | contains($mark))
@@ -671,7 +614,7 @@ if [ -s "$reuse_tmp" ]; then
 fi
 
 if [ "$dry" = "true" ]; then
-  stats="$(jq -r '"\(.total) doctests, \(.unique) unique, \(.functions // 0) functions, \(.unique_functions // 0) unique functions, \(.groups | length) duplicated groups"' "$report")"
+  stats="$(ejq -r 'include "echoes"; stats' "$report")"
   groups_block="$(jq -r '
     .groups | to_entries | map(
         "Group \(.key + 1), \(.value.kind // "doctest"), \(.value.sites | length) copies\n\n"
@@ -746,7 +689,7 @@ if [ "$mode" != "prepare" ] && [ -n "$scope" ] && [ -n "$pr" ]; then
   rows_all="$RUNNER_TEMP/echoes-rows.json"
   if list_threads > "$threads_raw" 2>/dev/null; then
     threads_ok=1
-    jq -s --slurpfile dirs "$dirs_file" --arg scope "$scope_uri" "$jq_own"'
+    ejq -s --slurpfile dirs "$dirs_file" --arg scope "$scope_uri" 'include "echoes";
       map(select(type == "object")
         | (.comments.nodes[0] // {}) as $c | ($c.body // "" | tostring) as $b
         | select(($c.author.login // "") == "github-actions")
@@ -787,7 +730,7 @@ local_n="$(wc -l < "$comments")"
 reuse_n="$(wc -l < "$reuse_tmp")"
 total_n=$((local_n + reuse_n))
 unposted_list() {
-  jq -rs "$jq_md"'map("- " + ((.path + ":" + (.start_line | tostring)) | md_code) + "  " + (.item | md_code)
+  ejq -rs 'include "echoes"; map("- " + ((.path + ":" + (.start_line | tostring)) | md_code) + "  " + (.item | md_code)
     + (if .group then " (group " + (.group | tostring) + ")" else " (" + (.kind // "context") + ")" end))
     | join("\n")'
 }

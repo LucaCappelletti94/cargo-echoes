@@ -1,6 +1,11 @@
 # shellcheck shell=bash
 # Helpers shared by the action's step scripts, which source this file.
 
+# The directory of the scripts and of the jq module echoes.jq.
+ECHOES_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# jq with echoes.jq on its module path.
+ejq() { jq -L "$ECHOES_LIB" "$@"; }
+
 # The runner drops step summaries over 1 MiB, so a step keeps its
 # summary writes within a safe total, the truncated tail gets a note.
 sum_append() {
