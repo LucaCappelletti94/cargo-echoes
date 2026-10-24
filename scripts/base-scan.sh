@@ -15,31 +15,9 @@ fi
 printf '%s\n' "$base_sha" > "$RUNNER_TEMP/echoes-base-sha"
 dir="$RUNNER_TEMP/echoes-base"
 [ -n "$CWD" ] && dir="$dir/$CWD"
-set --
-[ "$ALL_TARGETS" = "true" ] && set -- --all-targets "$@"
-[ -n "$PACKAGE" ] && set -- --package "$PACKAGE" "$@"
-[ "$FUNCTIONS" = "true" ] && set -- --functions "$@"
-[ -n "$FN_MIN_TOKENS" ] && set -- --fn-min-tokens "$FN_MIN_TOKENS" "$@"
-[ "$CONTEXT_BLOCKS" = "true" ] && set -- --context-blocks "$@"
-[ -n "$CONTEXT_MIN_TOKENS" ] && set -- --context-min-tokens "$CONTEXT_MIN_TOKENS" "$@"
-[ -n "$CONTEXT_SELECT" ] && set -- --context-select "$CONTEXT_SELECT" "$@"
-[ -n "$CONTEXT_SEARCH" ] && set -- --context-search "$CONTEXT_SEARCH" "$@"
-if [ "$CONTEXT_DEPTH" != "0" ]; then
-  set -- --context-dependency-depth "$CONTEXT_DEPTH" "$@"
-  [ "$CONTEXT_DEV" = "true" ] && set -- --context-dev-dependencies "$@"
-  [ "$CONTEXT_BUILD" = "true" ] && set -- --context-build-dependencies "$@"
-  [ "$CONTEXT_ALL_OPT" = "true" ] && set -- --context-all-optional-dependencies "$@"
-  [ -n "$CONTEXT_FEATURES" ] && set -- --context-features "$CONTEXT_FEATURES" "$@"
-  [ "$CONTEXT_ALL_FEATURES" = "true" ] && set -- --context-all-features "$@"
-  [ "$CONTEXT_NO_DEFAULT" = "true" ] && set -- --context-no-default-features "$@"
-  [ -n "$CONTEXT_TARGET" ] && set -- --context-target "$CONTEXT_TARGET" "$@"
-  [ -n "$CONTEXT_CACHE_DIR" ] && set -- --context-cache-dir "$CONTEXT_CACHE_DIR" "$@"
-  [ "$CONTEXT_CHECK_LATEST" = "false" ] && set -- --context-check-latest false "$@"
-  [ "$CONTEXT_FAIL" = "true" ] && set -- --context-fail-on-reuse "$@"
-fi
-while read -r pattern; do
-  [ -n "$pattern" ] && set -- "$@" --exclude "$pattern"
-done <<< "$EXCLUDE"
+# The head scan's flags, so the base scan sees the code the way the head scan does.
+mapfile -d '' -t flags < "$RUNNER_TEMP/echoes-scan-args"
+set -- "${flags[@]}"
 # Threshold 1 inventories every base site, a group the pull request
 # completes from a single existing copy must still be reported.
 # The base tree has the head's layout, so the head's prefix roots its paths.

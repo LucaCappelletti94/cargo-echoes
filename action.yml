@@ -276,28 +276,7 @@ runs:
         GH_TOKEN: ${{ github.token }}
         PR_NUMBER: ${{ inputs.pr-number }}
         CWD: ${{ inputs.cwd }}
-        ALL_TARGETS: ${{ inputs.all-targets }}
-        PACKAGE: ${{ inputs.package }}
-        THRESHOLD: ${{ inputs.threshold }}
         MIN_TOKENS: ${{ inputs.min-tokens }}
-        FUNCTIONS: ${{ inputs.functions }}
-        FN_MIN_TOKENS: ${{ inputs.fn-min-tokens }}
-        CONTEXT_BLOCKS: ${{ inputs.context-blocks }}
-        CONTEXT_MIN_TOKENS: ${{ inputs.context-min-tokens }}
-        CONTEXT_SELECT: ${{ inputs.context-select }}
-        CONTEXT_SEARCH: ${{ inputs.context-search }}
-        CONTEXT_DEPTH: ${{ inputs.context-dependency-depth }}
-        CONTEXT_DEV: ${{ inputs.context-dev-dependencies }}
-        CONTEXT_BUILD: ${{ inputs.context-build-dependencies }}
-        CONTEXT_ALL_OPT: ${{ inputs.context-all-optional-dependencies }}
-        CONTEXT_FEATURES: ${{ inputs.context-features }}
-        CONTEXT_ALL_FEATURES: ${{ inputs.context-all-features }}
-        CONTEXT_NO_DEFAULT: ${{ inputs.context-no-default-features }}
-        CONTEXT_TARGET: ${{ inputs.context-target }}
-        CONTEXT_CACHE_DIR: ${{ steps.cache-dir.outputs.dir }}
-        CONTEXT_CHECK_LATEST: ${{ inputs.context-check-latest }}
-        CONTEXT_FAIL: ${{ inputs.context-fail-on-reuse }}
-        EXCLUDE: ${{ inputs.exclude }}
       run: bash "$GITHUB_ACTION_PATH/scripts/base-scan.sh"
 
     - name: Review the findings on the pull request

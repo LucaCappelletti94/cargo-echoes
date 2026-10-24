@@ -272,10 +272,6 @@ fn s04_pr_local_onlynew() {
         "the base scan inventories every site"
     );
     assert!(
-        !base_args.iter().any(|a| a == "--context-dependency-depth"),
-        "the base scan inherits no dependency depth"
-    );
-    assert!(
         r.summary().contains("Copies to remove"),
         "the summary lists the copies to remove"
     );
@@ -2711,5 +2707,44 @@ fn s66_scan_summary_escapes_report_text() {
     assert!(
         !summary.contains("javascript:"),
         "a source url that is not https stays out of the run summary"
+    );
+}
+
+#[test]
+fn s67_base_scan_takes_the_head_scan_flags() {
+    let mut world = World::new("s67")
+        .inputs(&[
+            ("pr-number", "7"),
+            ("functions", "true"),
+            ("all-targets", "true"),
+            ("context-blocks", "true"),
+            ("context-dependency-depth", "2"),
+            ("context-dev-dependencies", "true"),
+            ("exclude", "benches/**\nsrc/gen.rs"),
+        ])
+        .event("pull_request")
+        .git()
+        .json(report(&[], &[], None, 6, 3))
+        .base_json(report(&[], &[], None, 1, 1));
+    world.run();
+    let r = world.runner();
+    let without_threshold = |args: Vec<String>| {
+        let at = args
+            .iter()
+            .position(|a| a == "--threshold")
+            .expect("a threshold");
+        let mut rest = args;
+        rest.drain(at..at + 2);
+        rest
+    };
+    let head = without_threshold(r.scan_args(0));
+    assert!(
+        head.iter().any(|a| a == "--context-dependency-depth"),
+        "the head scan searches dependencies: {head:?}"
+    );
+    assert_eq!(
+        without_threshold(r.scan_args(1)),
+        head,
+        "the base scan passes the head scan's flags, only the threshold differs"
     );
 }

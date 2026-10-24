@@ -51,6 +51,9 @@ fi
 while read -r pattern; do
   [ -n "$pattern" ] && set -- "$@" --exclude "$pattern"
 done <<< "$EXCLUDE"
+# The base scan reads the same flags, so it sees the code the way this scan does.
+: > "$RUNNER_TEMP/echoes-scan-args"
+[ "$#" -eq 0 ] || printf '%s\0' "$@" > "$RUNNER_TEMP/echoes-scan-args"
 set -- "$@" "${selection[@]}"
 if [ -n "$PR_NUMBER" ] || [ "$DRY_RUN" = "true" ]; then
   report="$RUNNER_TEMP/echoes-report.json"
