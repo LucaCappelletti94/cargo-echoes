@@ -227,8 +227,8 @@ jobs:
           body="$RUNNER_TEMP/echoes-review.md"
           removable=0
           declare -A shared=()
-          while IFS=$'\x1f' read -r p line _ _ c _ _ _ _ _ end _ _ kind remedy _ _ _ public; do
-            [ "$c" != "1" ] || continue
+          # One row per copy the review comments on, kept copies are already left out.
+          while IFS=$'\x1f' read -r p line end kind remedy public; do
             [ "$kind" = "function" ] || { echo "$p:$line is a $kind, the fixture holds functions only"; exit 1; }
             [ "$remedy" = "delete" ] && [ "$public" = "1" ] && remedy=public
             if [ "$remedy" != "delete" ]; then
@@ -244,7 +244,8 @@ jobs:
             esac
             [ "$last" = "}" ] || { echo "the suggestion on $p:$line-$end does not end on the closing brace: $last"; exit 1; }
             echo "verified $p:$line-$end deletes exactly one function"
-          done < "$RUNNER_TEMP/echoes-inline.tsv"
+          done < <(jq -r '[.path, .line, (.end // ""), .kind, (.remedy // ""), (if .s.public then 1 else 0 end)]
+            | map(tostring) | join("\u001f")' "$RUNNER_TEMP/echoes-rows.ndjson")
           [ "$removable" = "3" ] || { echo "expected 3 removable copies, got $removable"; exit 1; }
           [ "${shared[public]:-0}" = "2" ] || { echo "expected 2 public copies, got ${shared[public]:-0}"; exit 1; }
           for remedy in generic-or-macro helper-or-macro merge-cfg; do
