@@ -2781,3 +2781,39 @@ fn s68_a_second_copy_of_a_base_context_counts_as_added() {
         "the comment lands on the added copy"
     );
 }
+
+#[test]
+fn s69_annotation_names_the_group_first_copy_outside_only_new() {
+    let mut world = World::new("s69")
+        .inputs(&[("pr-number", "7"), ("only-new", "false")])
+        .event("pull_request")
+        .git()
+        .json(report(
+            &[group(
+                "g1",
+                "H1",
+                &[
+                    doc_site("src/lib.rs", 3, 5, "app::parse"),
+                    doc_site("src/dup.rs", 3, 5, "app::parse"),
+                ],
+            )],
+            &[],
+            None,
+            6,
+            3,
+        ))
+        .changed(&["src/dup.rs"]);
+    assert_eq!(world.run(), 0, "the review run exits 0");
+    let out = world
+        .runner()
+        .step_stdout("Review the findings on the pull request")
+        .unwrap_or_default();
+    let note = out
+        .lines()
+        .find(|l| l.starts_with("::error file=src/dup.rs"))
+        .unwrap_or_default();
+    assert!(
+        note.contains("duplicates the doctest at src/lib.rs:3"),
+        "the copy's annotation points at the group's first copy, not at itself: {note}"
+    );
+}
