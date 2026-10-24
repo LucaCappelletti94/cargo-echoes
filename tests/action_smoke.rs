@@ -2748,3 +2748,36 @@ fn s67_base_scan_takes_the_head_scan_flags() {
         "the base scan passes the head scan's flags, only the threshold differs"
     );
 }
+
+#[test]
+fn s68_a_second_copy_of_a_base_context_counts_as_added() {
+    let old = site("src/parser.rs", 3, 6, "app::parser::selected");
+    let added = site("src/parser.rs", 12, 15, "app::parser::selected");
+    let mut world = World::new("s68")
+        .inputs(&[("pr-number", "7"), ("context-select", "crate:app")])
+        .event("pull_request")
+        .git()
+        .json(report(
+            &[],
+            &[ctx_group("c1", "C1", &[old.clone(), added])],
+            None,
+            6,
+            3,
+        ))
+        .base_json(report(&[], &[ctx_group("c1", "C1", &[old])], None, 6, 3))
+        .changed(&["src/parser.rs"]);
+    assert_eq!(world.run(), 0, "the review run exits 0");
+    let posts = world.runner().comment_posts();
+    assert_eq!(
+        posts.len(),
+        1,
+        "the copy beyond the base's one is added by the pull request"
+    );
+    assert_eq!(
+        posts[0]
+            .pointer("/params/start_line")
+            .and_then(Value::as_str),
+        Some("12"),
+        "the comment lands on the added copy"
+    );
+}

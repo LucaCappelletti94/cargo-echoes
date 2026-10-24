@@ -11,7 +11,6 @@ report="$RUNNER_TEMP/echoes-report.json"
 base_report="$RUNNER_TEMP/echoes-base-report.json"
 body="$RUNNER_TEMP/echoes-review.md"
 status="$RUNNER_TEMP/echoes-post-status"
-inline_file="$RUNNER_TEMP/echoes-inline.tsv"
 mode="$MODE"
 payload="${PAYLOAD:-$RUNNER_TEMP/echoes-payload}"
 comments="$RUNNER_TEMP/echoes-comments.ndjson"
@@ -217,99 +216,70 @@ else
   base_json='{"keys": [], "keep": {}, "keep_ctx": {}, "keep_end": {}, "keep_item": {}}'
 fi
 
-# Sites to comment on. In only-new mode a site must be introduced by this
-# pull request, a new hash, item or path relative to the base report. A
-# site is inline when its file is in the pull request diff.
+# Sites to comment on, one JSON row per site of every kind. In only-new mode a site
+# must be introduced by this pull request, which holds more head copies of its hash,
+# item and path, up to and including this one, than the base holds. A site is inline
+# when its file is in the pull request diff. The kept copy of a group stays silent,
+# its first site, or in only-new mode the first added site when the base lacks the
+# group. A reuse finding is advice on its one local site, which always speaks.
 onlynew_mode=false
 [ "$onlynew" = "1" ] && onlynew_mode=true
 # One command line argument holds at most 128 KiB, a large pull request's
 # file list exceeds it, so jq reads both lists from files.
 changed_file="$RUNNER_TEMP/echoes-changed.json"
 base_file="$RUNNER_TEMP/echoes-base-keys.json"
+rows_file="$RUNNER_TEMP/echoes-rows.ndjson"
 printf '%s' "$changed_json" > "$changed_file"
 printf '%s' "$base_json" > "$base_file"
-jq -r --slurpfile changed "$changed_file" --slurpfile base "$base_file" \
-  --argjson onlynew_mode "$onlynew_mode" '
-  $changed[0] as $changed
-  | $base[0] as $base
-  | . as $r
-  | [ range(0; ($r.groups | length)) as $gi
-      | $r.groups[$gi]
-      | ($gi + 1) as $g
-      | (.sites | length) as $n
-      | .hash as $h
-      | (.sites[0].file + ":" + (.sites[0].line | tostring)) as $first
-      | (.sites[0].end // null) as $fend
-      | (.kind // "doctest") as $kind
-      | ([.sites[].self_type] as $t | ($t[0]) as $f | ($t[1:] | map(. != $f) | any)) as $spans
-      # A binary older than 0.4.1 sends no remedy, its rule only told types apart.
-      | (if $kind == "function" then (.remedy // (if $spans then "generic-or-macro" else "delete" end)) else "delete" end) as $remedy
-      | (reduce (.sites[] | (.self_type // "free function")) as $t ([]; if index($t) == null then . + [$t] else . end) | join(", ")) as $selftypes
-      | (.sites[0].item) as $firstitem
-      | ($base.keep[$h] // "") as $basekeep
-      | ($base.keep_item[$h] // "") as $baseitem
-      | ([ .sites[] | ([$h, .item, .file] | join("\t")) ]) as $ks
-      | [ .sites | to_entries[]
-          | (([$h, .value.item, .value.file] | join("\t")) as $k
-             | (([ $ks[: .key ][] | select(. == $k) ] | length) + 1) as $idx
-             | ([ $base.keys[] | select(. == $k) ] | length) as $bcount
-             | { g: $g, c: (.key + 1), n: $n, first: $first, fend: $fend, s: .value,
-                 p: .value.file,
-                 isNew: ($idx > $bcount),
-                 basekeep: $basekeep, bend: ($base.keep_end[$h] // null),
-                 kind: $kind, remedy: $remedy, selftypes: $selftypes, firstitem: $firstitem,
-                 baseitem: $baseitem }) ] as $rows
-      | ($rows | map(select(.isNew)) | length) as $knew
-      | $rows[] | . + { knew: $knew }
-  ]
-  | .[]
-  | . as $row
-  | select(($changed | index($row.p)) != null)
-  | select(if $onlynew_mode then $row.isNew else true end)
-  | [$row.p, (.s.line | tostring), .s.item, (.g | tostring), (.c | tostring),
-     (.n | tostring), .first, (if .isNew then "1" else "0" end),
-     (if .basekeep == "" then "-" else .basekeep end), (.knew | tostring),
-     (.s.end // "-" | tostring), (.fend // "-" | tostring), (.bend // "-" | tostring),
-     .kind, .remedy, .firstitem,
-     (if .baseitem == "" then "-" else .baseitem end), .selftypes,
-     (if .s.public then "1" else "0" end)]
-  | map(if . == null then "" else tostring | gsub("[\u001f\r\n]"; " ") end) | join("\u001f")' "$report" > "$inline_file"
-# Neutral reuse and context entries, one row per local site that survives
-# the same changed-file and only-new filters as the local duplicates.
 ejq -c --slurpfile changed "$changed_file" --slurpfile base "$base_file" \
   --argjson onlynew_mode "$onlynew_mode" --arg sha "$head_sha" \
   --arg blob "$GITHUB_SERVER_URL/$repo/blob" 'include "echoes";
-  def site_md: site_md($sha; $blob);
-  def spath: .file;
+  def loc: .file + ":" + (.line | tostring);
+  def site_rows($h; $keys):
+    [ .sites[] | [$h, .item, .file] | join("\t") ] as $ks
+    | [ .sites | to_entries[]
+        | ([$h, .value.item, .value.file] | join("\t")) as $k
+        | { c: (.key + 1), s: .value,
+            isNew: ((([$ks[: .key][] | select(. == $k)] | length) + 1) > ([$keys[] | select(. == $k)] | length)) } ]
+    | (map(select(.isNew)) | length) as $knew
+    | map(. + {knew: $knew});
+  def group_fields: {n: (.sites | length), first: (.sites[0] | loc), fend: (.sites[0].end // null)};
   $changed[0] as $changed
   | $base[0] as $base
-  | [ ( (.context_groups // [])
-        | .[] as $gr
-        | ($base.keep_ctx[$gr.hash] // "") as $basekeep
-        | ($gr.sites | length) as $n
-        | range(0; $n) as $i
-            | (if $i == 0 and (($basekeep == "") or ($onlynew_mode | not)) then empty else $gr.sites[$i] end) as $s
-            | ($gr.hash + "\t" + $s.item + "\t" + ($s | spath)) as $k
-            | { path: ($s | spath), line: $s.line, end: $s.end, item: $s.item,
-                kind: "context", hash: $gr.hash, label: "context group \($gr.hash[:8])",
-                isNew: (([ $base.keys[] | select(. == $k) ] | length) == 0),
-                others: ([ $gr.sites | to_entries[] | select(.key != $i) | .value | site_md ]),
-                sites: ([ $gr.sites[] | site_line ] | capped) }
-      )
-      , ( ((.reuse // {}).groups // [])
-          | .[] as $gr
-          | $gr.local as $l
-          | ($gr.hash + "\t" + $l.item + "\t" + ($l | spath)) as $k
-          | { path: ($l | spath), line: $l.line, end: $l.end, item: $l.item,
-              kind: "reuse", hash: $gr.hash, label: "reuse group \($gr.hash[:8])",
-              isNew: (([ $base.keys[] | select(. == $k) ] | length) == 0),
-              candidates_md: ([ $gr.candidates[] | cand_md ] | join("\n")),
-              sites: ([ ($l | site_line) ] + [ $gr.candidates[] | "\(.package) \(.version)  \(.site.item)" ] | capped) } )
+  | [ ( range(0; (.groups | length)) as $gi | .groups[$gi]
+        | (.kind // "doctest") as $kind
+        | ([.sites[].self_type] as $t | ($t[0]) as $f | ($t[1:] | map(. != $f) | any)) as $spans
+        # A binary older than 0.4.1 sends no remedy, its rule only told types apart.
+        | (if $kind == "function" then (.remedy // (if $spans then "generic-or-macro" else "delete" end)) else "delete" end) as $remedy
+        | (group_fields + { cls: "local", kind: $kind, g: ($gi + 1), hash, remedy: $remedy,
+            selftypes: (reduce (.sites[] | (.self_type // "free function")) as $t ([]; if index($t) == null then . + [$t] else . end) | join(", ")),
+            firstitem: .sites[0].item, basekeep: ($base.keep[.hash] // ""), baseitem: ($base.keep_item[.hash] // ""),
+            bend: ($base.keep_end[.hash] // null), label: "group \($gi + 1)", issue_sites: ([.sites[] | site_line] | capped) }) as $group
+        | site_rows(.hash; $base.keys)[] | $group + . )
+    , ( (.context_groups // [])[] as $gr
+        | (($gr | group_fields) + { cls: "context", kind: "context", hash: $gr.hash, basekeep: ($base.keep_ctx[$gr.hash] // ""),
+            label: "context group \($gr.hash[:8])", issue_sites: ([$gr.sites[] | site_line] | capped) }) as $group
+        | $gr | site_rows($gr.hash; $base.keys)[]
+        | . as $row
+        | $group + . + {others: [$gr.sites | to_entries[] | select(.key != $row.c - 1) | .value | site_md($sha; $blob)]} )
+    , ( ((.reuse // {}).groups // [])[] as $gr
+        | (({sites: [$gr.local]} | group_fields) + { cls: "reuse", kind: "reuse", hash: $gr.hash, basekeep: "",
+            label: "reuse group \($gr.hash[:8])",
+            issue_sites: ([($gr.local | site_line)] + [$gr.candidates[] | "\(.package) \(.version)  \(.site.item)"] | capped),
+            candidates_md: ([$gr.candidates[] | cand_md] | join("\n")) }) as $group
+        | {sites: [$gr.local]} | site_rows($gr.hash; $base.keys)[] | $group + . )
     ]
-  | map(. as $e | select(($changed | index($e.path)) != null))
-  | map(select(if $onlynew_mode then .isNew else true end))
-  | .[]
-' "$report" > "$reuse_tmp"
+  | map(. as $r | select(($changed | index($r.s.file)) != null) | select(if $onlynew_mode then .isNew else true end))
+  | . as $rows
+  | (reduce range(0; length) as $i ({}; ($rows[$i] | "\(.cls)\t\(.hash)") as $gk | if has($gk) then . else .[$gk] = $i end)) as $firsts
+  | range(0; length) as $i
+  | $rows[$i] | $firsts["\(.cls)\t\(.hash)"] as $fi
+  | . + (if $onlynew_mode
+         then {removable: (.cls == "reuse" or .basekeep != "" or $fi != $i), keepat: ($rows[$fi].s | loc), keepat_end: ($rows[$fi].s.end // null)}
+         else {removable: (.cls == "reuse" or .c != 1), keepat: .first, keepat_end: .fend} end)
+  | select(.removable)
+  | . + {path: .s.file, line: .s.line, end: (.s.end // null), item: .s.item, key: ("\(.kind):\(.hash):\(.s.file):\(.s.item)" | @uri)}
+' "$report" > "$rows_file"
 
 # The inline posts, live mode only. The first post is the permission probe.
 # Each comment links to a prefilled wrong-review issue naming its label and sites.
@@ -320,15 +290,11 @@ report_link() {
     "$(uri "$GITHUB_SERVER_URL/$repo/pull/$pr")" \
     "$(uri "$2")"
 }
-group_sites() {
-  ejq -r --argjson g "$1" 'include "echoes"; [.groups[$g - 1].sites[] | site_line] | capped' "$report"
-}
 support_link='[❤️ Support echoes](https://github.com/sponsors/LucaCappelletti94)'
 # The hidden marks that tie a comment to its workspace and finding, and a review to
 # its workspace, so a later head finds what this run posted.
 thread_mark() { printf '<!-- echoes:v1 scope=%s key=%s -->' "$scope_uri" "$1"; }
 review_mark() { printf '<!-- echoes:v1 scope=%s review -->' "$scope_uri"; }
-finding_key() { uri "$1:$2:$3:$4"; }
 # Every review thread of the pull request, one JSON object per line.
 list_threads() {
   gh api graphql --paginate \
@@ -401,48 +367,21 @@ cleanup() {
   return 0
 }
 rendered=''
+reuse_rendered=''
 findings=''
 findings_span=0
-# One pass builds every comment, live posts them, the dry run renders them.
-# The end line of each block comes from the report, `-` when the crate has
-# none, a block spanning an include or an escaped literal, or an older binary.
-# Fields are split on the unit separator, which read never merges the way it
-# merges runs of tabs, so an empty field cannot shift the ones after it.
-declare -A seen_first=() seen_first_end=()
-while IFS=$'\x1f' read -r p line item g c n first new basekeep knew end fend bend kind remedy firstitem baseitem selftypes public; do
-  [ -n "$p" ] || continue
+: > "$reuse_tmp"
+echoes_link='[echoes](https://github.com/LucaCappelletti94/cargo-echoes)'
+# The local note of a doctest or function copy, its preview and its suggestion,
+# appended to $comment. Returns 1 when the copy has no end line, a block spanning
+# an include or an escaped literal or an older binary, which only the review body lists.
+local_comment() {
   # A public copy that already shipped is called or deprecated, deleting it breaks callers.
   if [ "$remedy" = "delete" ] && [ "$kind" = "function" ] && [ "$public" = "1" ] && [ "$onlynew" != "1" ]; then
     remedy=public
   fi
-  site="$p:$line"
-  [ "$basekeep" = "-" ] && basekeep=''
-  [ "$end" = "-" ] && end=''
-  [ "$fend" = "-" ] && fend=''
-  [ "$bend" = "-" ] && bend=''
-  [ "$baseitem" = "-" ] && baseitem=''
   kept_item="$firstitem"
   [ -n "$baseitem" ] && kept_item="$baseitem"
-  if [ "$new" = "1" ] && [ -z "${seen_first[$g]:-}" ]; then
-    seen_first[$g]="$site"
-    seen_first_end[$g]="$end"
-  fi
-  if [ "$onlynew" = "1" ]; then
-    if [ -n "$basekeep" ] || [ "$site" != "${seen_first[$g]}" ]; then removable=1; else removable=0; fi
-  elif [ "$c" != "1" ]; then
-    removable=1
-  else
-    removable=0
-  fi
-  keepat="$first"
-  keepat_end="$fend"
-  if [ "$new" = "1" ]; then
-    keepat="${seen_first[$g]:-$first}"
-    keepat_end="${seen_first_end[$g]:-$fend}"
-  fi
-  # Comments only land on copies the author should act on, a kept
-  # copy stays silent.
-  [ "$removable" = "1" ] || continue
   # The annotation carries the same finding without a token, so a
   # fork pull request shows it anchored in the diff. The post job's run
   # is not the pull request's, so it annotates nothing.
@@ -475,58 +414,29 @@ while IFS=$'\x1f' read -r p line item g c n first new basekeep knew end fend ben
       findings="$findings- $(md_code "$p:$line")  $(md_code "$item"), duplicates $(md_code "$keep")"$'\n'
     fi
   fi
-  close_line="$end"
-  if [ -z "$close_line" ]; then
+  if [ -z "$end" ]; then
     out_of_range="$out_of_range- group $g  $(blob_link "$head_sha" "$p" "$line")  $(md_code "$item")"$'\n'
     oor_local=1
-    continue
+    return 1
   fi
   # The suggestion deletes the block plus the empty line right after
   # it, which would become a stray once the copy is gone.
-  delete_end="$close_line"
-  if [ "$remedy" = "delete" ]; then
-    if grep -Fxq -- "$p:$close_line" "$blank_file" 2>/dev/null; then
-      delete_end="$(awk -v l="$close_line" 'BEGIN { print l + 1 }')"
-    fi
+  stop="$end"
+  if [ "$remedy" = "delete" ] && grep -Fxq -- "$p:$end" "$blank_file" 2>/dev/null; then
+    stop="$(awk -v l="$end" 'BEGIN { print l + 1 }')"
   fi
-  url=''
-  loc=''
-  pv_s=''
-  pv_e=''
+  # The kept copy, on the base when the base already had the group.
+  kept_sha="$head_sha" kept="$keepat" kept_end="$keepat_end"
   if [ "$onlynew" = "1" ] && [ -n "$basekeep" ]; then
-    bp="${basekeep%:*}"
-    bl="${basekeep##*:}"
-    ce="$bend"
-    url="$(blob_url "$base_sha" "$bp" "$bl" "$ce")"
-    pv_s="$bl"
-    pv_e="$ce"
-    loc="$(loc_md "$(loc_text "$bp" "$bl" "$ce")" "$url")"
-  elif [ "$onlynew" = "1" ]; then
-    kp="${keepat%:*}"
-    kl="${keepat##*:}"
-    ce="$keepat_end"
-    url="$(blob_url "$head_sha" "$kp" "$kl" "$ce")"
-    pv_s="$kl"
-    pv_e="$ce"
-    loc="$(loc_md "$(loc_text "$kp" "$kl" "$ce")" "$url")"
-  else
-    fp="${first%:*}"
-    fl="${first##*:}"
-    ce="$fend"
-    url="$(blob_url "$head_sha" "$fp" "$fl" "$ce")"
-    pv_s="$fl"
-    pv_e="$ce"
-    loc="$(loc_md "$(loc_text "$fp" "$fl" "$ce")" "$url")"
+    kept_sha="$base_sha" kept="$basekeep" kept_end="$bend"
   fi
-  echoes_link='[echoes](https://github.com/LucaCappelletti94/cargo-echoes)'
+  kept_line="${kept##*:}"
+  url="$(blob_url "$kept_sha" "${kept%:*}" "$kept_line" "$kept_end")"
+  loc="$(loc_md "$(loc_text "${kept%:*}" "$kept_line" "$kept_end")" "$url")"
+  preview='the duplicated doctest'
   if [ "$kind" = "function" ]; then
-    if [ "$remedy" != "delete" ]; then
-      preview='the repeated function'
-    else
-      preview='the duplicated function'
-    fi
-  else
-    preview='the duplicated doctest'
+    preview='the duplicated function'
+    [ "$remedy" != "delete" ] && preview='the repeated function'
   fi
   kept_md="$(md_code "$kept_item")"
   if [ "$remedy" = "generic-or-macro" ]; then
@@ -546,72 +456,69 @@ while IFS=$'\x1f' read -r p line item g c n first new basekeep knew end fend ben
       note="This function appears $n times in this module, this is copy $c. $echoes_link suggests keeping the first copy at $loc and deleting this one, or updating it if it was meant to differ."
     fi
   elif [ "$onlynew" = "1" ] && [ -n "$basekeep" ]; then
-    note="This doctest was added by this pull request and duplicates a copy that already exists at $loc, [echoes](https://github.com/LucaCappelletti94/cargo-echoes) suggests removing the added copy."
+    note="This doctest was added by this pull request and duplicates a copy that already exists at $loc, $echoes_link suggests removing the added copy."
   elif [ "$onlynew" = "1" ]; then
-    note="This pull request adds $knew copies of the same doctest, [echoes](https://github.com/LucaCappelletti94/cargo-echoes) suggests keeping the first added copy at $loc and removing this one."
+    note="This pull request adds $knew copies of the same doctest, $echoes_link suggests keeping the first added copy at $loc and removing this one."
   else
-    note="This doctest appears $n times in this scan, this is copy $c. [echoes](https://github.com/LucaCappelletti94/cargo-echoes) suggests keeping the first copy at $loc and removing this one."
+    note="This doctest appears $n times in this scan, this is copy $c. $echoes_link suggests keeping the first copy at $loc and removing this one."
   fi
   comment="$note"
-  [ -n "$url" ] && comment="$comment"$'\n\n'"$(preview_of "$url" "$pv_s" "$pv_e" "$preview")"
+  [ -n "$url" ] && comment="$comment"$'\n\n'"$(preview_of "$url" "$kept_line" "$kept_end" "$preview")"
   if [ "$remedy" = "delete" ]; then
     comment="$comment"$'\n\n```suggestion\n```'
   fi
-  comment="$comment"$'\n\n'"$(report_link "group $g" "$(group_sites "$g")") $support_link"
+  return 0
+}
+# The neutral note of a context or a reuse finding, approximate and upstream
+# matches stay advice, so it carries no removal suggestion.
+advice_comment() {
+  if [ "$kind" = "context" ]; then
+    note="This context is repeated in this scan. A shared helper can carry it once. The other copies are at"
+    [ -n "$others" ] && note="$note"$'\n'"$others"
+  else
+    note="This context matches an upstream dependency context. The accessible APIs are listed first"
+    note="$note"$'\n'"$candidates_md"
+  fi
+  note="$note"$'\n\n'"Type compatibility and behavior equivalence need human review."
+  stop="$end"
+  url="$(blob_url "$head_sha" "$p" "$line" "$end")"
+  comment="$note"
+  [ -n "$url" ] && comment="$comment"$'\n\n'"$(preview_of "$url" "$line" "$end" "the local context")"
+  return 0
+}
+# One pass builds every comment, live posts them, the dry run renders them. Every
+# comment ends with the same footer, and the local ones are posted first. Each row's
+# fields are read in one jq call, shell-quoted by @sh, into these variables.
+cls='' kind='' p='' line='' end='' item='' c='' n='' g='' basekeep='' baseitem='' bend='' knew=''
+remedy='' firstitem='' selftypes='' public='' keepat='' keepat_end='' label='' issue_sites='' key=''
+others='' candidates_md=''
+while IFS= read -r row; do
+  [ -n "$row" ] || continue
+  eval "$(printf '%s' "$row" | jq -r '@sh "cls=\(.cls) kind=\(.kind) p=\(.path) line=\(.line) end=\(.end // "") item=\(.item) c=\(.c) n=\(.n) g=\(.g // "") basekeep=\(.basekeep) baseitem=\(.baseitem // "") bend=\(.bend // "") knew=\(.knew) remedy=\(.remedy // "") firstitem=\(.firstitem // "") selftypes=\(.selftypes // "") public=\(if .s.public then 1 else 0 end) keepat=\(.keepat) keepat_end=\(.keepat_end // "") label=\(.label) issue_sites=\(.issue_sites) key=\(.key) others=\(.others // [] | join("\n")) candidates_md=\(.candidates_md // "")"')"
+  if [ "$cls" = "local" ]; then
+    local_comment || continue
+  else
+    advice_comment
+  fi
+  comment="$comment"$'\n\n'"$(report_link "$label" "$issue_sites") $support_link"
   if [ "$dry" = "true" ]; then
-    rendered+="$comment"$'\n\n'
+    if [ "$cls" = "local" ]; then rendered+="$comment"$'\n\n'; else reuse_rendered+="$comment"$'\n\n'; fi
     continue
   fi
+  [ -n "$scope" ] && comment="$comment"$'\n\n'"$(thread_mark "$key")"
   # One row per comment, so a later job can post it without the
   # source tree it was computed from.
-  key="$(finding_key "$kind" "$(jq -r --argjson g "$g" '.groups[$g - 1].hash' "$report")" "$p" "$item")"
-  [ -n "$scope" ] && comment="$comment"$'\n\n'"$(thread_mark "$key")"
-  jq -cn --arg path "$p" --arg start "$line" --arg stop "$delete_end" \
-    --arg group "$g" --arg item "$item" --arg close "$close_line" --arg key "$key" --arg body "$comment" \
-    '{path: $path, start_line: ($start | tonumber), line: ($stop | tonumber),
-      group: $group, item: $item, close_line: ($close | tonumber), key: $key, body: $body}' \
-    >> "$comments"
-done < "$inline_file"
-# The neutral reuse and context entries, the local comment minus the
-# removal suggestion, so approximate and upstream matches stay advice.
-reuse_rendered=''
-if [ -s "$reuse_tmp" ]; then
-  reuse_built="$RUNNER_TEMP/echoes-reuse-built.ndjson"
-  : > "$reuse_built"
-  while IFS= read -r row; do
-    [ -n "$row" ] || continue
-    p="$(printf '%s' "$row" | jq -r '.path')"
-    line="$(printf '%s' "$row" | jq -r '.line')"
-    end="$(printf '%s' "$row" | jq -r '.end')"
-    item="$(printf '%s' "$row" | jq -r '.item')"
-    kind="$(printf '%s' "$row" | jq -r '.kind')"
-    others="$(printf '%s' "$row" | jq -r '.others // [] | join("\n")')"
-    candidates_md="$(printf '%s' "$row" | jq -r '.candidates_md // empty')"
-    if [ "$kind" = "context" ]; then
-      note="This context is repeated in this scan. A shared helper can carry it once. The other copies are at"
-      [ -n "$others" ] && note="$note"$'\n'"$others"
-    else
-      note="This context matches an upstream dependency context. The accessible APIs are listed first"
-      note="$note"$'\n'"$candidates_md"
-    fi
-    note="$note"$'\n\n'"Type compatibility and behavior equivalence need human review."
-    r_url="$(blob_url "$head_sha" "$p" "$line" "$end")"
-    comment="$note"
-    [ -n "$r_url" ] && comment="$comment"$'\n\n'"$(preview_of "$r_url" "$line" "$end" "the local context")"
-    comment="$comment"$'\n\n'"$(report_link "$(printf '%s' "$row" | jq -r '.label')" "$(printf '%s' "$row" | jq -r '.sites')") $support_link"
-    if [ "$dry" = "true" ]; then
-      reuse_rendered+="$comment"$'\n\n'
-      continue
-    fi
-    key="$(finding_key "$kind" "$(printf '%s' "$row" | jq -r '.hash')" "$p" "$item")"
-    [ -n "$scope" ] && comment="$comment"$'\n\n'"$(thread_mark "$key")"
-    jq -cn --arg path "$p" --arg start "$line" --arg stop "$end" \
+  if [ "$cls" = "local" ]; then
+    jq -cn --arg path "$p" --argjson start "$line" --argjson stop "$stop" --arg group "$g" \
+      --arg item "$item" --argjson close "$end" --arg key "$key" --arg body "$comment" \
+      '{path: $path, start_line: $start, line: $stop, group: $group, item: $item, close_line: $close, key: $key, body: $body}' \
+      >> "$comments"
+  else
+    jq -cn --arg path "$p" --argjson start "$line" --argjson stop "$stop" \
       --arg item "$item" --arg kind "$kind" --arg key "$key" --arg body "$comment" \
-      '{path: $path, start_line: ($start | tonumber), line: ($stop | tonumber),
-        item: $item, kind: $kind, key: $key, body: $body}' >> "$reuse_built"
-  done < "$reuse_tmp"
-  mv "$reuse_built" "$reuse_tmp"
-fi
+      '{path: $path, start_line: $start, line: $stop, item: $item, kind: $kind, key: $key, body: $body}' >> "$reuse_tmp"
+  fi
+done < "$rows_file"
 
 if [ "$dry" = "true" ]; then
   stats="$(ejq -r 'include "echoes"; stats' "$report")"
