@@ -285,16 +285,6 @@ support_link='[❤️ Support echoes](https://github.com/sponsors/LucaCappellett
 # its workspace, so a later head finds what this run posted.
 thread_mark() { printf '<!-- echoes:v1 scope=%s key=%s -->' "$scope_uri" "$1"; }
 review_mark() { printf '<!-- echoes:v1 scope=%s review -->' "$scope_uri"; }
-# Every review thread of the pull request, one JSON object per line.
-list_threads() {
-  gh api graphql --paginate \
-    -f query='query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
-      repository(owner: $owner, name: $name) { pullRequest(number: $number) {
-        reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor }
-          nodes { id isResolved path line comments(first: 1) { nodes { author { login } body } } } } } } }' \
-    -f "owner=${repo%%/*}" -f "name=${repo#*/}" -F "number=$pr" \
-    --jq '.data.repository.pullRequest.reviewThreads.nodes[] | @json'
-}
 # This workspace's earlier threads and reviews, cleaned up once the run knows its findings.
 # $1 is the review this run posted, which stays.
 cleanup() {
@@ -580,7 +570,7 @@ if [ "$mode" != "prepare" ] && [ -n "$scope" ] && [ -n "$pr" ]; then
   threads_raw="$RUNNER_TEMP/echoes-threads.ndjson"
   threads="$RUNNER_TEMP/echoes-threads.json"
   rows_all="$RUNNER_TEMP/echoes-rows.json"
-  if list_threads > "$threads_raw" 2>/dev/null; then
+  if list_threads "$repo" "$pr" > "$threads_raw" 2>/dev/null; then
     threads_ok=1
     ejq -s --slurpfile dirs "$dirs_file" --arg scope "$scope_uri" 'include "echoes";
       map(select(type == "object")

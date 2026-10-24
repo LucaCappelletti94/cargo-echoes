@@ -53,12 +53,11 @@ jobs:
               skipped-*) ;;
               *) echo "the reverted check branch adds no copy, so nothing must post, got $status"; exit 1 ;;
             esac
-            # shellcheck disable=SC2016 # GraphQL variables, not shell ones
-            open_threads="$(gh api graphql -f query='query($owner: String!, $name: String!, $number: Int!) {
-                repository(owner: $owner, name: $name) { pullRequest(number: $number) {
-                  reviewThreads(first: 100) { nodes { isResolved comments(first: 1) { nodes { author { login } } } } } } } }' \
-              -f "owner=${repo%%/*}" -f "name=${repo#*/}" -F "number=$PR_NUMBER" \
-              --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.comments.nodes[0].author.login == "github-actions" and (.isResolved | not))] | length')"
+            # The action's own thread listing, so the check reads threads the way the action does.
+            # shellcheck source=scripts/lib.sh
+            . scripts/lib.sh
+            open_threads="$(list_threads "$repo" "$PR_NUMBER" \
+              | jq -s '[.[] | select(.comments.nodes[0].author.login == "github-actions" and (.isResolved | not))] | length')"
             [ "$open_threads" = "0" ] || { echo "$open_threads echoes threads stay open after their copies were removed"; exit 1; }
             requests="$(gh api "repos/$repo/pulls/$PR_NUMBER/reviews" --paginate \
               --jq '.[] | select(.user.login == "github-actions[bot]" and .state == "CHANGES_REQUESTED") | .id' | wc -l)"
