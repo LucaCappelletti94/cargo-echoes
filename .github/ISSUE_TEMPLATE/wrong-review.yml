@@ -7,7 +7,7 @@ body:
     attributes:
       label: What is wrong
       options:
-        - The doctests are not duplicates
+        - The copies are not duplicates
         - A duplicate was missed
         - The comment or suggestion is on the wrong lines
         - Something else

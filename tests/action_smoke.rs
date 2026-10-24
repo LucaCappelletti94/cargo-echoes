@@ -416,6 +416,13 @@ fn s05_pr_reuse_only() {
         text.contains("lookup: `issue lookup unavailable: HTTP 503`"),
         "the failed issue lookup is rendered explicitly"
     );
+    assert!(
+        text.contains("Report a wrong review")
+            && text.contains("reuse%20group%20R1")
+            && text.contains("src%2Fparser.rs%3A3%20%20app%3A%3Aparser%3A%3Aselected")
+            && text.contains("direct%201.2.3%20%20direct%3A%3Ahelper"),
+        "the reuse advice links a wrong-review issue naming the local site and the candidates"
+    );
     let summary = r.summary();
     assert!(
         summary.contains("### Dependency reuse"),
@@ -503,6 +510,18 @@ fn s06_pr_context_groups() {
     assert!(
         !text.contains("remove") && !text.contains("delet"),
         "the context advice never suggests deletion"
+    );
+    assert!(
+        text.contains("Report a wrong review")
+            && text.contains("context%20group%20C1")
+            && text.contains("src%2Fparser.rs%3A3%20%20app%3A%3Aparser%3A%3Aselected")
+            && text.contains("src%2Fmod.rs%3A10%20%20app%3A%3Aother%3A%3Aselected"),
+        "the context advice links a wrong-review issue naming every copy"
+    );
+    assert!(
+        text.contains("  - [`src/parser.rs:3-6`](")
+            && text.contains("/src/parser.rs#L3-L6)  `app::parser::selected`"),
+        "the other context copy links its lines at the head commit"
     );
     let summary = r.summary();
     assert!(

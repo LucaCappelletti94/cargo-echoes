@@ -849,9 +849,20 @@ runs:
         # Neutral reuse and context entries, one row per local site that survives
         # the same changed-file and only-new filters as the local duplicates.
         jq -c --slurpfile changed "$changed_file" --slurpfile base "$base_file" \
-          --argjson onlynew_mode "$onlynew_mode" "$jq_md"'
+          --argjson onlynew_mode "$onlynew_mode" --arg sha "$head_sha" \
+          --arg blob "$GITHUB_SERVER_URL/$repo/blob" "$jq_md"'
           def spath: .file;
-          def site_md: "  - " + ((spath + ":" + (.line | tostring)) | md_code) + "  " + (.item | md_code);
+          def span: (.line | tostring) + (if .end and .end != .line then "-\(.end)" else "" end);
+          def anchor: "#L\(.line)" + (if .end and .end != .line then "-L\(.end)" else "" end);
+          def site_md:
+            ((spath + ":" + span) | md_code) as $text
+            | "  - "
+            + (if ($sha | test("^[0-9a-f]{40}$"))
+               then "[\($text)](\($blob)/\($sha)/\(spath | split("/") | map(@uri) | join("/"))\(anchor))"
+               else $text end)
+            + "  " + (.item | md_code);
+          def site_line: "\(spath):\(.line)  \(.item)";
+          def capped: .[:12] + (if length > 12 then ["and \(length - 12) more"] else [] end) | join("\n");
           def cand_md:
             "  - " + ("\(.package) \(.version)" | md_code)
             + (if (.depth | type) == "number" and .depth > 0 then " (depth \(.depth | floor))" else "" end)
@@ -883,18 +894,20 @@ runs:
                     | (if $i == 0 and (($basekeep == "") or ($onlynew_mode | not)) then empty else $gr.sites[$i] end) as $s
                     | ($gr.hash + "\t" + $s.item + "\t" + ($s | spath)) as $k
                     | { path: ($s | spath), line: $s.line, end: $s.end, item: $s.item,
-                        kind: "context", hash: $gr.hash,
+                        kind: "context", hash: $gr.hash, label: "context group \($gr.hash[:8])",
                         isNew: (([ $base.keys[] | select(. == $k) ] | length) == 0),
-                        others: ([ $gr.sites | to_entries[] | select(.key != $i) | .value | site_md ]) }
+                        others: ([ $gr.sites | to_entries[] | select(.key != $i) | .value | site_md ]),
+                        sites: ([ $gr.sites[] | site_line ] | capped) }
               )
               , ( ((.reuse // {}).groups // [])
                   | .[] as $gr
                   | $gr.local as $l
                   | ($gr.hash + "\t" + $l.item + "\t" + ($l | spath)) as $k
                   | { path: ($l | spath), line: $l.line, end: $l.end, item: $l.item,
-                      kind: "reuse", hash: $gr.hash,
+                      kind: "reuse", hash: $gr.hash, label: "reuse group \($gr.hash[:8])",
                       isNew: (([ $base.keys[] | select(. == $k) ] | length) == 0),
-                      candidates_md: ([ $gr.candidates[] | cand_md ] | join("\n")) } )
+                      candidates_md: ([ $gr.candidates[] | cand_md ] | join("\n")),
+                      sites: ([ ($l | site_line) ] + [ $gr.candidates[] | "\(.package) \(.version)  \(.site.item)" ] | capped) } )
             ]
           | map(. as $e | select(($changed | index($e.path)) != null))
           | map(select(if $onlynew_mode then .isNew else true end))
@@ -902,19 +915,20 @@ runs:
         ' "$report" > "$reuse_tmp"
 
         # The inline posts, live mode only. The first post is the permission probe.
-        # Each comment links to a prefilled wrong-review issue for its group.
+        # Each comment links to a prefilled wrong-review issue naming its label and sites.
         report_link() {
-          local sites
-          sites="$(jq -r --argjson g "$1" '
+          printf '[👎 Report a wrong review](https://github.com/LucaCappelletti94/cargo-echoes/issues/new?template=wrong-review.yml&title=%s&version=%s&review=%s&group=%s)' \
+            "$(uri "Wrong review on $repo#$pr, $1")" \
+            "$(uri "$version")" \
+            "$(uri "$GITHUB_SERVER_URL/$repo/pull/$pr")" \
+            "$(uri "$2")"
+        }
+        group_sites() {
+          jq -r --argjson g "$1" '
             .groups[$g - 1].sites as $s
             | [$s[:12][] | "\(.file):\(.line)  \(.item)"]
               + (if ($s | length) > 12 then ["and \(($s | length) - 12) more"] else [] end)
-            | join("\n")' "$report")"
-          printf '[👎 Report a wrong review](https://github.com/LucaCappelletti94/cargo-echoes/issues/new?template=wrong-review.yml&title=%s&version=%s&review=%s&group=%s)' \
-            "$(uri "Wrong review on $repo#$pr, group $1")" \
-            "$(uri "$version")" \
-            "$(uri "$GITHUB_SERVER_URL/$repo/pull/$pr")" \
-            "$(uri "$sites")"
+            | join("\n")' "$report"
         }
         support_link='[❤️ Support echoes](https://github.com/sponsors/LucaCappelletti94)'
         # A permalink to lines $3 to $4 of path $2 at commit $1, GitHub shows
@@ -1127,7 +1141,7 @@ runs:
           if [ "$remedy" = "delete" ]; then
             comment="$comment"$'\n\n```suggestion\n```'
           fi
-          comment="$comment"$'\n\n'"$(report_link "$g") $support_link"
+          comment="$comment"$'\n\n'"$(report_link "group $g" "$(group_sites "$g")") $support_link"
           if [ "$dry" = "true" ]; then
             rendered+="$comment"$'\n\n'
             continue
@@ -1166,7 +1180,7 @@ runs:
             r_url="$(blob_url "$head_sha" "$p" "$line" "$end")"
             comment="$note"
             [ -n "$r_url" ] && comment="$comment"$'\n\n'"$(preview_of "$r_url" "$line" "$end" "the local context")"
-            comment="$comment"$'\n\n'"$support_link"
+            comment="$comment"$'\n\n'"$(report_link "$(printf '%s' "$row" | jq -r '.label')" "$(printf '%s' "$row" | jq -r '.sites')") $support_link"
             if [ "$dry" = "true" ]; then
               reuse_rendered+="$comment"$'\n\n'
               continue
