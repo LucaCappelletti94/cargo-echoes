@@ -205,9 +205,7 @@ fn s04_pr_local_onlynew() {
         1,
         1,
     );
-    let mut world = World::new("s04")
-        .inputs(&[("pr-number", "7")])
-        .event("pull_request")
+    let mut world = World::pull_request("s04")
         .git()
         .json(report(
             &[group(
@@ -279,12 +277,8 @@ fn s04_pr_local_onlynew() {
 
 #[test]
 fn s50_exclude_reaches_the_scan_and_the_base_scan() {
-    let mut world = World::new("s50")
-        .inputs(&[
-            ("pr-number", "7"),
-            ("exclude", "benches/**\n  examples/ \n\n"),
-        ])
-        .event("pull_request")
+    let mut world = World::pull_request("s50")
+        .inputs(&[("exclude", "benches/**\n  examples/ \n\n")])
         .git()
         .json(report(&[], &[], None, 6, 3))
         .base_json(report(&[], &[], None, 1, 1));
@@ -351,9 +345,8 @@ fn s05_report() -> Value {
 
 #[test]
 fn s05_pr_reuse_only() {
-    let mut world = World::new("s05")
-        .inputs(&[("pr-number", "7"), ("context-dependency-depth", "2")])
-        .event("pull_request")
+    let mut world = World::pull_request("s05")
+        .inputs(&[("context-dependency-depth", "2")])
         .git()
         .json(s05_report())
         .base_json(report(&[], &[], None, 6, 3))
@@ -460,9 +453,8 @@ fn s05_summary_checks(summary: &str) {
 
 #[test]
 fn s06_pr_context_groups() {
-    let mut world = World::new("s06")
-        .inputs(&[("pr-number", "7"), ("context-select", "crate:app")])
-        .event("pull_request")
+    let mut world = World::pull_request("s06")
+        .inputs(&[("context-select", "crate:app")])
         .git()
         .json(report(
             &[],
@@ -546,9 +538,8 @@ fn s06_pr_context_groups() {
 
 #[test]
 fn s07_pr_fork_403() {
-    let mut world = World::new("s07")
-        .inputs(&[("pr-number", "7"), ("only-new", "false")])
-        .event("pull_request")
+    let mut world = World::pull_request("s07")
+        .inputs(&[("only-new", "false")])
         .fork()
         .json(report(
             &[group(
@@ -595,9 +586,7 @@ fn s07_pr_fork_403() {
 #[test]
 fn s08_pr_incomplete() {
     let local = site("src/parser.rs", 3, 6, "app::parser::selected");
-    let mut world = World::new("s08")
-        .inputs(&[("pr-number", "7"), ("context-dependency-depth", "2")])
-        .event("pull_request")
+    let mut world = World::pull_request("s08").inputs(&[("context-dependency-depth", "2")])
         .json(report(
             &[],
             &[],
@@ -736,14 +725,12 @@ fn s09_payload_checks(world: &World, r: &Runner) {
 #[test]
 fn s09_prepare_post_reuse() {
     let (rep, base_report) = s09_fixture();
-    let mut world = World::new("s09a")
+    let mut world = World::pull_request("s09a")
         .inputs(&[
-            ("pr-number", "7"),
             ("mode", "prepare"),
             ("payload", "echoes-payload"),
             ("context-dependency-depth", "2"),
         ])
-        .event("pull_request")
         .git()
         .json(rep)
         .base_json(base_report)
@@ -757,13 +744,8 @@ fn s09_prepare_post_reuse() {
     let (base, head) = world.shas();
     // The posting job runs on a fresh runner sharing the prepare workspace, so
     // the payload directory outlives the prepare job.
-    let mut world2 = World::new("s09b")
-        .inputs(&[
-            ("pr-number", "7"),
-            ("mode", "post"),
-            ("payload", "echoes-payload"),
-        ])
-        .event("pull_request")
+    let mut world2 = World::pull_request("s09b")
+        .inputs(&[("mode", "post"), ("payload", "echoes-payload")])
         .workspace(payload_ws)
         .base_sha(&base)
         .head_sha(&head)
@@ -1012,9 +994,7 @@ fn s13b_cache_depth_zero() {
 fn s14_escape_untrusted() {
     let local = site("src/parser.rs", 3, 6, "app::parser::selected");
     let evil = r#"weird:item, 50% $(touch "$RUNNER_TEMP/pwned") `backtick` "quoted""#;
-    let mut world = World::new("s14")
-        .inputs(&[("pr-number", "7"), ("context-dependency-depth", "2")])
-        .event("pull_request")
+    let mut world = World::pull_request("s14").inputs(&[("context-dependency-depth", "2")])
         .git()
         .json(report(
             &[],
@@ -1062,14 +1042,9 @@ fn s14_escape_untrusted() {
 #[test]
 fn s15_prepare_post_reuse_only() {
     let local = site("src/parser.rs", 3, 6, "app::parser::selected");
-    let mut world = World::new("s15a")
-        .inputs(&[
-            ("pr-number", "7"),
-            ("mode", "prepare"),
-            ("payload", "echoes-payload"),
-            ("context-dependency-depth", "2"),
-        ])
-        .event("pull_request")
+    let mut world = World::pull_request("s15a").inputs(&[("mode", "prepare"),
+    ("payload", "echoes-payload"),
+    ("context-dependency-depth", "2"),])
         .git()
         .json(report(
             &[],
@@ -1099,13 +1074,8 @@ fn s15_prepare_post_reuse_only() {
     // The posting job shares the prepare workspace so the payload survives it.
     let payload_ws = world.workspace_path().to_path_buf();
     let (base, head) = world.shas();
-    let mut world2 = World::new("s15b")
-        .inputs(&[
-            ("pr-number", "7"),
-            ("mode", "post"),
-            ("payload", "echoes-payload"),
-        ])
-        .event("pull_request")
+    let mut world2 = World::pull_request("s15b")
+        .inputs(&[("mode", "post"), ("payload", "echoes-payload")])
         .workspace(payload_ws)
         .base_sha(&base)
         .head_sha(&head)
@@ -1127,13 +1097,8 @@ fn s15_prepare_post_reuse_only() {
 
 #[test]
 fn s16_comment_cap() {
-    let mut world = World::new("s16")
-        .inputs(&[
-            ("pr-number", "7"),
-            ("only-new", "false"),
-            ("max-comments", "2"),
-        ])
-        .event("pull_request")
+    let mut world = World::pull_request("s16")
+        .inputs(&[("only-new", "false"), ("max-comments", "2")])
         .json(report(
             &[group(
                 "g1",
@@ -1188,9 +1153,8 @@ fn s16_comment_cap() {
 
 #[test]
 fn s17_rate_limit_403() {
-    let mut world = World::new("s17")
-        .inputs(&[("pr-number", "7"), ("only-new", "false")])
-        .event("pull_request")
+    let mut world = World::pull_request("s17")
+        .inputs(&[("only-new", "false")])
         .json(report(
             &[group(
                 "g1",
@@ -1248,9 +1212,8 @@ fn s17_rate_limit_403() {
 
 #[test]
 fn s18_perm_403_readonly() {
-    let mut world = World::new("s18")
-        .inputs(&[("pr-number", "7"), ("only-new", "false")])
-        .event("pull_request")
+    let mut world = World::pull_request("s18")
+        .inputs(&[("only-new", "false")])
         .json(report(
             &[group(
                 "g1",
@@ -1299,9 +1262,8 @@ fn s19_oor_truncation() {
             "item": format!("app::f{i}"),
         }));
     }
-    let mut world = World::new("s19")
-        .inputs(&[("pr-number", "7"), ("only-new", "false")])
-        .event("pull_request")
+    let mut world = World::pull_request("s19")
+        .inputs(&[("only-new", "false")])
         .json(report(&[group("g1", "H1", &sites)], &[], None, 6, 3))
         .changed(&["src/lib.rs"]);
     let exit = world.run();
@@ -1338,14 +1300,12 @@ fn s19_oor_truncation() {
 #[test]
 fn s20_prepare_post_cap() {
     let local = site("src/parser.rs", 3, 6, "app::parser::selected");
-    let mut world = World::new("s20a")
+    let mut world = World::pull_request("s20a")
         .inputs(&[
-            ("pr-number", "7"),
             ("mode", "prepare"),
             ("payload", "echoes-payload"),
             ("max-comments", "1"),
         ])
-        .event("pull_request")
         .json(report(
             &[group(
                 "g1",
@@ -1387,14 +1347,12 @@ fn s20_prepare_post_cap() {
     );
     let payload_ws = world.workspace_path().to_path_buf();
     let (base, head) = world.shas();
-    let mut world2 = World::new("s20b")
+    let mut world2 = World::pull_request("s20b")
         .inputs(&[
-            ("pr-number", "7"),
             ("mode", "post"),
             ("payload", "echoes-payload"),
             ("max-comments", "1"),
         ])
-        .event("pull_request")
         .workspace(payload_ws)
         .base_sha(&base)
         .head_sha(&head)
@@ -1455,13 +1413,8 @@ fn prepared(name: &str, copies: usize, item: &str, kind: &str) -> World {
         g["remedy"] = json!(kind);
     }
     let changed: Vec<&str> = files.iter().map(String::as_str).collect();
-    let mut world = World::new(name)
-        .inputs(&[
-            ("pr-number", "7"),
-            ("mode", "prepare"),
-            ("payload", "echoes-payload"),
-        ])
-        .event("pull_request")
+    let mut world = World::pull_request(name)
+        .inputs(&[("mode", "prepare"), ("payload", "echoes-payload")])
         .json(report(&[g], &[], None, 6, 3))
         .changed(&changed);
     for f in &files {
@@ -1490,13 +1443,8 @@ fn post_world(name: &str, prepared: &World, event: &str, inputs: &[(&str, &str)]
 
 #[test]
 fn s48_prepare_writes_a_payload_for_a_clean_scan() {
-    let mut prep = World::new("s48a")
-        .inputs(&[
-            ("pr-number", "7"),
-            ("mode", "prepare"),
-            ("payload", "echoes-payload"),
-        ])
-        .event("pull_request")
+    let mut prep = World::pull_request("s48a")
+        .inputs(&[("mode", "prepare"), ("payload", "echoes-payload")])
         .json(report(&[], &[], None, 6, 3));
     assert_eq!(prep.run(), 0, "a clean prepare run exits 0");
     let payload = prep.workspace_path().join("echoes-payload");
@@ -1941,9 +1889,7 @@ fn s39_review_fences_candidate_text_and_checks_links() {
             site("src/parser.rs", 10, 13, "app::other"),
         ],
     );
-    let mut world = World::new("s39")
-        .inputs(&[("pr-number", "7")])
-        .event("pull_request")
+    let mut world = World::pull_request("s39")
         .json(report(
             &[],
             &[ctx],
@@ -2303,9 +2249,7 @@ const DUP_KEY: &str = "doctest%3AH1%3Asrc%2Fdup.rs%3Aapp%3A%3Aparse";
 
 /// A git world with a foreign workspace under `sub`, where `src` belongs to the root.
 fn cleanup_world(name: &str) -> World {
-    World::new(name)
-        .inputs(&[("pr-number", "7")])
-        .event("pull_request")
+    World::pull_request(name)
         .git()
         .extra_base("sub/Cargo.toml", "[workspace]\n")
         .extra_base("sub/src/lib.rs", SRC_LIB)
@@ -2406,9 +2350,7 @@ fn s60_clean_head_resolves_gone_threads_and_dismisses_reviews() {
 
 #[test]
 fn s61_threaded_finding_is_not_posted_again() {
-    let mut world = World::new("s61")
-        .inputs(&[("pr-number", "7")])
-        .event("pull_request")
+    let mut world = World::pull_request("s61")
         .git()
         .json(report(
             &[group(
@@ -2495,9 +2437,8 @@ fn s61_threaded_finding_is_not_posted_again() {
 #[test]
 fn s62_legacy_thread_covering_a_finding_is_kept() {
     let legacy = "This pull request adds 2 copies of the same doctest, echoes suggests keeping the first added copy.";
-    let mut world = World::new("s62")
-        .inputs(&[("pr-number", "7"), ("only-new", "false")])
-        .event("pull_request")
+    let mut world = World::pull_request("s62")
+        .inputs(&[("only-new", "false")])
         .git()
         .json(report(
             &[group(
@@ -2533,9 +2474,8 @@ fn s62_legacy_thread_covering_a_finding_is_kept() {
 
 #[test]
 fn s63_context_out_of_range_links_and_requests_nothing() {
-    let mut world = World::new("s63")
-        .inputs(&[("pr-number", "7"), ("context-select", "crate:app")])
-        .event("pull_request")
+    let mut world = World::pull_request("s63")
+        .inputs(&[("context-select", "crate:app")])
         .git()
         .json(report(
             &[],
@@ -2607,13 +2547,8 @@ fn s64_refused_resolution_leaves_a_notice() {
 
 #[test]
 fn s65_post_mode_cleans_up_the_payload_scope() {
-    let mut prep = World::new("s65a")
-        .inputs(&[
-            ("pr-number", "7"),
-            ("mode", "prepare"),
-            ("payload", "echoes-payload"),
-        ])
-        .event("pull_request")
+    let mut prep = World::pull_request("s65a")
+        .inputs(&[("mode", "prepare"), ("payload", "echoes-payload")])
         .json(report(&[], &[], None, 6, 3));
     assert_eq!(prep.run(), 0, "a clean prepare run exits 0");
     let meta: Value = serde_json::from_str(
@@ -2694,9 +2629,8 @@ fn s66_scan_summary_escapes_report_text() {
         6,
         3,
     );
-    let mut world = World::new("s66")
-        .inputs(&[("pr-number", "7"), ("context-dependency-depth", "2")])
-        .event("pull_request")
+    let mut world = World::pull_request("s66")
+        .inputs(&[("context-dependency-depth", "2")])
         .json(rep);
     world.run();
     let summary = world.runner().summary();
@@ -2712,9 +2646,8 @@ fn s66_scan_summary_escapes_report_text() {
 
 #[test]
 fn s67_base_scan_takes_the_head_scan_flags() {
-    let mut world = World::new("s67")
+    let mut world = World::pull_request("s67")
         .inputs(&[
-            ("pr-number", "7"),
             ("functions", "true"),
             ("all-targets", "true"),
             ("context-blocks", "true"),
@@ -2722,7 +2655,6 @@ fn s67_base_scan_takes_the_head_scan_flags() {
             ("context-dev-dependencies", "true"),
             ("exclude", "benches/**\nsrc/gen.rs"),
         ])
-        .event("pull_request")
         .git()
         .json(report(&[], &[], None, 6, 3))
         .base_json(report(&[], &[], None, 1, 1));
@@ -2753,9 +2685,8 @@ fn s67_base_scan_takes_the_head_scan_flags() {
 fn s68_a_second_copy_of_a_base_context_counts_as_added() {
     let old = site("src/parser.rs", 3, 6, "app::parser::selected");
     let added = site("src/parser.rs", 12, 15, "app::parser::selected");
-    let mut world = World::new("s68")
-        .inputs(&[("pr-number", "7"), ("context-select", "crate:app")])
-        .event("pull_request")
+    let mut world = World::pull_request("s68")
+        .inputs(&[("context-select", "crate:app")])
         .git()
         .json(report(
             &[],
@@ -2784,9 +2715,8 @@ fn s68_a_second_copy_of_a_base_context_counts_as_added() {
 
 #[test]
 fn s69_annotation_names_the_group_first_copy_outside_only_new() {
-    let mut world = World::new("s69")
-        .inputs(&[("pr-number", "7"), ("only-new", "false")])
-        .event("pull_request")
+    let mut world = World::pull_request("s69")
+        .inputs(&[("only-new", "false")])
         .git()
         .json(report(
             &[group(

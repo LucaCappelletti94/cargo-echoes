@@ -84,6 +84,13 @@ impl World {
         }
     }
 
+    /// A world reviewing pull request 7 on a `pull_request` event.
+    pub fn pull_request(name: &str) -> Self {
+        Self::new(name)
+            .inputs(&[("pr-number", "7")])
+            .event("pull_request")
+    }
+
     pub fn inputs(mut self, pairs: &[(&str, &str)]) -> Self {
         for (k, v) in pairs {
             self.inputs.insert(k.to_string(), v.to_string());
