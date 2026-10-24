@@ -22,7 +22,7 @@ case "$cmd" in
     exit "${SCEN_EXIT:-0}"
     ;;
   metadata)
-    jq -cn --arg r "${SCEN_META_ROOT:-$PWD}" '{workspace_root: $r}'
+    jq -cn --arg r "${SCEN_META_ROOT:-$PWD}" --argjson p "${SCEN_META_PACKAGES:-[]}" '{workspace_root: $r, packages: [$p[] | {manifest_path: .}]}'
     ;;
   install)
     { printf 'install\n'; printf '%s\n' "$@"; } | jq -R . | jq -cs '{cmd: "install", args: .}' >> "${FAKE_LOG}/cargo.jsonl"

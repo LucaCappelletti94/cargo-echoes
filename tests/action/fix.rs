@@ -51,6 +51,29 @@ pub fn ctx_group(gid: &str, hash: &str, sites: &[Value]) -> Value {
     })
 }
 
+/// One review thread as the GraphQL listing returns it, its first comment's author and body.
+pub fn thread(
+    id: &str,
+    resolved: bool,
+    path: &str,
+    line: Option<i64>,
+    author: &str,
+    body: &str,
+) -> Value {
+    json!({
+        "id": id,
+        "isResolved": resolved,
+        "path": path,
+        "line": line,
+        "comments": { "nodes": [{ "author": { "login": author }, "body": body }] },
+    })
+}
+
+/// One pull request review as the REST listing returns it.
+pub fn review(id: i64, state: &str, user: &str, body: &str) -> Value {
+    json!({ "id": id, "state": state, "user": { "login": user }, "body": body })
+}
+
 /// One dependency coverage block.
 pub fn coverage(
     complete: bool,

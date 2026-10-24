@@ -42,6 +42,29 @@ case "${1:-}" in
       '{m: $m, p: $p, params: $params, j: $j}' >> "$log_dir/gh.jsonl"
     resp='{}'
     case "$path" in
+      graphql)
+        query=''
+        for a in "${args[@]:-}"; do case "$a" in query=*) query="${a#query=}" ;; esac; done
+        case "$query" in
+          *resolveReviewThread*)
+            if [ "${SCEN_GH_RESOLVE_403:-0}" = "1" ]; then
+              echo '{"data":{"resolveReviewThread":null},"errors":[{"type":"FORBIDDEN","path":["resolveReviewThread"],"message":"Resource not accessible by integration"}]}'
+              echo "gh: Resource not accessible by integration" >&2
+              exit 1
+            fi
+            resp='{"data":{"resolveReviewThread":{"thread":{"isResolved":true}}}}'
+            ;;
+          *reviewThreads*)
+            if [ "${SCEN_GH_THREADS_FAIL:-0}" = "1" ]; then
+              echo "gh: Server Error (HTTP 502)" >&2
+              exit 1
+            fi
+            nodes='[]'
+            [ -n "${SCEN_THREADS:-}" ] && [ -f "$SCEN_THREADS" ] && nodes="$(cat "$SCEN_THREADS")"
+            resp="$(jq -cn --argjson n "$nodes" '{data: {repository: {pullRequest: {reviewThreads: {pageInfo: {hasNextPage: false, endCursor: null}, nodes: $n}}}}}')"
+            ;;
+        esac
+        ;;
       "repos/$GITHUB_REPOSITORY/pulls/"*"/files")
         if [ "${SCEN_GH_FILES_FAIL:-0}" = "1" ]; then
           echo "gh: Server Error (HTTP 500)" >&2
@@ -91,15 +114,31 @@ case "${1:-}" in
                   REQUEST_CHANGES) ev=CHANGES_REQUESTED ;;
                   *) ev=COMMENTED ;;
                 esac
-                resp="$(jq -cn --arg s "$ev" '{state: $s}')"
+                resp="$(jq -cn --arg s "$ev" '{state: $s, id: 9001}')"
                 ;;
               *) resp='{}' ;;
             esac
             ;;
           *)
-            resp="$(jq -cn --arg b "${SCEN_BASE_SHA:-0000000000000000000000000000000000000000}" \
-              --arg h "${SCEN_HEAD_SHA:-0000000000000000000000000000000000000000}" \
-              '{base: {sha: $b}, head: {sha: $h}}')"
+            case "$path" in
+              */dismissals)
+                if [ "${SCEN_GH_DISMISS_403:-0}" = "1" ]; then
+                  echo '{"message":"Resource not accessible by integration","status":"403"}'
+                  echo "gh: Resource not accessible by integration (HTTP 403)" >&2
+                  exit 1
+                fi
+                resp='{"state": "DISMISSED"}'
+                ;;
+              */reviews)
+                resp='[]'
+                [ -n "${SCEN_REVIEWS:-}" ] && [ -f "$SCEN_REVIEWS" ] && resp="$(cat "$SCEN_REVIEWS")"
+                ;;
+              *)
+                resp="$(jq -cn --arg b "${SCEN_BASE_SHA:-0000000000000000000000000000000000000000}" \
+                  --arg h "${SCEN_HEAD_SHA:-0000000000000000000000000000000000000000}" \
+                  '{base: {sha: $b}, head: {sha: $h}}')"
+                ;;
+            esac
             ;;
         esac
         ;;

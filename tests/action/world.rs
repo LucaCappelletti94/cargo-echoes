@@ -42,6 +42,8 @@ pub struct World {
     env: BTreeMap<String, String>,
     run_event: String,
     open_prs: Option<Value>,
+    threads: Value,
+    reviews: Value,
     runner: Option<Runner>,
 }
 
@@ -76,6 +78,8 @@ impl World {
             env: BTreeMap::new(),
             run_event: "pull_request".into(),
             open_prs: None,
+            threads: json!([]),
+            reviews: json!([]),
             runner: None,
         }
     }
@@ -156,6 +160,18 @@ impl World {
         self
     }
 
+    /// The review threads the GraphQL listing returns.
+    pub fn threads(mut self, threads: Value) -> Self {
+        self.threads = threads;
+        self
+    }
+
+    /// The reviews the REST listing returns.
+    pub fn reviews(mut self, reviews: Value) -> Self {
+        self.reviews = reviews;
+        self
+    }
+
     pub fn extra_base(mut self, path: &str, content: &str) -> Self {
         self.extra_base
             .push((path.to_string(), content.to_string()));
@@ -220,19 +236,6 @@ impl World {
         }
         let fixtures = self.tmp.path().join("fixtures");
         fs::create_dir_all(&fixtures).expect("make the fixtures dir");
-        fs::write(
-            fixtures.join("report.json"),
-            serde_json::to_string(&self.json).expect("serialize the report"),
-        )
-        .expect("write the report fixture");
-        fs::write(
-            fixtures.join("base.json"),
-            serde_json::to_string(&self.base_json).expect("serialize the base report"),
-        )
-        .expect("write the base fixture");
-        fs::write(fixtures.join("human.txt"), &self.human).expect("write the human fixture");
-        fs::write(fixtures.join("changed.txt"), self.changed.join("\n"))
-            .expect("write the changed fixture");
         let head_owner = if self.fork { "fork" } else { "owner" };
         let open_prs = self.open_prs.clone().unwrap_or_else(|| {
             json!([{
@@ -244,23 +247,19 @@ impl World {
                 }
             }])
         });
-        fs::write(
-            fixtures.join("open_prs.json"),
-            serde_json::to_string(&open_prs).expect("serialize the open pull requests"),
-        )
-        .expect("write the open pull requests fixture");
         let mut scenario_env = BTreeMap::new();
-        for (key, file) in [
-            ("SCEN_JSON", "report.json"),
-            ("SCEN_BASE_JSON", "base.json"),
-            ("SCEN_HUMAN", "human.txt"),
-            ("SCEN_CHANGED_FILES", "changed.txt"),
-            ("SCEN_OPEN_PRS", "open_prs.json"),
+        for (key, file, text) in [
+            ("SCEN_JSON", "report.json", self.json.to_string()),
+            ("SCEN_BASE_JSON", "base.json", self.base_json.to_string()),
+            ("SCEN_HUMAN", "human.txt", self.human.clone()),
+            ("SCEN_CHANGED_FILES", "changed.txt", self.changed.join("\n")),
+            ("SCEN_OPEN_PRS", "open_prs.json", open_prs.to_string()),
+            ("SCEN_THREADS", "threads.json", self.threads.to_string()),
+            ("SCEN_REVIEWS", "reviews.json", self.reviews.to_string()),
         ] {
-            scenario_env.insert(
-                key.to_string(),
-                fixtures.join(file).to_string_lossy().into_owned(),
-            );
+            let path = fixtures.join(file);
+            fs::write(&path, text).expect("write a scenario fixture");
+            scenario_env.insert(key.to_string(), path.to_string_lossy().into_owned());
         }
         scenario_env.insert("SCEN_HEAD_SHA".into(), self.head_sha.clone());
         scenario_env.insert("SCEN_BASE_SHA".into(), self.base_sha.clone());
