@@ -11,6 +11,22 @@ def md_code: (tostring | gsub("[\r\n]"; " ")) as $s
 # An https url safe to place inside a markdown link, else null.
 def safe_url: if type == "string" and test("^https://[A-Za-z0-9.-]+/[^\\s()<>`\\[\\]]*$") then . else null end;
 
+# A site as `path:line`.
+def loc: .file + ":" + (.line | tostring);
+
+# The identity of a site of the group with hash $h, its hash, item and path.
+def site_key($h): [$h, .item, .file] | join("\t");
+
+# Every site of a report with its group hash: doctest and function groups, context
+# groups, and the local site of each reuse group.
+def report_sites:
+  (.groups[] | .hash as $h | .sites[] | {h: $h, s: .}),
+  ((.context_groups // [])[] | .hash as $h | .sites[] | {h: $h, s: .}),
+  (((.reuse // {}).groups // [])[] | {h: .hash, s: .local});
+
+# The first site of each of the groups gs, by group hash.
+def first_sites(gs): reduce gs[] as $gr ({}; .[$gr.hash] = $gr.sites[0]);
+
 # The line range of a site, `start` or `start-end`, and its blob anchor.
 def span: (.line | tostring) + (if .end and .end != .line then "-\(.end)" else "" end);
 def anchor: "#L\(.line)" + (if .end and .end != .line then "-L\(.end)" else "" end);

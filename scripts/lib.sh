@@ -110,3 +110,16 @@ preview_of() {
     printf '%s' "$1"
   fi
 }
+
+# Every review thread of pull request $2 of repository $1, one JSON object per line,
+# with its first comment's author and body.
+list_threads() {
+  # shellcheck disable=SC2016 # GraphQL variables, not shell ones
+  gh api graphql --paginate \
+    -f query='query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
+      repository(owner: $owner, name: $name) { pullRequest(number: $number) {
+        reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor }
+          nodes { id isResolved path line comments(first: 1) { nodes { author { login } body } } } } } } }' \
+    -f "owner=${1%%/*}" -f "name=${1#*/}" -F "number=$2" \
+    --jq '.data.repository.pullRequest.reviewThreads.nodes[] | @json'
+}
