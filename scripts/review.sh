@@ -702,12 +702,8 @@ posted_local=0
 posted_reuse=0
 planned_n="$(cat "$comments" "$reuse_tmp" | wc -l)"
 post_one() {
-  local row="$1" p line stop err item g
-  p="$(printf '%s' "$row" | jq -r '.path')"
-  line="$(printf '%s' "$row" | jq -r '.start_line')"
-  stop="$(printf '%s' "$row" | jq -r '.line')"
-  item="$(printf '%s' "$row" | jq -r '.item')"
-  g="$(printf '%s' "$row" | jq -r '.group // .kind')"
+  local row="$1" p line stop err item g close loc
+  eval "$(printf '%s' "$row" | jq -r '@sh "p=\(.path) line=\(.start_line) stop=\(.line) item=\(.item) g=\(.group // .kind) close=\(.close_line // .line)"')"
   if ! err="$(printf '%s' "$row" | jq -r '.body' | gh api "repos/$repo/pulls/$pr/comments" \
     -f "commit_id=$head_sha" -f "path=$p" \
     -F "start_line=$line" -F "line=$stop" \
@@ -722,10 +718,11 @@ post_one() {
     fi
     printf 'echoes: %s:%s %s\n' "$(escape_data "$p")" "$line" "$(escape_data "$item")"
     printf '%s\n' "$err" | sed 's/^/echoes: /'
+    loc="$(blob_link "$head_sha" "$p" "$line" "$close")"
     if printf '%s' "$err" | grep -qE 'HTTP 422|"status": "422"'; then
-      out_of_range="$out_of_range- group $g  $(blob_link "$head_sha" "$p" "$line" "$(printf '%s' "$row" | jq -r '.close_line // .line')")  $(md_code "$item")"$'\n'
+      out_of_range="$out_of_range- group $g  $loc  $(md_code "$item")"$'\n'
     else
-      failed_sites="$failed_sites- group $g  $(md_code "$p:$line")  $(md_code "$item")"$'\n'
+      failed_sites="$failed_sites- group $g  $loc  $(md_code "$item")"$'\n'
       failed_log="$failed_log  group $g  $(escape_data "$p"):$line  $(escape_data "$item")"$'\n'
     fi
   fi
@@ -767,41 +764,31 @@ fi
 review_event='REQUEST_CHANGES'
 [ "$local_found" = "1" ] || review_event='COMMENT'
 review=(-f "event=$review_event")
-review_body=''
-if [ -n "$out_of_range" ]; then
-  review_body="$(printf 'These duplicates are not on lines GitHub shows in this pull request diff, the inline comment cannot attach there. The links point at the copies on the head commit.\n\n%s' "$out_of_range")"
-fi
-if [ -n "$failed_sites" ]; then
-  review_body="$review_body$(printf '\n\nDuplicates echoes could not comment inline\n\n%s' "$failed_sites")"
-fi
-if [ "$omitted" -gt 0 ]; then
-  review_body="$review_body$(printf '\n\n%s inline copies were not posted, they are listed in the run summary %s' "$omitted" "$run_url")"
-fi
-if [ "$rate_omitted" -gt 0 ]; then
-  review_body="$review_body$(printf '\n\n%s inline copies were not posted because the api rate limit was reached, they are listed in the run summary %s' "$rate_omitted" "$run_url")"
-fi
+# One list of the review body, its header and the lines that fit in $3 bytes, with a
+# pointer to the run summary for the rest.
+body_section() {
+  [ -n "$2" ] || return 0
+  local kept more
+  kept="$(printf '%s' "$2" | fit_lines "$3")"
+  more=$(($(printf '%s' "$2" | wc -l) - $(printf '%s' "$kept" | wc -l)))
+  printf '%s\n\n%s' "$1" "$kept"
+  [ "$more" -gt 0 ] && printf '\n%s' "and $more more, they are in the run summary $run_url"
+  return 0
+}
+# The review body, each list within $1 bytes.
+review_text() {
+  local text
+  text="$(body_section 'These duplicates are not on lines GitHub shows in this pull request diff, the inline comment cannot attach there. The links point at the copies on the head commit.' "$out_of_range" "$1")"
+  [ -n "$failed_sites" ] && text="$text"$'\n\n'"$(body_section 'Duplicates echoes could not comment inline' "$failed_sites" "$1")"
+  [ "$omitted" -gt 0 ] && text="$text"$'\n\n'"$omitted inline copies were not posted, they are listed in the run summary $run_url"
+  [ "$rate_omitted" -gt 0 ] && text="$text"$'\n\n'"$rate_omitted inline copies were not posted because the api rate limit was reached, they are listed in the run summary $run_url"
+  printf '%s' "$text"
+}
+review_body="$(review_text 1000000000)"
 # The api rejects a review body over 65,536 characters, so the lists
 # are truncated with a pointer to the run summary.
 if [ "${#review_body}" -gt 65000 ]; then
-  budget=$((65000 / 2 - 400))
-  oor_part=''
-  if [ -n "$out_of_range" ]; then
-    oor_kept="$(printf '%s' "$out_of_range" | fit_lines "$budget")"
-    oor_more=$(($(printf '%s' "$out_of_range" | wc -l) - $(printf '%s' "$oor_kept" | wc -l)))
-    oor_part='These duplicates are not on lines GitHub shows in this pull request diff, the inline comment cannot attach there. The links point at the copies on the head commit.'
-    oor_part="$oor_part"$'\n\n'"$oor_kept"
-    [ "$oor_more" -gt 0 ] && oor_part="$oor_part"$'\n'"and $oor_more more, they are in the run summary $run_url"
-  fi
-  failed_part=''
-  if [ -n "$failed_sites" ]; then
-    failed_kept="$(printf '%s' "$failed_sites" | fit_lines "$budget")"
-    failed_more=$(($(printf '%s' "$failed_sites" | wc -l) - $(printf '%s' "$failed_kept" | wc -l)))
-    failed_part="$(printf '\n\nDuplicates echoes could not comment inline\n\n%s' "$failed_kept")"
-    [ "$failed_more" -gt 0 ] && failed_part="$failed_part"$'\n'"and $failed_more more, they are in the run summary $run_url"
-  fi
-  review_body="$oor_part$failed_part"
-  [ "$omitted" -gt 0 ] && review_body="$review_body$(printf '\n\n%s inline copies were not posted, they are listed in the run summary %s' "$omitted" "$run_url")"
-  [ "$rate_omitted" -gt 0 ] && review_body="$review_body$(printf '\n\n%s inline copies were not posted because the api rate limit was reached, they are listed in the run summary %s' "$rate_omitted" "$run_url")"
+  review_body="$(review_text $((65000 / 2 - 400)))"
 fi
 if [ -z "$review_body" ]; then
   if [ "$posted_local" -eq 0 ] && [ "$posted_reuse" -eq 0 ]; then
