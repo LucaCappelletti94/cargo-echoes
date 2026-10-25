@@ -138,6 +138,10 @@ mod custom {
     }
     pub(crate) use vec;
 }
+fn tail_scope() -> u32 {
+    let value = std::cell::RefCell::new(7u32);
+    return *value.borrow();
+}
 fn main() {
     let beta = alpha::Beta { gamma: 3u32 };
     beta.delta(1u32);

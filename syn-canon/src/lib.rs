@@ -20,6 +20,7 @@ mod reference;
 mod schedule;
 mod scope;
 mod structure;
+mod tails;
 
 use alloc::vec::Vec;
 use proc_macro2::{TokenStream, TokenTree};
@@ -1855,8 +1856,8 @@ mod tests {
 
     #[test]
     fn match_arm_block_single_expr_merges() {
-        let a = canonicalize("match v { Some(x) => { foo(x) }, None => 0, }");
-        let b = canonicalize("match v { Some(x) => foo(x), None => 0, }");
+        let a = canonicalize("match v { Some(x) => { 1 }, None => 0, }");
+        let b = canonicalize("match v { Some(x) => 1, None => 0, }");
         assert_eq!(a.text, b.text);
     }
 
@@ -1902,8 +1903,8 @@ mod tests {
 
     #[test]
     fn an_unwrapped_arm_block_merges_with_the_comma_form() {
-        let a = canonicalize("match v { 1 => { foo() } _ => 0 }");
-        let b = canonicalize("match v { 1 => foo(), _ => 0 }");
+        let a = canonicalize("match v { 1 => { 1 } _ => 0 }");
+        let b = canonicalize("match v { 1 => 1, _ => 0 }");
         assert_eq!(a.text, b.text);
     }
 
@@ -2288,9 +2289,13 @@ mod tests {
 
     #[test]
     fn closure_body_block_unwraps() {
-        let a = canonicalize("|x| { x + 1 }");
-        let b = canonicalize("|x| x + 1");
+        let a = canonicalize("|x: u32| { x + 1 }");
+        let b = canonicalize("|x: u32| x + 1");
         assert_eq!(a.text, b.text);
+        assert_ne!(
+            canonicalize("|x| { x + 1 }").text,
+            canonicalize("|x| x + 1").text
+        );
     }
 
     #[test]
@@ -2316,9 +2321,13 @@ mod tests {
 
     #[test]
     fn return_tail_in_closure_block_folds() {
-        let a = canonicalize("|x| { return x + 1; }");
-        let b = canonicalize("|x| x + 1");
+        let a = canonicalize("|x: u32| { return x + 1; }");
+        let b = canonicalize("|x: u32| x + 1");
         assert_eq!(a.text, b.text);
+        assert_ne!(
+            canonicalize("|x| { return x + 1; }").text,
+            canonicalize("|x| x + 1").text
+        );
     }
 
     #[test]
@@ -4593,10 +4602,8 @@ mod tests {
 
     #[test]
     fn a_return_in_a_tail_match_arm_folds() {
-        // A tail match arm value is the fn result, `return 1;` and `1`
-        // return the same value, verified equivalent with rustc.
-        let early = canonicalize("fn f() -> u8 { match v { A => { return 1; }, _ => 2 } }");
-        let value = canonicalize("fn f() -> u8 { match v { A => { 1 }, _ => 2 } }");
+        let early = canonicalize("fn f(v: u8) -> u8 { match v { 0 => { return 1; }, _ => 2 } }");
+        let value = canonicalize("fn f(v: u8) -> u8 { match v { 0 => { 1 }, _ => 2 } }");
         assert_eq!(early.text, value.text);
     }
 
@@ -5057,8 +5064,8 @@ mod tests {
     }
 
     #[test]
-    fn a_unit_tail_semicolon_merges() {
-        assert_merge(&[
+    fn a_unit_tail_semicolon_requires_a_scope_proof() {
+        assert_split(&[
             ("f(); g()", "f(); g();"),
             ("f(); println!(\"x\")", "f(); println!(\"x\");"),
             ("fn k() { f(); g() }", "fn k() { f(); g(); }"),
@@ -5077,14 +5084,6 @@ mod tests {
             ),
             ("while c { g() } f();", "while c { g(); } f();"),
             (
-                "let v = loop { break 5 }; f(v);",
-                "let v = loop { break 5; }; f(v);",
-            ),
-            (
-                "if c { panic!(\"x\") } f();",
-                "if c { panic!(\"x\"); } f();",
-            ),
-            (
                 "if a { g() } else if b { h() } f();",
                 "if a { g(); } else if b { h(); } f();",
             ),
@@ -5092,6 +5091,16 @@ mod tests {
             (
                 "fn k() { if c { return g(); } else { h() }; }",
                 "fn k() { if c { g() } else { h() } }",
+            ),
+        ]);
+        assert_merge(&[
+            (
+                "let v = loop { break 5 }; f(v);",
+                "let v = loop { break 5; }; f(v);",
+            ),
+            (
+                "if c { panic!(\"x\") } f();",
+                "if c { panic!(\"x\"); } f();",
             ),
         ]);
     }
@@ -5125,11 +5134,16 @@ mod tests {
             ),
             ("impl S { fn h(mut self) {} }", "impl S { fn h(self) {} }"),
             ("match x { _ => 5 }; g();", "match x { _ => 5 } g();"),
+        ] {
+            assert_ne!(failing(a), failing(b), "{a} vs {b}");
+            assert_eq!(canonicalize(a).text, canonicalize(b).text, "{a} vs {b}");
+        }
+        for (a, b) in [
             ("f(); 5", "f(); 5;"),
             ("for i in v { i }", "for i in v { i; }"),
         ] {
             assert_ne!(failing(a), failing(b), "{a} vs {b}");
-            assert_eq!(canonicalize(a).text, canonicalize(b).text, "{a} vs {b}");
+            assert_ne!(canonicalize(a).text, canonicalize(b).text, "{a} vs {b}");
         }
         assert_eq!(
             failing("fn f(x: u8) -> u8 { return (x); }"),

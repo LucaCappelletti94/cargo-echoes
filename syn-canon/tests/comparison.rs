@@ -121,7 +121,7 @@ fn opaque_compound_operators_count_as_body_units_without_swallowing_neighbors() 
         ("a =<< b", 6),
         ("a =.. b", 6),
     ] {
-        let source = format!("fn f() {{ observe!({input}); }}");
+        let source = format!("fn f() {{ observe!({input}) }}");
         let form = syn_canon::canonicalize(syn::parse_str(&source).unwrap());
         assert_eq!(form.body_units(), units, "{input}");
         assert_eq!(form.leaf_tokens(), 9, "{input}");

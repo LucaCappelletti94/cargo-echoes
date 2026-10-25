@@ -206,6 +206,87 @@ class WitnessHarnessTests(unittest.TestCase):
             self.assertFalse(report["ok"])
             self.assertIn("DG-HARNESS-CLI-01", process.stdout)
 
+    def test_edition_dependent_expectation_requires_agreement_in_2024(self):
+        cases = json.loads(
+            pathlib.Path(__file__).with_name("fixtures").joinpath(
+                "dependency", "tail_cases.json"
+            ).read_text()
+        )
+        case = next(row for row in cases if row["id"] == "T01_function_return_tail")
+        report = self.matrix([case], "DG-HARNESS-EDITION-01")
+        self.assertTrue(report["ok"], report)
+        for check in report["checks"]:
+            self.assertTrue(check["compiled"])
+            self.assertEqual(check["equal"], check["edition"] == "2024")
+            self.assertTrue(check["matches_expectation"])
+        for result in report["results"]:
+            self.assertTrue(result["request_id"].startswith("DG-HARNESS-EDITION-01/"))
+            self.assertEqual(result["run"]["exit"], 0)
+            expected_stdout = "drop temp\ndrop local\n0\n"
+            if result["side"] == "b" and result["edition"] == "2021":
+                expected_stdout = "drop local\ndrop temp\n0\n"
+            self.assertEqual(result["run"]["stdout"], expected_stdout)
+
+    def test_edition_dependent_expectation_rejects_mismatched_pairs(self):
+        cases = [
+            {
+                "id": "agrees_in_2021",
+                "a": "fn main(){println!(\"{}\", 5u32);}",
+                "b": "fn main(){println!(\"{}\", 5u32);}",
+                "expected": "edition-dependent",
+            },
+            {
+                "id": "differs_in_2024",
+                "a": "fn main(){println!(\"{}\", 5u32);}",
+                "b": "fn main(){println!(\"{}\", 6u32);}",
+                "expected": "edition-dependent",
+            },
+        ]
+        report = self.matrix(cases, "DG-HARNESS-EDITION-MISMATCH-01")
+        self.assertFalse(report["ok"])
+        for check in report["checks"]:
+            if check["case_id"] == "agrees_in_2021":
+                self.assertTrue(check["equal"])
+                self.assertEqual(check["matches_expectation"], check["edition"] == "2024")
+            else:
+                self.assertFalse(check["equal"])
+                self.assertEqual(check["matches_expectation"], check["edition"] == "2021")
+
+    def test_unknown_expectation_is_rejected_before_compilation(self):
+        case = {
+            "id": "bad_expectation",
+            "a": "fn main(){}",
+            "b": "fn main(){}",
+            "expected": "edition-2024",
+        }
+        with self.assertRaises(ValueError):
+            witnesses.run_matrix(
+                [case], request_id="DG-HARNESS-EDITION-VAL-01", timeout=60
+            )
+
+    def test_edition_dependent_checks_cannot_match_on_incomplete_jobs(self):
+        source = (
+            "fn main(){std::thread::sleep(std::time::Duration::from_millis(500));"
+            'println!("done");}'
+        )
+        report = witnesses.run_matrix(
+            [{
+                "id": "edition_deadline",
+                "a": source,
+                "b": source,
+                "expected": "edition-dependent",
+            }],
+            request_id="DG-HARNESS-EDITION-GLOBAL-01",
+            toolchain="stable",
+            timeout=3,
+        )
+        self.assertFalse(report["ok"])
+        incomplete = [check for check in report["checks"] if not check["compiled"]]
+        self.assertTrue(incomplete)
+        for check in incomplete:
+            self.assertFalse(check["equal"])
+            self.assertFalse(check["matches_expectation"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -330,6 +330,7 @@ pub(crate) struct Renamer<'env> {
     /// A live observer attribute froze the declarations being visited.
     observed: bool,
     constants_observed: bool,
+    tail_blocked: bool,
     constants_prepared: bool,
     regions_active: bool,
     /// The block nesting level of the traversal.
@@ -383,6 +384,7 @@ impl<'env> Renamer<'env> {
             inline_depth: 0,
             observed: false,
             constants_observed: false,
+            tail_blocked: false,
             constants_prepared: false,
             regions_active: true,
             depth: 0,
@@ -417,6 +419,7 @@ impl<'env> Renamer<'env> {
         let observed = inherited.frames.iter().any(|frame| frame.observed);
         let mut renamer = Self::base(true, inherited);
         renamer.observed = observed;
+        renamer.tail_blocked = observed;
         renamer
     }
 
@@ -431,6 +434,7 @@ impl<'env> Renamer<'env> {
         renamer.prim_fallback = options.prim_fallback;
         renamer.std_names = options.std_names;
         renamer.observed = options.observed;
+        renamer.tail_blocked = options.enclosing_observed;
         renamer.seed = options.seed;
         renamer.generics = options.generics;
         if let Some(table) = options.helper_table {
@@ -1211,6 +1215,16 @@ impl<'env> Renamer<'env> {
     /// The facts of the most recently analyzed block, when any.
     pub(crate) fn last_block_facts(&self) -> Option<&schedule::BlockFacts> {
         self.block_facts.last()
+    }
+
+    fn tails_allowed(&self) -> bool {
+        !self.analysis && !self.tail_blocked && self.macro_origins.is_none()
+    }
+
+    pub(crate) fn normalize_return_body(&self, block: &mut syn::Block) {
+        if self.tails_allowed() {
+            crate::tails::normalize(self, block);
+        }
     }
 
     /// The proven primitive type of a declared type, when the declaration
@@ -2268,7 +2282,7 @@ impl<'env> Renamer<'env> {
         for name in &names {
             self.bind_full(Ns::Value, name, Origin::Let, None, 0, plan.take());
         }
-        syn::visit_mut::visit_pat_mut(self, pat);
+        self.visit_pat_mut(pat);
         rewrite_pat_bindings(self, pat);
     }
 
@@ -2288,6 +2302,8 @@ impl<'env> Renamer<'env> {
         );
         let observed = self.observed;
         self.observed |= crate::context::live_attr(attrs);
+        let tail_blocked = self.tail_blocked;
+        self.tail_blocked |= crate::tails::observed(attrs, self.std_names);
         let scoped = if self.compiles
             && let Some(block) = body.as_deref_mut()
         {
@@ -2327,6 +2343,7 @@ impl<'env> Renamer<'env> {
         visit_fn_inputs(self, sig.inputs.iter_mut());
         syn::visit_mut::visit_return_type_mut(self, &mut sig.output);
         if let Some(body) = body {
+            self.normalize_return_body(body);
             self.visit_block_mut(body);
         }
         self.pop();
@@ -2335,6 +2352,7 @@ impl<'env> Renamer<'env> {
             self.scopes.pop().expect("a fn scope");
         }
         self.observed = observed;
+        self.tail_blocked = tail_blocked;
         self.receiver = receiver;
     }
 
@@ -3035,6 +3053,7 @@ fn visit_value_item(
 
 impl VisitMut for Renamer<'_> {
     fn visit_file_mut(&mut self, file: &mut syn::File) {
+        self.tail_blocked |= crate::tails::observed(&file.attrs, self.std_names);
         self.observed |= crate::context::live_attr(&file.attrs);
         self.constants_observed |= crate::context::live_attr(&file.attrs);
         self.prim_fallback &= crate::context::scope_primitives_known(&file.items);
@@ -3046,6 +3065,9 @@ impl VisitMut for Renamer<'_> {
     }
 
     fn visit_item_mut(&mut self, item: &mut syn::Item) {
+        let tail_blocked = self.tail_blocked;
+        self.tail_blocked |=
+            crate::tails::observed(crate::helpers::item_attrs(item), self.std_names);
         let observed = self.constants_observed;
         self.constants_observed |=
             crate::drift::item_attrs(item).is_some_and(|attrs| crate::context::live_attr(attrs));
@@ -3059,9 +3081,12 @@ impl VisitMut for Renamer<'_> {
         self.regions_active = regions_active;
         self.constants_observed = observed;
         self.helper_blocked = helper_blocked;
+        self.tail_blocked = tail_blocked;
     }
 
     fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
+        let tail_blocked = self.tail_blocked;
+        self.tail_blocked |= crate::tails::observed(crate::drift::expr_attrs(expr), self.std_names);
         let observed = self.constants_observed;
         self.constants_observed |= !crate::drift::expr_attrs(expr).is_empty();
         let prepared = self.constants_prepared;
@@ -3072,9 +3097,12 @@ impl VisitMut for Renamer<'_> {
         syn::visit_mut::visit_expr_mut(self, expr);
         self.constants_prepared = prepared;
         self.constants_observed = observed;
+        self.tail_blocked = tail_blocked;
     }
 
     fn visit_block_mut(&mut self, block: &mut syn::Block) {
+        let tail_blocked = self.tail_blocked;
+        self.tail_blocked |= crate::tails::blocked(self, block);
         self.push();
         let before_constants = self.helper_syntax.snapshot_block(block);
         let items: Vec<&syn::Item> = block
@@ -3090,6 +3118,9 @@ impl VisitMut for Renamer<'_> {
             if let syn::Item::Use(import) = item {
                 self.prebind_use_tree(&import.tree, &mut Vec::new());
             }
+        }
+        if self.compiles && self.tails_allowed() {
+            crate::tails::drop_exit_semicolon(self, block);
         }
         self.depth += 1;
         if self.constants_allowed() {
@@ -3154,9 +3185,12 @@ impl VisitMut for Renamer<'_> {
             let facts = self.block_facts.pop().expect("an analyzed block");
             facts.finish(block, &mut self.facts);
         }
+        self.tail_blocked = tail_blocked;
     }
 
     fn visit_local_mut(&mut self, local: &mut syn::Local) {
+        let tail_blocked = self.tail_blocked;
+        self.tail_blocked |= crate::tails::observed(&local.attrs, self.std_names);
         let observed = self.constants_observed;
         self.constants_observed |= !local.attrs.is_empty();
         // The initializer resolves under the outer bindings.
@@ -3168,6 +3202,15 @@ impl VisitMut for Renamer<'_> {
         }
         self.bind_pat(&mut local.pat);
         self.constants_observed = observed;
+        self.tail_blocked = tail_blocked;
+    }
+
+    fn visit_pat_mut(&mut self, pat: &mut syn::Pat) {
+        let tail_blocked = self.tail_blocked;
+        self.tail_blocked |= crate::drift::pat_attrs(pat)
+            .is_some_and(|attrs| crate::tails::observed(attrs, self.std_names));
+        syn::visit_mut::visit_pat_mut(self, pat);
+        self.tail_blocked = tail_blocked;
     }
 
     fn visit_item_fn_mut(&mut self, item: &mut syn::ItemFn) {
@@ -3508,22 +3551,40 @@ impl VisitMut for Renamer<'_> {
             }
         }
         for input in &mut closure.inputs {
-            syn::visit_mut::visit_pat_mut(self, input);
+            self.visit_pat_mut(input);
             rewrite_pat_bindings(self, input);
         }
         syn::visit_mut::visit_return_type_mut(self, &mut closure.output);
+        if self.tails_allowed() {
+            crate::tails::normalize_expr(self, &mut closure.body);
+            crate::tails::unwrap(self, &mut closure.body);
+        }
         syn::visit_mut::visit_expr_mut(self, &mut closure.body);
         self.pop();
     }
 
+    fn visit_expr_async_mut(&mut self, expr: &mut syn::ExprAsync) {
+        self.normalize_return_body(&mut expr.block);
+        syn::visit_mut::visit_expr_async_mut(self, expr);
+    }
+
     fn visit_arm_mut(&mut self, arm: &mut syn::Arm) {
+        let tail_blocked = self.tail_blocked;
+        self.tail_blocked |= crate::tails::observed(&arm.attrs, self.std_names);
+        let observed = self.constants_observed;
+        self.constants_observed |= !arm.attrs.is_empty();
         self.push();
         if self.regions_active && self.values_allowed() && self.macro_origins.is_none() {
             crate::structure::literal_alternatives(arm);
         }
         self.bind_pat(&mut arm.pat);
+        if self.tails_allowed() && arm.attrs.is_empty() {
+            crate::tails::unwrap(self, &mut arm.body);
+        }
         syn::visit_mut::visit_expr_mut(self, &mut arm.body);
         self.pop();
+        self.constants_observed = observed;
+        self.tail_blocked = tail_blocked;
     }
 
     fn visit_expr_for_loop_mut(&mut self, for_loop: &mut syn::ExprForLoop) {
@@ -3809,7 +3870,7 @@ impl VisitMut for Renamer<'_> {
     }
 
     fn visit_pat_guard_mut(&mut self, node: &mut syn::PatGuard) {
-        syn::visit_mut::visit_pat_mut(self, &mut node.pat);
+        self.visit_pat_mut(&mut node.pat);
         walk_let_cond(self, &mut node.guard);
     }
 

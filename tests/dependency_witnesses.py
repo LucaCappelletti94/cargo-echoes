@@ -18,7 +18,9 @@ EDITIONS = ("2021", "2024")
 OPTIMIZATIONS = (0, 2)
 OVERFLOW_CHECKS = (False, True)
 SIDES = ("a", "b")
-EXPECTATIONS = frozenset(("same", "different", "profile-dependent"))
+EXPECTATIONS = frozenset(
+    ("same", "different", "profile-dependent", "edition-dependent")
+)
 COMPILE_CAP = 30.0
 RUN_CAP = 5.0
 PROBE_CAP = 10.0
@@ -231,6 +233,8 @@ def _build_checks(validated, lookup, request_id):
                         matches = complete and equal
                     elif expected == "different":
                         matches = complete and not equal
+                    elif expected == "edition-dependent":
+                        matches = complete and equal == (edition == "2024")
                     else:
                         matches = complete and equal == (not overflow_checks)
                     checks.append(

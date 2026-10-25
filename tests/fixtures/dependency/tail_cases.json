@@ -1,0 +1,93 @@
+[
+  {
+    "id": "T01_function_return_tail",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { let local = D(\"local\"); return D(\"temp\").value(); }\nfn main() { println!(\"{}\", f()); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { let local = D(\"local\"); D(\"temp\").value() }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T02_method_return_tail",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nstruct S;\nimpl S { fn run(&self) -> u32 { let local = D(\"local\"); return D(\"temp\").value(); } }\nfn main() { println!(\"{}\", S.run()); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nstruct S;\nimpl S { fn run(&self) -> u32 { let local = D(\"local\"); D(\"temp\").value() } }\nfn main() { println!(\"{}\", S.run()); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T03_trait_default_return_tail",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\ntrait Run { fn run(&self) -> u32 { let local = D(\"local\"); return D(\"temp\").value(); } }\nstruct S;\nimpl Run for S {}\nfn main() { println!(\"{}\", S.run()); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\ntrait Run { fn run(&self) -> u32 { let local = D(\"local\"); D(\"temp\").value() } }\nstruct S;\nimpl Run for S {}\nfn main() { println!(\"{}\", S.run()); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T04_closure_return_tail",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn make() -> impl Fn() -> u32 { || { let local = D(\"local\"); return D(\"temp\").value(); } }\nfn main() { println!(\"{}\", make()()); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn make() -> impl Fn() -> u32 { || { let local = D(\"local\"); D(\"temp\").value() } }\nfn main() { println!(\"{}\", make()()); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T05_async_return_tail",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn block_on<F: std::future::Future>(fut: F) -> F::Output { let mut cx = std::task::Context::from_waker(std::task::Waker::noop()); let mut fut = std::pin::pin!(fut); match std::future::Future::poll(fut.as_mut(), &mut cx) { std::task::Poll::Ready(value) => value, std::task::Poll::Pending => panic!(\"witness future is pending\") } }\nasync fn run() -> u32 { let local = D(\"local\"); return D(\"temp\").value(); }\nfn main() { println!(\"{}\", block_on(run())); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn block_on<F: std::future::Future>(fut: F) -> F::Output { let mut cx = std::task::Context::from_waker(std::task::Waker::noop()); let mut fut = std::pin::pin!(fut); match std::future::Future::poll(fut.as_mut(), &mut cx) { std::task::Poll::Ready(value) => value, std::task::Poll::Pending => panic!(\"witness future is pending\") } }\nasync fn run() -> u32 { let local = D(\"local\"); D(\"temp\").value() }\nfn main() { println!(\"{}\", block_on(run())); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T06_nested_block_return_tail",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { { let local = D(\"local\"); return D(\"temp\").value(); } }\nfn main() { println!(\"{}\", f()); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { { let local = D(\"local\"); D(\"temp\").value() } }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T07_if_condition_return_tail",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { let local = D(\"local\"); return if let 0u32 = D(\"temp\").value() { 1u32 } else { 2u32 }; }\nfn main() { println!(\"{}\", f()); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { let local = D(\"local\"); if let 0u32 = D(\"temp\").value() { 1u32 } else { 2u32 } }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T08_match_scrutinee_return_tail",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { let local = D(\"local\"); return match D(\"temp\").value() { 0 => 1u32, _ => 2u32 }; }\nfn main() { println!(\"{}\", f()); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { let local = D(\"local\"); match D(\"temp\").value() { 0 => 1u32, _ => 2u32 } }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T09_match_arm_return",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { let local = D(\"local\"); match 0u32 { 0 => { let inner = D(\"inner\"); return D(\"temp\").value(); }, _ => 1u32 } }\nfn main() { println!(\"{}\", f()); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { let local = D(\"local\"); match 0u32 { 0 => { let inner = D(\"inner\"); D(\"temp\").value() }, _ => 1u32 } }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T10_unsafe_block_return_tail",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 {\n// SAFETY: The block contains only safe operations.\nunsafe { let local = D(\"local\"); return D(\"temp\").value(); }\n}\nfn main() { println!(\"{}\", f()); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 {\n// SAFETY: The block contains only safe operations.\nunsafe { let local = D(\"local\"); D(\"temp\").value() }\n}\nfn main() { println!(\"{}\", f()); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T11_async_block_return_tail",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn block_on<F: std::future::Future>(fut: F) -> F::Output { let mut cx = std::task::Context::from_waker(std::task::Waker::noop()); let mut fut = std::pin::pin!(fut); match std::future::Future::poll(fut.as_mut(), &mut cx) { std::task::Poll::Ready(value) => value, std::task::Poll::Pending => panic!(\"witness future is pending\") } }\nfn main() { let future = async { let local = D(\"local\"); return D(\"temp\").value(); }; println!(\"{}\", block_on(future)); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn block_on<F: std::future::Future>(fut: F) -> F::Output { let mut cx = std::task::Context::from_waker(std::task::Waker::noop()); let mut fut = std::pin::pin!(fut); match std::future::Future::poll(fut.as_mut(), &mut cx) { std::task::Poll::Ready(value) => value, std::task::Poll::Pending => panic!(\"witness future is pending\") } }\nfn main() { let future = async { let local = D(\"local\"); D(\"temp\").value() }; println!(\"{}\", block_on(future)); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T13_match_primitive_no_temporary",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { let local = D(\"local\"); return match 0u32 { 0 => 1u32, _ => 2u32 }; }\nfn main() { println!(\"{}\", f()); }",
+    "b": "struct D(&'static str);\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() -> u32 { let local = D(\"local\"); match 0u32 { 0 => 1u32, _ => 2u32 } }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "same"
+  },
+  {
+    "id": "T14_unit_block_tail",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn unit(&self) {} }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() { let local = D(\"local\"); { D(\"temp\").unit() } return; }\nfn main() { f(); }",
+    "b": "struct D(&'static str);\nimpl D { fn unit(&self) {} }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() { let local = D(\"local\"); { D(\"temp\").unit() } }\nfn main() { f(); }",
+    "expected": "edition-dependent"
+  }
+]
