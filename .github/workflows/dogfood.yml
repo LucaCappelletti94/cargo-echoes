@@ -14,7 +14,7 @@ concurrency:
 jobs:
   dogfood:
     name: Dogfood the action on the fixture
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       # Resolving the review threads of copies that are gone needs contents: write.
       contents: write
@@ -146,7 +146,7 @@ jobs:
 
   payload:
     name: Prepare a review payload without posting it
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     if: ${{ github.event_name == 'pull_request' }}
     permissions: {}
     steps:
@@ -201,7 +201,7 @@ jobs:
 
   functions:
     name: Dogfood the function check on its fixture
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -256,7 +256,7 @@ jobs:
 
   member:
     name: Dogfood the action from a workspace member and on procedural macros
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
