@@ -612,12 +612,16 @@ fn compound_constant_negation_preserves_signed_results() {
 }
 
 #[test]
-fn comparison_operands_fold_without_boolean_evaluation() {
+fn comparison_operands_fold_with_reflexive_equality() {
     for operator in ["==", "!=", "<", "<=", ">", ">="] {
         let source = format!("fn f() -> bool {{ (2u32 + 3u32) {operator} 5u32 }}");
         let expected = format!("fn f() -> bool {{ 5u32 {operator} 5u32 }}");
         assert_eq!(form(&source), form(&expected));
-        assert_ne!(form(&source), form("fn f() -> bool { true }"));
+        if operator == "==" {
+            assert_eq!(form(&source), form("fn f() -> bool { true }"));
+        } else {
+            assert_ne!(form(&source), form("fn f() -> bool { true }"));
+        }
         assert_ne!(form(&source), form("fn f() -> bool { false }"));
     }
 }

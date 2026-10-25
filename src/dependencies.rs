@@ -2670,6 +2670,18 @@ mod tests {
         assert!(second.coverage.complete);
         assert_eq!(second.coverage.indexed_files, first.coverage.indexed_files);
         assert_eq!(second.coverage.cached_files, first.coverage.indexed_files);
+        let manifest_dir = std::fs::canonicalize(dir.path().join("deps/direct")).unwrap();
+        let key = source_key("path", &manifest_dir.to_string_lossy());
+        let entry = cache.join("private").join(key).join("direct.json");
+        let mut stale: serde_json::Value =
+            serde_json::from_reader(std::fs::File::open(&entry).unwrap()).unwrap();
+        stale["canonicalization"] = serde_json::Value::from("incompatible-policy");
+        stale["records"] = serde_json::json!([]);
+        std::fs::write(&entry, serde_json::to_vec(&stale).unwrap()).unwrap();
+        let rebuilt = run(dir.path(), &local, &targets, &options);
+        assert_eq!(packages(&rebuilt), packages(&first));
+        assert!(rebuilt.coverage.complete);
+        assert!(rebuilt.coverage.cached_files < second.coverage.cached_files);
         put(
             dir.path(),
             "deps/direct/src/lib.rs",

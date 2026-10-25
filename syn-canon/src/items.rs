@@ -1503,32 +1503,32 @@ impl<'a> Observations<'a> {
     fn scalar_binary(&mut self, binary: &syn::ExprBinary) -> Option<(Lbl, crate::scope::PrimTy)> {
         let (left, _) = self.scalar(&binary.left)?;
         let (right, _) = self.scalar(&binary.right)?;
-        let label =
-            if let Some(reduced) = crate::schedule::true_comparison(binary.op, &left, &right) {
-                reduced
-            } else {
-                match crate::schedule::total_binary(binary.op, &left, &right)? {
-                    crate::schedule::TotalBinary::Ordered { tag, reverse, prim } => {
-                        let (left, right) = if reverse.is_some() {
-                            (right, left)
-                        } else {
-                            (left, right)
-                        };
-                        Lbl::Op(
-                            tag,
-                            alloc::boxed::Box::new(left),
-                            alloc::boxed::Box::new(right),
-                            prim,
-                        )
-                    }
-                    crate::schedule::TotalBinary::Flat(op, prim) => {
-                        let mut leaves = Vec::new();
-                        crate::schedule::collect_leaves(op, prim, left, &mut leaves);
-                        crate::schedule::collect_leaves(op, prim, right, &mut leaves);
-                        crate::schedule::flat_label(op, prim, leaves)
-                    }
+        let label = if let Some(reduced) = crate::schedule::equality_label(binary.op, &left, &right)
+        {
+            reduced
+        } else {
+            match crate::schedule::total_binary(binary.op, &left, &right)? {
+                crate::schedule::TotalBinary::Ordered { tag, reverse, prim } => {
+                    let (left, right) = if reverse.is_some() {
+                        (right, left)
+                    } else {
+                        (left, right)
+                    };
+                    Lbl::Op(
+                        tag,
+                        alloc::boxed::Box::new(left),
+                        alloc::boxed::Box::new(right),
+                        prim,
+                    )
                 }
-            };
+                crate::schedule::TotalBinary::Flat(op, prim) => {
+                    let mut leaves = Vec::new();
+                    crate::schedule::collect_leaves(op, prim, left, &mut leaves);
+                    crate::schedule::collect_leaves(op, prim, right, &mut leaves);
+                    crate::schedule::flat_label(op, prim, leaves)
+                }
+            }
+        };
         let prim = label.prim()?;
         Some((label, prim))
     }

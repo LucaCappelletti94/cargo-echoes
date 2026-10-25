@@ -60,6 +60,7 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block, facts: &B
     }
     let env = renamer.frame_env();
     let mut walker = Walker {
+        renamer,
         env,
         locals: 0,
         dedup: true,
@@ -119,7 +120,8 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block, facts: &B
     }
 }
 
-struct Walker<'env> {
+struct Walker<'a, 'env> {
+    renamer: &'a Renamer<'env>,
     env: Env<'env>,
     locals: usize,
     dedup: bool,
@@ -136,29 +138,33 @@ fn tail_expr_mut(block: &mut syn::Block) -> Option<&mut syn::Expr> {
     Some(expr)
 }
 
-impl Walker<'_> {
-    fn scalar_in_place(&self, expr: &mut syn::Expr) -> Option<Lbl> {
+impl Walker<'_, '_> {
+    fn scalar_in_place(&self, expr: &mut syn::Expr, total_calls: bool) -> Option<Lbl> {
         let owned = core::mem::replace(expr, empty_expr());
-        let (normalized, label) = self.scalar(owned);
+        let (normalized, label) = self.scalar(owned, total_calls);
         *expr = normalized;
         label
     }
 
-    fn scalar(&self, expr: syn::Expr) -> (syn::Expr, Option<Lbl>) {
+    fn scalar(&self, expr: syn::Expr, total_calls: bool) -> (syn::Expr, Option<Lbl>) {
         if !crate::drift::expr_attrs(&expr).is_empty() {
             return (expr, None);
         }
         match expr {
             syn::Expr::Binary(mut binary) => {
-                let left = self.scalar_in_place(&mut binary.left);
-                let right = self.scalar_in_place(&mut binary.right);
+                let total_calls =
+                    total_calls || self.dedup && matches!(binary.op, syn::BinOp::Eq(_));
+                let left = self.scalar_in_place(&mut binary.left, total_calls);
+                let right = self.scalar_in_place(&mut binary.right, total_calls);
                 let (Some(left), Some(right)) = (left, right) else {
                     return (syn::Expr::Binary(binary), None);
                 };
                 if self.dedup
-                    && let Some(label) = schedule::true_comparison(binary.op, &left, &right)
+                    && let Some(label) = schedule::equality_label(binary.op, &left, &right)
                 {
-                    let expr = if left == Lbl::Bool(true) {
+                    let expr = if label == Lbl::Bool(true) {
+                        crate::constants::literal_expr(PrimTy::Bool, 1, binary.span())
+                    } else if left == Lbl::Bool(true) {
                         *binary.right
                     } else {
                         *binary.left
@@ -208,7 +214,7 @@ impl Walker<'_> {
                 }
             }
             syn::Expr::Unary(mut unary) if self.dedup && matches!(unary.op, syn::UnOp::Not(_)) => {
-                if let Some(inner) = self.scalar_in_place(&mut unary.expr)
+                if let Some(inner) = self.scalar_in_place(&mut unary.expr, total_calls)
                     && inner.prim() == Some(PrimTy::Bool)
                 {
                     if !matches!(
@@ -224,8 +230,15 @@ impl Walker<'_> {
                 }
                 (syn::Expr::Unary(unary), None)
             }
-            syn::Expr::If(branch) if self.dedup => self.branch(branch),
-            syn::Expr::Group(group) => self.scalar(*group.expr),
+            syn::Expr::If(branch) if self.dedup => self.branch(branch, total_calls),
+            syn::Expr::Group(group) => self.scalar(*group.expr, total_calls),
+            expr @ syn::Expr::Call(_) if total_calls => {
+                let mut locals = 0;
+                let label =
+                    schedule::label_expr(self.renamer, &self.env, &expr, 0, &mut locals, None).0;
+                let label = label.prim().is_some().then_some(label);
+                (expr, label)
+            }
             expr @ (syn::Expr::Lit(_) | syn::Expr::Path(_) | syn::Expr::Unary(_)) => {
                 let label = schedule::scalar_leaf(&self.env, &expr);
                 (expr, label)
@@ -234,13 +247,13 @@ impl Walker<'_> {
         }
     }
 
-    fn condition(&self, expr: syn::Expr) -> (syn::Expr, Option<Lbl>, bool) {
+    fn condition(&self, expr: syn::Expr, total_calls: bool) -> (syn::Expr, Option<Lbl>, bool) {
         match expr {
             syn::Expr::Unary(mut unary)
                 if unary.attrs.is_empty() && matches!(unary.op, syn::UnOp::Not(_)) =>
             {
                 let owned = core::mem::replace(&mut *unary.expr, empty_expr());
-                let (expr, label, inverted) = self.condition(owned);
+                let (expr, label, inverted) = self.condition(owned, total_calls);
                 if label
                     .as_ref()
                     .is_some_and(|label| label.prim() == Some(PrimTy::Bool))
@@ -251,37 +264,39 @@ impl Walker<'_> {
                     (syn::Expr::Unary(unary), None, false)
                 }
             }
-            syn::Expr::Group(group) if group.attrs.is_empty() => self.condition(*group.expr),
+            syn::Expr::Group(group) if group.attrs.is_empty() => {
+                self.condition(*group.expr, total_calls)
+            }
             expr => {
-                let (expr, label) = self.scalar(expr);
+                let (expr, label) = self.scalar(expr, total_calls);
                 (expr, label, false)
             }
         }
     }
 
-    fn tail(&self, block: &mut syn::Block) -> Option<Lbl> {
+    fn tail(&self, block: &mut syn::Block, total_calls: bool) -> Option<Lbl> {
         let expr = tail_expr_mut(block)?;
-        self.scalar_in_place(expr)
+        self.scalar_in_place(expr, total_calls)
     }
 
-    fn branch(&self, mut branch: syn::ExprIf) -> (syn::Expr, Option<Lbl>) {
+    fn branch(&self, mut branch: syn::ExprIf, total_calls: bool) -> (syn::Expr, Option<Lbl>) {
         let Some((_, otherwise)) = &mut branch.else_branch else {
-            self.scalar_in_place(&mut branch.cond);
+            self.scalar_in_place(&mut branch.cond, total_calls);
             return (syn::Expr::If(branch), None);
         };
         let syn::Expr::Block(else_block) = &mut **otherwise else {
-            self.scalar_in_place(&mut branch.cond);
-            self.scalar_in_place(otherwise);
+            self.scalar_in_place(&mut branch.cond, total_calls);
+            self.scalar_in_place(otherwise, total_calls);
             return (syn::Expr::If(branch), None);
         };
         if !schedule::branches_unattributed(&branch.attrs, &branch.then_branch, else_block) {
-            self.scalar_in_place(&mut branch.cond);
+            self.scalar_in_place(&mut branch.cond, total_calls);
             return (syn::Expr::If(branch), None);
         }
-        let mut then = self.tail(&mut branch.then_branch);
-        let mut otherwise = self.tail(&mut else_block.block);
+        let mut then = self.tail(&mut branch.then_branch, total_calls);
+        let mut otherwise = self.tail(&mut else_block.block, total_calls);
         let owned = core::mem::replace(&mut *branch.cond, empty_expr());
-        let (cond, label, inverted) = self.condition(owned);
+        let (cond, label, inverted) = self.condition(owned, total_calls);
         *branch.cond = cond;
         let Some(mut cond_label) = label.filter(|label| label.prim() == Some(PrimTy::Bool)) else {
             return (syn::Expr::If(branch), None);
@@ -330,7 +345,7 @@ impl Walker<'_> {
     }
 }
 
-impl VisitMut for Walker<'_> {
+impl VisitMut for Walker<'_, '_> {
     fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
         if !crate::drift::expr_attrs(expr).is_empty() {
             return;
@@ -343,7 +358,7 @@ impl VisitMut for Walker<'_> {
             | syn::Expr::Path(_)
             | syn::Expr::Group(_) => {
                 let owned = core::mem::replace(expr, empty_expr());
-                *expr = self.scalar(owned).0;
+                *expr = self.scalar(owned, false).0;
             }
             syn::Expr::Reference(reference) => {
                 let dedup = core::mem::replace(&mut self.dedup, false);

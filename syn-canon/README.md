@@ -15,12 +15,16 @@ let mut forms = HashSet::new();
 assert!(forms.insert(canonical("fn f(x: u32) -> u32 { return (x + 1); }")));
 assert!(!forms.insert(canonical("fn g(y: u32) -> u32 { y + 1 }")));
 assert!(forms.insert(canonical("fn f(x: u64) -> u64 { x + 1 }")));
+assert_eq!(
+    canonical("fn f(x: u32) -> bool { x == x }"),
+    canonical("fn f(x: u32) -> bool { true }"),
+);
 println!("{forms:?}");
 ```
 
 `no_std` with `alloc`. It powers [`cargo-echoes`](https://github.com/LucaCappelletti94/cargo-echoes), which finds duplicated doctests.
 
-Equal forms mean approximate duplication, since the normalization cannot see what the compiler resolves, such as inferred types, macro expansions or an enclosing `cfg`. Tail `return` folds require temporary-free values and forwarded control heads. Unknown calls, borrows, destructor dependencies and unresolved values retain return boundaries in both comparison modes.
+Equal forms mean approximate duplication, since the normalization cannot see what the compiler resolves, such as inferred types, macro expansions or an enclosing `cfg`. Tail `return` folds require temporary-free values and forwarded control heads, preserving return boundaries for unknown calls, borrows, destructor dependencies and unresolved values in both comparison modes. Reflexive equality folds in compiling mode only for identical proven total boolean or fixed-width integer values.
 
 Macro input retains significant commas unless lexical resolution proves a supported standard grammar. Enclosing macros and live attributes preserve comma spelling.
 
