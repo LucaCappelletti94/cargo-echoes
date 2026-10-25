@@ -742,7 +742,7 @@ body_section() {
   [ -n "$2" ] || return 0
   local kept more
   kept="$(printf '%s' "$2" | fit_lines "$3")"
-  more=$(($(printf '%s' "$2" | wc -l) - $(printf '%s' "$kept" | wc -l)))
+  more=$(($(printf '%s\n' "$2" | awk 'NF { n++ } END { print n+0 }') - $(printf '%s\n' "$kept" | awk 'NF { n++ } END { print n+0 }')))
   printf '%s\n\n%s' "$1" "$kept"
   [ "$more" -gt 0 ] && printf '\n%s' "and $more more, they are in the run summary $run_url"
   return 0
@@ -756,11 +756,13 @@ review_text() {
   [ "$rate_omitted" -gt 0 ] && text="$text"$'\n\n'"$rate_omitted inline copies were not posted because the api rate limit was reached, they are listed in the run summary $run_url"
   printf '%s' "$text"
 }
+review_sites="$(ejq -r 'include "echoes"; [report_sites | .s | site_line] | capped | .[:1500]' "$report")"
+review_footer="$echoes_link · $(report_link 'review' "$review_sites") · $support_link"
 review_body="$(review_text 1000000000)"
 # The api rejects a review body over 65,536 characters, so the lists
 # are truncated with a pointer to the run summary.
-if [ "${#review_body}" -gt 65000 ]; then
-  review_body="$(review_text $((65000 / 2 - 400)))"
+if [ "$((${#review_body} + ${#review_footer}))" -gt 65000 ]; then
+  review_body="$(review_text $(((65000 - ${#review_footer}) / 2 - 400)))"
 fi
 if [ -z "$review_body" ]; then
   if [ "$posted_local" -eq 0 ] && [ "$posted_reuse" -eq 0 ]; then
@@ -771,6 +773,7 @@ if [ -z "$review_body" ]; then
     review_body='echoes found duplicates in this pull request, the inline comments name them.'
   fi
 fi
+review_body="$review_body"$'\n\n'"$review_footer"
 [ -n "$scope" ] && review_body="$review_body"$'\n\n'"$(review_mark)"
 review+=(-f "body=$review_body")
 if ! resp="$(gh api -X POST "repos/$repo/pulls/$pr/reviews" "${review[@]}" 2>&1)"; then
