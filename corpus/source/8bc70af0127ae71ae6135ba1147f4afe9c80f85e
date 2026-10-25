@@ -1,0 +1,4 @@
+#[derive(e=str!("doc.md")= "```", must_use = "extra"c"x")]
+#[cf]
+/// fn%
+pub struct Gated;

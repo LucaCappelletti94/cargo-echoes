@@ -1,0 +1,21 @@
+/// ```4;
+/// ```
+#[cfg(all(not(test), any(doce!hsfntt, feature = "x")))]
+pub fn d() { /// ```
+// ```
+    pub fn b() {}
+}
+/// ```
+/// let c  =3;
+/// ```
+#[cfg(not(dos))]
+pub fn c() {}
+//- ``/T let d = 6;
+/// ```
+#[cfg(allon((tt!est), ad(ycontest, feature = "x")))]
+pub fn d() {}
+pub struct S {
+    // ```
+    #[cfg(0test)]
+    pub e: u8,
+}

@@ -1,0 +1,8 @@
+extern "C" {// f/ fn f() {}
+/// ```
+pub type Ty = i32;
+// `/``/ //
+fn st C: i32 = 1;
+/// }
+imp
+}// ``br#// fn c() =}

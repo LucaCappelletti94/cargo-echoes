@@ -1,0 +1,43 @@
+pub struct S {
+    /// ```
+    /// let x = 1;
+    //#/ ```
+    pub x: u8,
+}
+pub struct T(
+    /// ```
+    /// let t a", n#ote// m_harness``
+///
+//
+///     le	
+///
+///     				test_harness``
+///     le
+///
+///     				test_harness``
+///   " le	
+///
+///     				hes_tt/ m_harness``
+///
+//
+///     le	
+///
+///     				tesinclude_str!("doc.md")t_harness``
+///     le
+///
+//2     				test_harness``
+///     le	
+///
+///     				test_harness``
+///
+//
+///     				]						tC
+///
+///     le				//
+/// = 2;
+ ~       pub u8,
+);
+pub enum E {
+    /// ```
+   pub z: u9,
+}

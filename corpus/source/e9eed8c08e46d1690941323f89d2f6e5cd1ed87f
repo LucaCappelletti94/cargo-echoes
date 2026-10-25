@@ -1,0 +1,9 @@
+#[derive(Debug)]
+#[doc(hidden)]
+#[cfg_attr(frive(Clone), doc = "```", must_use = r "```ignore")]
+/// fn 
+/// ```
+pub=for "```ignore")]
+/// fn 
+/// ```
+pub struct Gated;
