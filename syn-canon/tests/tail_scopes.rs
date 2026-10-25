@@ -289,11 +289,16 @@ fn local_primitive_values_keep_return_equivalence() {
 #[test]
 fn oversized_return_boundaries_keep_their_spelling() {
     let prefix = "unknown();".repeat(16_385);
-    compare(
-        &format!("fn f() -> u32 {{ {prefix} return 1; }}"),
-        &format!("fn f() -> u32 {{ {prefix} 1 }}"),
-        false,
-    );
+    for template in [
+        "fn f() -> u32 { BODY }",
+        "fn f() { let _ = || -> u32 { BODY }; }",
+    ] {
+        compare(
+            &template.replace("BODY", &format!("{prefix} return 1;")),
+            &template.replace("BODY", &format!("{prefix} 1")),
+            false,
+        );
+    }
 }
 
 #[test]
@@ -327,4 +332,135 @@ fn rebound_derive_macros_protect_nested_return_boundaries() {
         "use custom::Debug; #[derive(Debug)] struct S { data: [u8; { let _ = || -> u32 { 1 }; 0usize }] }",
         false,
     );
+}
+
+#[test]
+fn bare_unit_closure_returns_match_unit_values() {
+    compare(
+        "fn f() { let _ = || return; }",
+        "fn f() { let _ = || (); }",
+        true,
+    );
+}
+
+#[test]
+fn unit_value_semicolons_do_not_change_return_scopes() {
+    compare("fn f() { (); }", "fn f() { () }", true);
+    compare(
+        "fn f(mut x: i32) { x = -1; }",
+        "fn f(mut x: i32) { x = -1 }",
+        true,
+    );
+}
+
+#[test]
+fn attributed_assignment_operands_keep_temporary_boundaries() {
+    for statement in ["#[observe] x = 1", "x = #[observe] 1"] {
+        compare(
+            &format!("fn f(mut x: u32) {{ {statement}; }}"),
+            &format!("fn f(mut x: u32) {{ {statement} }}"),
+            false,
+        );
+    }
+}
+
+#[test]
+fn guard_bindings_do_not_inherit_outer_primitive_proofs() {
+    compare(
+        "fn f(gate: bool) -> u32 { match true { gate if gate => return 1, _ => return 2 } }",
+        "fn f(gate: bool) -> u32 { match true { gate if gate => 1, _ => 2 } }",
+        false,
+    );
+}
+
+#[test]
+fn attributed_guard_patterns_keep_forwarded_returns() {
+    struct Observe;
+    impl syn::visit_mut::VisitMut for Observe {
+        fn visit_pat_ident_mut(&mut self, pattern: &mut syn::PatIdent) {
+            pattern.attrs.push(syn::parse_quote!(#[observe]));
+        }
+    }
+    let observed = |source: &str| {
+        let mut file = parse(source);
+        syn::visit_mut::VisitMut::visit_file_mut(&mut Observe, &mut file);
+        file
+    };
+    let written = "fn f() -> u32 { match (1u32,) { (value,) if true => return 1, _ => return 2 } }";
+    let tail = "fn f() -> u32 { match (1u32,) { (value,) if true => 1, _ => 2 } }";
+    compare(written, tail, true);
+    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
+        assert_ne!(
+            canonicalize(observed(written)),
+            canonicalize(observed(tail))
+        );
+    }
+}
+
+#[test]
+fn oversized_attribute_values_cannot_supply_a_scalar_proof() {
+    let values = "1u32,".repeat(16_385);
+    compare(
+        &format!("fn f(x: u32) -> u32 {{ return x + #[observe = [{values}]] x; }}"),
+        &format!("fn f(x: u32) -> u32 {{ x + #[observe = [{values}]] x }}"),
+        false,
+    );
+}
+
+#[test]
+fn invisible_expression_groups_preserve_tail_scope_proofs() {
+    struct Groups;
+    impl syn::visit_mut::VisitMut for Groups {
+        fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
+            syn::visit_mut::visit_expr_mut(self, expr);
+            if matches!(expr, syn::Expr::Return(_)) {
+                return;
+            }
+            let inner =
+                core::mem::replace(expr, syn::Expr::Verbatim(proc_macro2::TokenStream::new()));
+            *expr = syn::Expr::Group(syn::ExprGroup {
+                attrs: Vec::new(),
+                group_token: syn::token::Group::default(),
+                expr: Box::new(inner),
+            });
+        }
+    }
+    let grouped = |source: &str| {
+        let mut file = parse(source);
+        syn::visit_mut::VisitMut::visit_file_mut(&mut Groups, &mut file);
+        file
+    };
+    for (written, tail, equal) in [
+        (
+            "fn f(x: u32) -> u32 { return x }",
+            "fn f(x: u32) -> u32 { x }",
+            true,
+        ),
+        (
+            "fn f(mut x: i32) { x = -1; }",
+            "fn f(mut x: i32) { x = -1 }",
+            true,
+        ),
+        ("fn f() { (); }", "fn f() { () }", true),
+        (
+            "fn f(gate: bool) -> u32 { if gate { return 1 } else { return 2 } }",
+            "fn f(gate: bool) -> u32 { if gate { 1 } else { 2 } }",
+            true,
+        ),
+        (
+            "fn f() -> u32 { return make() }",
+            "fn f() -> u32 { make() }",
+            false,
+        ),
+    ] {
+        for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
+            let left = canonicalize(grouped(written));
+            let right = canonicalize(grouped(tail));
+            assert_eq!(
+                left == right,
+                equal,
+                "{written}\n{tail}\n{left:?}\n{right:?}"
+            );
+        }
+    }
 }

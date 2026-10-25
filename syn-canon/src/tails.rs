@@ -84,7 +84,7 @@ pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr) {
     if block.label.is_some() || !block.attrs.is_empty() {
         return;
     }
-    let [syn::Stmt::Expr(expr, None)] = block.block.stmts.as_slice() else {
+    let [syn::Stmt::Expr(expr, None)] = block.block.stmts.as_mut_slice() else {
         return;
     };
     let proof = Proof { renamer, locals: 0 };
@@ -95,9 +95,7 @@ pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr) {
     {
         return;
     }
-    if let Some(syn::Stmt::Expr(expr, None)) = block.block.stmts.pop() {
-        *body = expr;
-    }
+    *body = core::mem::replace(expr, syn::Expr::Verbatim(proc_macro2::TokenStream::new()));
 }
 
 struct Proof<'a, 'env> {
@@ -127,9 +125,6 @@ impl<'env> Proof<'_, 'env> {
             if let syn::Stmt::Item(item) = stmt {
                 types_known = false;
                 if let syn::Item::Use(import) = item {
-                    if !crate::helpers::use_tree_known(&import.tree, 0) {
-                        return None;
-                    }
                     crate::helpers::walk_imports(
                         &import.tree,
                         &mut alloc::vec::Vec::new(),
@@ -274,7 +269,6 @@ impl<'env> Proof<'_, 'env> {
                 }
                 safe
             }
-            syn::Expr::Paren(paren) => self.expr(&mut paren.expr, env, types_known),
             syn::Expr::Group(group) => self.expr(&mut group.expr, env, types_known),
             _ => self.value(expr, env),
         }
@@ -314,7 +308,6 @@ impl<'env> Proof<'_, 'env> {
                     | syn::Lit::Char(_)
                     | syn::Lit::Byte(_)
             ),
-            syn::Expr::Paren(paren) => Self::native(&paren.expr, env),
             syn::Expr::Group(group) => Self::native(&group.expr, env),
             syn::Expr::Unary(unary)
                 if matches!(unary.op, syn::UnOp::Neg(_) | syn::UnOp::Not(_)) =>
@@ -343,7 +336,6 @@ impl<'env> Proof<'_, 'env> {
             syn::Expr::Binary(binary) if schedule::is_assign_op(binary.op) => {
                 Self::native(&binary.left, env) && Self::native(&binary.right, env)
             }
-            syn::Expr::Paren(paren) => Self::unit(&paren.expr, env),
             syn::Expr::Group(group) => Self::unit(&group.expr, env),
             _ => false,
         }
@@ -356,7 +348,6 @@ impl<'env> Proof<'_, 'env> {
         match expr {
             syn::Expr::Lit(_) => true,
             syn::Expr::Tuple(tuple) => tuple.elems.iter().all(|element| self.value(element, env)),
-            syn::Expr::Paren(paren) => self.value(&paren.expr, env),
             syn::Expr::Group(group) => self.value(&group.expr, env),
             _ => {
                 Self::native(expr, env)
