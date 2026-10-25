@@ -69,6 +69,7 @@ struct Resolved<'env> {
     port: usize,
     target: Option<usize>,
     helper: Option<crate::scope::HelperId>,
+    macro_resolution: Option<crate::macros::MacroResolution>,
     /// The canon of an inherited binding. A local binding's canon is in the local table.
     inherited: Option<&'env str>,
 }
@@ -315,6 +316,7 @@ pub(crate) struct Renamer<'env> {
     after_bare_qself: bool,
     /// Raw-involved identifiers in macro input keep their token spelling.
     opaque_tokens: bool,
+    macro_punctuation_observed: bool,
     macro_supported: bool,
     /// A passing doctest: the scheduling analysis runs on its function blocks.
     compiles: bool,
@@ -373,6 +375,7 @@ impl<'env> Renamer<'env> {
             in_type: false,
             after_bare_qself: false,
             opaque_tokens: false,
+            macro_punctuation_observed: false,
             macro_supported: true,
             compiles: false,
             prim_fallback: false,
@@ -411,7 +414,14 @@ impl<'env> Renamer<'env> {
 
     /// One candidate pass against the inherited environment.
     pub(crate) fn contextual(inherited: Inherited<'env>) -> Self {
-        Self::base(true, inherited)
+        let observed = inherited.frames.iter().any(|frame| frame.observed);
+        let mut renamer = Self::base(true, inherited);
+        renamer.observed = observed;
+        renamer
+    }
+
+    pub(crate) fn observes_tokens(&self) -> bool {
+        self.observed
     }
 
     /// A file pass with the optional seeded environment of a function view.
@@ -453,6 +463,7 @@ impl<'env> Renamer<'env> {
                     target: None,
                     raw: false,
                     helper: None,
+                    macro_resolution: None,
                 },
             );
             renamer.self_frame = Some(frame);
@@ -700,6 +711,7 @@ impl<'env> Renamer<'env> {
             target: None,
             raw: false,
             helper: None,
+            macro_resolution: None,
         };
         self.local_canons.insert(id, canon);
         self.top_bind(ns, name, binding.clone());
@@ -712,6 +724,7 @@ impl<'env> Renamer<'env> {
         name: &str,
         target: Option<usize>,
         origin: Origin,
+        standard: Option<crate::macros::MacroResolution>,
     ) -> Binding {
         let id = self.alloc_id();
         let canon = self.local_canon(Ns::Value);
@@ -725,6 +738,7 @@ impl<'env> Renamer<'env> {
             target,
             raw: false,
             helper: None,
+            macro_resolution: standard,
         };
         self.local_canons.insert(id, canon);
         self.top_bind(Ns::Value, name, binding.clone());
@@ -821,6 +835,7 @@ impl<'env> Renamer<'env> {
             port: binding.port,
             target: binding.target,
             helper: binding.helper,
+            macro_resolution: binding.macro_resolution,
             inherited,
         }
     }
@@ -829,11 +844,20 @@ impl<'env> Renamer<'env> {
     /// namespace priority first. A raw name that resolves keeps its
     /// binding, an unresolved raw token stays opaque by default.
     fn lookup(&self, ns: &[Ns], name: &str) -> Option<Resolved<'env>> {
+        self.lookup_with_opaque(ns, name, self.opaque_tokens)
+    }
+
+    fn lookup_with_opaque(
+        &self,
+        ns: &[Ns],
+        name: &str,
+        opaque_tokens: bool,
+    ) -> Option<Resolved<'env>> {
         let inherited: &'env [Frame] = self.inherited.frames;
         for ns in ns {
             for frame in self.frames.iter().rev() {
                 if let Some(binding) = frame.lookup(*ns, name) {
-                    if self.opaque_tokens && (binding.raw || name.starts_with("r#")) {
+                    if opaque_tokens && (binding.raw || name.starts_with("r#")) {
                         return None;
                     }
                     return Some(Self::resolved(Domain::Local, *ns, binding, None));
@@ -854,7 +878,7 @@ impl<'env> Renamer<'env> {
                         .map(|binding| (binding, binding.canon.as_str()))
                 });
             if let Some((binding, canon)) = found {
-                if self.opaque_tokens && (binding.raw || name.starts_with("r#")) {
+                if opaque_tokens && (binding.raw || name.starts_with("r#")) {
                     return None;
                 }
                 return Some(Self::resolved(Domain::Inherited, *ns, binding, Some(canon)));
@@ -1018,7 +1042,14 @@ impl<'env> Renamer<'env> {
         if let Some(resolved) = self.lookup(ns, &ident.to_string())
             && resolved.target.is_none()
         {
-            rename(ident, &self.render(&resolved));
+            match resolved.domain {
+                Domain::Local => {
+                    if let Some(canon) = self.local_canons.get(&resolved.id) {
+                        rename(ident, canon);
+                    }
+                }
+                Domain::Inherited => rename(ident, &self.render(&resolved)),
+            }
         }
     }
 
@@ -1272,6 +1303,81 @@ impl<'env> Renamer<'env> {
         })
     }
 
+    fn standard_unbound(&self, name: &str) -> bool {
+        let bit = crate::drift::std_name_bit(name);
+        self.frames
+            .iter()
+            .chain(self.inherited.frames)
+            .chain(self.seed)
+            .chain(self.generics)
+            .all(|frame| !frame.glob && frame.std_rebound & bit == 0)
+    }
+
+    fn standard_name(
+        &self,
+        path: &syn::Path,
+        import: bool,
+    ) -> Option<crate::macros::MacroResolution> {
+        use crate::macros::{MacroResolution, StandardRoot};
+
+        if self.helper_blocked
+            || path
+                .segments
+                .iter()
+                .any(|segment| !matches!(segment.arguments, syn::PathArguments::None))
+        {
+            return None;
+        }
+        let first = path.segments.first()?;
+        let head = crate::scope::ident_name(&first.ident);
+        if path.segments.len() == 1 {
+            let ns: &[Ns] = if import {
+                &[Ns::Type, Ns::Macro]
+            } else {
+                &[Ns::Macro]
+            };
+            if let Some(binding) = self.lookup_with_opaque(ns, &head, false) {
+                return self.standard_binding(binding);
+            }
+            if !self.standard_unbound(&head) {
+                return None;
+            }
+            return if import {
+                StandardRoot::named(&head).map(MacroResolution::Crate)
+            } else if (self.context || self.std_names) && path.leading_colon.is_none() {
+                StandardRoot::Std.grammar(&head).map(MacroResolution::Macro)
+            } else {
+                None
+            };
+        }
+        if path.segments.len() != 2 {
+            return None;
+        }
+        let root = if let Some(binding) = self.lookup_with_opaque(&[Ns::Type], &head, false) {
+            let Some(MacroResolution::Crate(root)) = self.standard_binding(binding) else {
+                return None;
+            };
+            root
+        } else {
+            if !self.standard_unbound(&head) {
+                return None;
+            }
+            StandardRoot::named(&head)?
+        };
+        let name = crate::scope::ident_name(&path.segments.last()?.ident);
+        if import && name == "self" {
+            return Some(MacroResolution::Crate(root));
+        }
+        root.grammar(&name).map(MacroResolution::Macro)
+    }
+
+    fn standard_binding(&self, binding: Resolved<'_>) -> Option<crate::macros::MacroResolution> {
+        binding.macro_resolution.or_else(|| {
+            let target = self.target_of(binding.domain, binding.target?);
+            crate::macros::MacroResolution::external_target(target)
+        })
+    }
+
     /// The block nesting level of the traversal.
     pub(crate) fn depth(&self) -> usize {
         self.depth
@@ -1348,6 +1454,17 @@ impl<'env> Renamer<'env> {
 
     /// Bind one imported macro name into the current frame.
     fn prebind_macro_name(&mut self, name: &str) {
+        let opaque = self
+            .frames
+            .last()
+            .and_then(|frame| frame.lookup(Ns::Macro, name))
+            .is_some_and(|binding| binding.origin == Origin::Use)
+            || self
+                .lookup_with_opaque(&[Ns::Macro], name, false)
+                .is_some_and(|binding| {
+                    binding.origin == Origin::MacroRule
+                        || binding.macro_resolution == Some(crate::macros::MacroResolution::Opaque)
+                });
         let id = self.alloc_id();
         self.top_bind(
             Ns::Macro,
@@ -1362,6 +1479,7 @@ impl<'env> Renamer<'env> {
                 target: None,
                 raw: false,
                 helper: None,
+                macro_resolution: opaque.then_some(crate::macros::MacroResolution::Opaque),
             },
         );
     }
@@ -1935,11 +2053,46 @@ impl<'env> Renamer<'env> {
         &mut self,
         tokens: proc_macro2::TokenStream,
         format_at: Option<usize>,
+        grammar: Option<crate::macros::MacroGrammar>,
     ) -> proc_macro2::TokenStream {
+        use crate::macros::{MacroGrammar, MatchesArgs};
+
+        if grammar == Some(MacroGrammar::Matches) {
+            let Ok(mut args) = syn::parse2::<MatchesArgs>(tokens.clone()) else {
+                self.macro_supported = false;
+                return self.rename_tokens(tokens);
+            };
+            if !self.analysis && !self.macro_punctuation_observed {
+                args.trailing = None;
+            }
+            self.helper_syntax.clear_expr(&args.value);
+            self.visit_expr_mut(&mut args.value);
+            self.push();
+            rewrite_pat_bindings(self, &mut args.pattern);
+            self.visit_pat_mut(&mut args.pattern);
+            if let Some((_, guard)) = &mut args.guard {
+                self.helper_syntax.clear_expr(guard);
+                self.visit_expr_mut(guard);
+            }
+            self.pop();
+            return args.to_token_stream();
+        }
         let Ok(mut args) = syn::parse2::<MacroArgs>(tokens.clone()) else {
             self.macro_supported = false;
             return self.rename_tokens(tokens);
         };
+        let trusted = match grammar {
+            Some(MacroGrammar::Expressions) => matches!(args, MacroArgs::List(_)),
+            Some(MacroGrammar::Vector) => true,
+            Some(MacroGrammar::Matches) | None => false,
+        };
+        self.macro_punctuation_observed |= !trusted;
+        if !self.analysis
+            && !self.macro_punctuation_observed
+            && let MacroArgs::List(exprs) = &mut args
+        {
+            exprs.pop_punct();
+        }
         for (index, expr) in args.iter_mut().enumerate() {
             self.helper_syntax.clear_expr(expr);
             self.visit_expr_mut(expr);
@@ -1993,7 +2146,14 @@ impl<'env> Renamer<'env> {
                     let (rooted, segments) =
                         resolve_target_path(&|name| self.resolve_first_seg(name), rooted, prefix);
                     let target = self.store_target(rooted, segments);
-                    self.bind_value_and_type(alias, Some(target), Origin::Use);
+                    let resolution = if self.opaque_import(alias) {
+                        Some(crate::macros::MacroResolution::Opaque)
+                    } else {
+                        crate::macros::MacroResolution::external_target(
+                            self.targets.get(target).expect("a stored target"),
+                        )
+                    };
+                    self.bind_value_and_type(alias, Some(target), Origin::Use, resolution);
                 }
                 syn::UseTree::Name(name)
             }
@@ -2020,6 +2180,19 @@ impl<'env> Renamer<'env> {
                 glob
             }
         }
+    }
+
+    fn opaque_import(&self, name: &str) -> bool {
+        self.helper_blocked
+            || self
+                .frames
+                .last()
+                .and_then(|frame| frame.lookup(Ns::Macro, name))
+                .is_some_and(|binding| {
+                    (binding.origin == Origin::Use && !binding.canon.is_empty())
+                        || binding.origin == Origin::MacroRule
+                        || binding.macro_resolution == Some(crate::macros::MacroResolution::Opaque)
+                })
     }
 
     /// Bind one `use` leaf that imports `ident` under `alias`.
@@ -2054,11 +2227,17 @@ impl<'env> Renamer<'env> {
                 resolve_target_path(&|name| self.resolve_first_seg(name), rooted, &path);
             self.store_target(rooted, segments)
         });
-        let binding = self.bind_value_and_type(&alias.to_string(), target, Origin::Use);
+        let alias_name = alias.to_string();
+        let resolution = if self.opaque_import(&alias_name) {
+            Some(crate::macros::MacroResolution::Opaque)
+        } else {
+            self.standard_name(&helper_path, true)
+        };
+        let binding = self.bind_value_and_type(&alias_name, target, Origin::Use, resolution);
         if let Some(helper) = helper {
             self.frames.last_mut().expect("a scope frame").set_helper(
                 Ns::Value,
-                &alias.to_string(),
+                &alias_name,
                 helper,
             );
         }
@@ -2205,6 +2384,7 @@ impl<'env> Renamer<'env> {
     /// The reference provenance and transported marker edges, consumed after the visit.
     pub(crate) fn into_reference_facts(mut self) -> ReferenceFacts {
         let mut facts = self.facts;
+        facts.observed = self.observed;
         let (paths, macros) = self.helper_syntax.take_marker_transport();
         facts.marker_paths.extend(paths);
         facts.marker_macros.extend(macros);
@@ -2570,6 +2750,21 @@ pub(crate) fn item_binding(item: &syn::Item) -> Option<(Ns, &Ident)> {
 /// `macro_rules!` and `use`, which are visible only after their line.
 fn prebind(renamer: &mut Renamer<'_>, items: &[&syn::Item]) {
     for item in items {
+        if let syn::Item::ExternCrate(item) = item {
+            let ident = item.rename.as_ref().map_or(&item.ident, |(_, alias)| alias);
+            let name = ident.to_string();
+            renamer.bind(Ns::Type, &name, Origin::Use);
+            renamer
+                .frames
+                .last_mut()
+                .expect("a scope frame")
+                .set_macro_resolution(
+                    Ns::Type,
+                    &name,
+                    crate::macros::MacroResolution::external_crate(item),
+                );
+            continue;
+        }
         let Some((ns, ident)) = item_binding(item) else {
             continue;
         };
@@ -2683,8 +2878,12 @@ fn begin_generics(renamer: &mut Renamer<'_>, generics: &mut syn::Generics) {
             }
             syn::GenericParam::Const(r#const) => {
                 // A bare reference in `Foo<N>` reads as a type argument.
-                let binding =
-                    renamer.bind_value_and_type(&r#const.ident.to_string(), None, Origin::Generic);
+                let binding = renamer.bind_value_and_type(
+                    &r#const.ident.to_string(),
+                    None,
+                    Origin::Generic,
+                    None,
+                );
                 if renamer.analysis {
                     renamer.record_ident(&r#const.ident, Ns::Type, binding.id, true);
                 } else {
@@ -3032,6 +3231,7 @@ impl VisitMut for Renamer<'_> {
                 target: None,
                 raw: false,
                 helper: None,
+                macro_resolution: None,
             },
         );
         begin_generics(self, &mut item.generics);
@@ -3085,6 +3285,7 @@ impl VisitMut for Renamer<'_> {
                     target: None,
                     raw: false,
                     helper: None,
+                    macro_resolution: None,
                 },
             );
         }
@@ -3206,6 +3407,26 @@ impl VisitMut for Renamer<'_> {
         } else {
             self.visit_attrs(&mut item.attrs);
             self.visit_macro_mut(&mut item.mac);
+        }
+    }
+
+    fn visit_item_extern_crate_mut(&mut self, item: &mut syn::ItemExternCrate) {
+        self.visit_attrs(&mut item.attrs);
+        let ident = item.rename.as_ref().map_or(&item.ident, |(_, alias)| alias);
+        let name = ident.to_string();
+        let binding = self
+            .lookup_with_opaque(&[Ns::Type], &name, false)
+            .expect("a prebound external crate");
+        if self.analysis {
+            self.record_ident(ident, Ns::Type, binding.id, true);
+        } else if !self.opaque_tokens || !name.starts_with("r#") {
+            let canon = self.render(&binding);
+            let span = ident.span();
+            if let Some((_, alias)) = &mut item.rename {
+                rename(alias, &canon);
+            } else {
+                item.rename = Some((<syn::Token![as]>::default(), Ident::new(&canon, span)));
+            }
         }
     }
 
@@ -3474,6 +3695,18 @@ impl VisitMut for Renamer<'_> {
             &[Ns::Macro]
         };
         self.record_path(&mac.path, ns, ns);
+        let grammar = match self.standard_name(&mac.path, false) {
+            Some(crate::macros::MacroResolution::Macro(grammar))
+                if !self.observed
+                    && !self.macro_punctuation_observed
+                    && !self.constants_observed =>
+            {
+                Some(grammar)
+            }
+            _ => None,
+        };
+        let punctuation_parent = self.macro_punctuation_observed;
+        self.macro_punctuation_observed |= grammar.is_none();
         let known = self.std_format_path(&mac.path, Self::macro_shadowed);
         // Another macro under a formatting name reads its string literal as written.
         let captures = self.std_format_path(
@@ -3494,11 +3727,13 @@ impl VisitMut for Renamer<'_> {
             .map(|(at, _)| at);
         let outer = core::mem::replace(&mut self.opaque_tokens, !known);
         if self.analysis {
-            let _ = self.rewrite_macro_tokens(mac.tokens.clone(), format_at);
+            let _ = self.rewrite_macro_tokens(mac.tokens.clone(), format_at, grammar);
         } else {
-            mac.tokens = self.rewrite_macro_tokens(core::mem::take(&mut mac.tokens), format_at);
+            mac.tokens =
+                self.rewrite_macro_tokens(core::mem::take(&mut mac.tokens), format_at, grammar);
         }
         self.opaque_tokens = outer;
+        self.macro_punctuation_observed = punctuation_parent;
         let origins = self.macro_origins.take().expect("a macro origin collector");
         let supported = known && self.macro_supported;
         self.macro_supported = if parent.is_some() {

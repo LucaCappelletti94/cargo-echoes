@@ -15,6 +15,7 @@ mod drift;
 mod form;
 mod helpers;
 mod items;
+mod macros;
 mod reference;
 mod schedule;
 mod scope;
@@ -187,10 +188,12 @@ fn observer_attribute(group: &proc_macro2::Group) -> bool {
 fn reads_commas(before: &[TokenTree], group: &proc_macro2::Group) -> bool {
     let back = |n: usize| before.len().checked_sub(n).and_then(|i| before.get(i));
     let punct = |tree: Option<&TokenTree>, c: char| matches!(tree, Some(TokenTree::Punct(p)) if p.as_char() == c);
-    if punct(back(1), '!')
-        && let Some(TokenTree::Ident(name)) = back(2)
+    if punct(back(1), '!') && matches!(back(2), Some(TokenTree::Ident(_)))
+        || punct(back(2), '!')
+            && matches!(back(1), Some(TokenTree::Ident(_)))
+            && matches!(back(3), Some(TokenTree::Ident(name)) if name == "macro_rules")
     {
-        return !COMMA_BLIND_MACROS.iter().any(|blind| name == blind);
+        return true;
     }
     let attribute = group.delimiter() == proc_macro2::Delimiter::Bracket
         && (punct(back(1), '#') || (punct(back(1), '!') && punct(back(2), '#')));

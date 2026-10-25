@@ -22,6 +22,8 @@ println!("{forms:?}");
 
 Equal forms mean approximate duplication, since the normalization cannot see what the compiler resolves, such as inferred types, macro expansions or an enclosing `cfg`.
 
+Macro input retains significant commas unless lexical resolution proves a supported standard grammar. Enclosing macros and live attributes preserve comma spelling.
+
 ## Stability
 
-`CanonicalForm` keys and hashes are comparable within one major version. New folds require a major version.
+`CanonicalForm` keys and hashes are comparable within a semver-compatible release series. Before `1.0`, each minor version defines a series, such as `0.5.x`. Incompatible normalization requires a new series.

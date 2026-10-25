@@ -1,0 +1,191 @@
+[
+  {
+    "id": "MP_custom_assert",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! assert { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use assert; }\nfn f() -> u32 { custom::assert!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! assert { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use assert; }\nfn f() -> u32 { custom::assert!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_assert_eq",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! assert_eq { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use assert_eq; }\nfn f() -> u32 { custom::assert_eq!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! assert_eq { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use assert_eq; }\nfn f() -> u32 { custom::assert_eq!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_assert_ne",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! assert_ne { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use assert_ne; }\nfn f() -> u32 { custom::assert_ne!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! assert_ne { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use assert_ne; }\nfn f() -> u32 { custom::assert_ne!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_dbg",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! dbg { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use dbg; }\nfn f() -> u32 { custom::dbg!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! dbg { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use dbg; }\nfn f() -> u32 { custom::dbg!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_debug_assert",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! debug_assert { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use debug_assert; }\nfn f() -> u32 { custom::debug_assert!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! debug_assert { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use debug_assert; }\nfn f() -> u32 { custom::debug_assert!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_debug_assert_eq",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! debug_assert_eq { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use debug_assert_eq; }\nfn f() -> u32 { custom::debug_assert_eq!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! debug_assert_eq { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use debug_assert_eq; }\nfn f() -> u32 { custom::debug_assert_eq!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_debug_assert_ne",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! debug_assert_ne { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use debug_assert_ne; }\nfn f() -> u32 { custom::debug_assert_ne!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! debug_assert_ne { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use debug_assert_ne; }\nfn f() -> u32 { custom::debug_assert_ne!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_eprint",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! eprint { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use eprint; }\nfn f() -> u32 { custom::eprint!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! eprint { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use eprint; }\nfn f() -> u32 { custom::eprint!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_eprintln",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! eprintln { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use eprintln; }\nfn f() -> u32 { custom::eprintln!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! eprintln { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use eprintln; }\nfn f() -> u32 { custom::eprintln!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_format",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! format { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use format; }\nfn f() -> u32 { custom::format!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! format { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use format; }\nfn f() -> u32 { custom::format!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_format_args",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! format_args { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use format_args; }\nfn f() -> u32 { custom::format_args!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! format_args { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use format_args; }\nfn f() -> u32 { custom::format_args!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_matches",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! matches { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use matches; }\nfn f() -> u32 { custom::matches!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! matches { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use matches; }\nfn f() -> u32 { custom::matches!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_panic",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! panic { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use panic; }\nfn f() -> u32 { custom::panic!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! panic { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use panic; }\nfn f() -> u32 { custom::panic!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_print",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! print { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use print; }\nfn f() -> u32 { custom::print!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! print { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use print; }\nfn f() -> u32 { custom::print!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_println",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! println { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use println; }\nfn f() -> u32 { custom::println!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! println { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use println; }\nfn f() -> u32 { custom::println!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_todo",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! todo { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use todo; }\nfn f() -> u32 { custom::todo!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! todo { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use todo; }\nfn f() -> u32 { custom::todo!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_unimplemented",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! unimplemented { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use unimplemented; }\nfn f() -> u32 { custom::unimplemented!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! unimplemented { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use unimplemented; }\nfn f() -> u32 { custom::unimplemented!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_unreachable",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! unreachable { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use unreachable; }\nfn f() -> u32 { custom::unreachable!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! unreachable { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use unreachable; }\nfn f() -> u32 { custom::unreachable!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_vec",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! vec { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use vec; }\nfn f() -> u32 { custom::vec!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! vec { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use vec; }\nfn f() -> u32 { custom::vec!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_write",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! write { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use write; }\nfn f() -> u32 { custom::write!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! write { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use write; }\nfn f() -> u32 { custom::write!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_custom_writeln",
+    "family": "macro-punctuation",
+    "a": "mod custom { macro_rules! writeln { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use writeln; }\nfn f() -> u32 { custom::writeln!(1) }\nfn main() { println!(\"{}\", f()); }",
+    "b": "mod custom { macro_rules! writeln { (1) => { 10u32 }; (1,) => { 20u32 }; } pub(crate) use writeln; }\nfn f() -> u32 { custom::writeln!(1,) }\nfn main() { println!(\"{}\", f()); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_standard_vec",
+    "family": "macro-punctuation",
+    "a": "fn main() { println!(\"{:?}\", std::vec![1, 2]); }",
+    "b": "fn main() { println!(\"{:?}\", std::vec![1, 2,]); }",
+    "expected": "same"
+  },
+  {
+    "id": "MP_standard_alias",
+    "family": "macro-punctuation",
+    "a": "use std::vec as make; fn main() { println!(\"{:?}\", make![1, 2]); }",
+    "b": "use std::vec as make; fn main() { println!(\"{:?}\", make![1, 2,]); }",
+    "expected": "same"
+  },
+  {
+    "id": "MP_tuple",
+    "family": "macro-punctuation",
+    "a": "fn main() { println!(\"{:?}\", vec![(1,)]); }",
+    "b": "fn main() { println!(\"{:?}\", vec![(1)]); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_observed",
+    "family": "macro-punctuation",
+    "a": "macro_rules! observe { ($($t:tt)*) => { stringify!($($t)*) } } fn main() { println!(\"{}\", observe!(std::vec!(1))); }",
+    "b": "macro_rules! observe { ($($t:tt)*) => { stringify!($($t)*) } } fn main() { println!(\"{}\", observe!(std::vec!(1,))); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_pattern",
+    "family": "macro-punctuation",
+    "a": "macro_rules! m { ((a, b)) => { (1, _) }; ((a, b),) => { (_, 2) }; } fn main() { println!(\"{}\", match (1u32, 3u32) { m!((a, b)) => 1, _ => 0 }); }",
+    "b": "macro_rules! m { ((a, b)) => { (1, _) }; ((a, b),) => { (_, 2) }; } fn main() { println!(\"{}\", match (1u32, 3u32) { m!((a, b),) => 1, _ => 0 }); }",
+    "expected": "different"
+  },
+  {
+    "id": "MP_standard_family",
+    "family": "macro-punctuation",
+    "a": "extern crate alloc; use std::io::Write as _;\npub fn std_assert() { std::assert!(true); }\npub fn std_assert_eq() { std::assert_eq!(1, 1); }\npub fn std_assert_ne() { std::assert_ne!(1, 2); }\npub fn std_dbg() { std::dbg!(1); }\npub fn std_debug_assert() { std::debug_assert!(true); }\npub fn std_debug_assert_eq() { std::debug_assert_eq!(1, 1); }\npub fn std_debug_assert_ne() { std::debug_assert_ne!(1, 2); }\npub fn std_eprint() { std::eprint!(\"a\"); }\npub fn std_eprintln() { std::eprintln!(\"a\"); }\npub fn std_format() { std::format!(\"a\"); }\npub fn std_format_args() { std::format_args!(\"a\"); }\npub fn std_matches() { std::matches!(1, 1); }\npub fn std_panic() { std::panic!(\"a\"); }\npub fn std_print() { std::print!(\"a\"); }\npub fn std_println() { std::println!(\"a\"); }\npub fn std_todo() { std::todo!(\"a\"); }\npub fn std_unimplemented() { std::unimplemented!(\"a\"); }\npub fn std_unreachable() { std::unreachable!(\"a\"); }\npub fn std_vec() { std::vec!(1, 2); }\npub fn std_write() { std::write!(std::io::stdout(), \"a\"); }\npub fn std_writeln() { std::writeln!(std::io::stdout(), \"a\"); }\npub fn core_assert() { core::assert!(true); }\npub fn core_assert_eq() { core::assert_eq!(1, 1); }\npub fn core_assert_ne() { core::assert_ne!(1, 2); }\npub fn core_debug_assert() { core::debug_assert!(true); }\npub fn core_debug_assert_eq() { core::debug_assert_eq!(1, 1); }\npub fn core_debug_assert_ne() { core::debug_assert_ne!(1, 2); }\npub fn core_format_args() { core::format_args!(\"a\"); }\npub fn core_matches() { core::matches!(1, 1); }\npub fn core_panic() { core::panic!(\"a\"); }\npub fn core_todo() { core::todo!(\"a\"); }\npub fn core_unimplemented() { core::unimplemented!(\"a\"); }\npub fn core_unreachable() { core::unreachable!(\"a\"); }\npub fn core_write() { core::write!(std::io::stdout(), \"a\"); }\npub fn core_writeln() { core::writeln!(std::io::stdout(), \"a\"); }\npub fn alloc_format() { alloc::format!(\"a\"); }\npub fn alloc_vec() { alloc::vec!(1, 2); }\nfn main() { println!(\"ok\"); }",
+    "b": "extern crate alloc; use std::io::Write as _;\npub fn std_assert() { std::assert!(true,); }\npub fn std_assert_eq() { std::assert_eq!(1, 1,); }\npub fn std_assert_ne() { std::assert_ne!(1, 2,); }\npub fn std_dbg() { std::dbg!(1,); }\npub fn std_debug_assert() { std::debug_assert!(true,); }\npub fn std_debug_assert_eq() { std::debug_assert_eq!(1, 1,); }\npub fn std_debug_assert_ne() { std::debug_assert_ne!(1, 2,); }\npub fn std_eprint() { std::eprint!(\"a\",); }\npub fn std_eprintln() { std::eprintln!(\"a\",); }\npub fn std_format() { std::format!(\"a\",); }\npub fn std_format_args() { std::format_args!(\"a\",); }\npub fn std_matches() { std::matches!(1, 1,); }\npub fn std_panic() { std::panic!(\"a\",); }\npub fn std_print() { std::print!(\"a\",); }\npub fn std_println() { std::println!(\"a\",); }\npub fn std_todo() { std::todo!(\"a\",); }\npub fn std_unimplemented() { std::unimplemented!(\"a\",); }\npub fn std_unreachable() { std::unreachable!(\"a\",); }\npub fn std_vec() { std::vec!(1, 2,); }\npub fn std_write() { std::write!(std::io::stdout(), \"a\",); }\npub fn std_writeln() { std::writeln!(std::io::stdout(), \"a\",); }\npub fn core_assert() { core::assert!(true,); }\npub fn core_assert_eq() { core::assert_eq!(1, 1,); }\npub fn core_assert_ne() { core::assert_ne!(1, 2,); }\npub fn core_debug_assert() { core::debug_assert!(true,); }\npub fn core_debug_assert_eq() { core::debug_assert_eq!(1, 1,); }\npub fn core_debug_assert_ne() { core::debug_assert_ne!(1, 2,); }\npub fn core_format_args() { core::format_args!(\"a\",); }\npub fn core_matches() { core::matches!(1, 1,); }\npub fn core_panic() { core::panic!(\"a\",); }\npub fn core_todo() { core::todo!(\"a\",); }\npub fn core_unimplemented() { core::unimplemented!(\"a\",); }\npub fn core_unreachable() { core::unreachable!(\"a\",); }\npub fn core_write() { core::write!(std::io::stdout(), \"a\",); }\npub fn core_writeln() { core::writeln!(std::io::stdout(), \"a\",); }\npub fn alloc_format() { alloc::format!(\"a\",); }\npub fn alloc_vec() { alloc::vec!(1, 2,); }\nfn main() { println!(\"ok\"); }",
+    "expected": "same"
+  }
+]

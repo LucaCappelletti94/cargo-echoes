@@ -288,9 +288,10 @@ pub(crate) fn from_node(node: &impl CanonicalNode, facts: &ReferenceFacts) -> Ca
 /// The comparison form of `node`. With `owner`, the key numbers owner parameters by first
 /// appearance, and the role-labelled tokens give the owner role key.
 fn from_node_with(node: &impl CanonicalNode, facts: &ReferenceFacts, owner: bool) -> CanonicalForm {
-    let tokens: TokenStream = crate::fold_tokens(node.to_token_stream(), false, false)
-        .into_iter()
-        .collect();
+    let tokens: TokenStream =
+        crate::fold_tokens(node.to_token_stream(), facts.observed, facts.observed)
+            .into_iter()
+            .collect();
     let units = node.canonical_body_units(&tokens);
     let mut tail = String::from("R ");
     node.visit(&mut ReferenceEncoding {

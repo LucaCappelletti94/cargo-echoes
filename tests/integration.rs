@@ -541,6 +541,45 @@ fn threshold_builder_narrows_groups() {
     assert_eq!(report.groups.len(), 1);
 }
 
+const MACROVEC_FIXTURE: &str = "tests/fixtures/macrovecws";
+
+#[test]
+fn qualified_custom_macros_keep_their_comma_in_doctests() {
+    let report = Echoes::default().run(MACROVEC_FIXTURE).unwrap();
+    assert_eq!((report.total, report.unique), (4, 3));
+    assert_eq!(report.groups.len(), 1);
+    let group = &report.groups[0];
+    assert_eq!(group.kind, echoes::Kind::Doctest);
+    let items: Vec<&str> = group.sites.iter().map(|s| s.item.as_str()).collect();
+    assert_eq!(
+        items,
+        vec!["macrovecws::Standard", "macrovecws::StandardComma"]
+    );
+}
+
+#[test]
+fn qualified_custom_macros_keep_their_comma_in_functions() {
+    let report = Echoes::default()
+        .functions()
+        .fn_min_tokens(0)
+        .run(MACROVEC_FIXTURE)
+        .unwrap();
+    assert_eq!((report.functions, report.unique_functions), (4, 3));
+    let function_groups = report
+        .groups
+        .iter()
+        .filter(|g| g.kind == echoes::Kind::Function)
+        .collect::<Vec<_>>();
+    assert_eq!(function_groups.len(), 1);
+    let group = function_groups[0];
+    let items: Vec<&str> = group.sites.iter().map(|s| s.item.as_str()).collect();
+    assert_eq!(
+        items,
+        vec!["macrovecws::equal_first", "macrovecws::equal_second"]
+    );
+    assert_eq!(group.remedy, Some(Remedy::Delete));
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

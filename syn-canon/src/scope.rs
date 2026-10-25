@@ -191,6 +191,7 @@ pub(crate) struct Binding {
     pub(crate) raw: bool,
     /// The identity handle of an accepted total helper declaration.
     pub(crate) helper: Option<HelperId>,
+    pub(crate) macro_resolution: Option<crate::macros::MacroResolution>,
 }
 
 #[derive(Clone, Default)]
@@ -198,9 +199,9 @@ pub(crate) struct Frame {
     names: [BTreeMap<String, Binding>; 5],
     /// A glob import marked this scope uncertain.
     pub(crate) glob: bool,
-    /// The std derive, formatting macro and crate root names an import of this scope may bind
-    /// to something else, every one of them under a glob of an unknown module.
-    pub(crate) std_rebound: u32,
+    pub(crate) observed: bool,
+    /// Standard names an import may rebind, all set under an unknown glob.
+    pub(crate) std_rebound: u64,
 }
 
 impl Frame {
@@ -236,6 +237,18 @@ impl Frame {
             .get_mut(ns.key(name))
             .expect("indexed helper value binding")
             .helper = Some(helper);
+    }
+
+    pub(crate) fn set_macro_resolution(
+        &mut self,
+        ns: Ns,
+        name: &str,
+        standard: Option<crate::macros::MacroResolution>,
+    ) {
+        self.bindings_mut(ns)
+            .get_mut(ns.key(name))
+            .expect("a prebound name")
+            .macro_resolution = standard;
     }
 }
 

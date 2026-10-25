@@ -165,7 +165,16 @@ fn prebind_items<'a>(
     items: impl Iterator<Item = &'a syn::Item>,
 ) {
     for item in items {
-        let Some((ns, ident)) = item_binding(item) else {
+        let (ns, ident, standard, origin) = if let syn::Item::ExternCrate(item) = item {
+            (
+                Ns::Type,
+                item.rename.as_ref().map_or(&item.ident, |(_, alias)| alias),
+                crate::macros::MacroResolution::external_crate(item),
+                Origin::Use,
+            )
+        } else if let Some((ns, ident)) = item_binding(item) {
+            (ns, ident, None, Origin::Item)
+        } else {
             continue;
         };
         let binding_id = BindingId(*id);
@@ -177,13 +186,14 @@ fn prebind_items<'a>(
             Binding {
                 id: binding_id,
                 canon: String::new(),
-                origin: Origin::Item,
+                origin,
                 prim: None,
                 port: 0,
                 value_port: None,
                 target: None,
                 raw: false,
                 helper: None,
+                macro_resolution: standard,
             },
         );
         if let syn::Item::Mod(
@@ -248,6 +258,7 @@ impl Walker<'_> {
                 target: None,
                 raw: false,
                 helper: None,
+                macro_resolution: None,
             },
         );
         binding_id
@@ -267,6 +278,7 @@ impl Walker<'_> {
         name: &str,
         target: Option<usize>,
         origin: Origin,
+        macro_resolution: Option<crate::macros::MacroResolution>,
     ) -> BindingId {
         let binding_id = BindingId(self.id);
         self.id += 1;
@@ -280,8 +292,12 @@ impl Walker<'_> {
             target,
             raw: false,
             helper: None,
+            macro_resolution,
         };
         self.top_bind(Ns::Value, name, binding.clone());
+        if origin == Origin::Use {
+            self.top_bind(Ns::Macro, name, binding.clone());
+        }
         self.top_bind(Ns::Type, name, binding);
         binding_id
     }
@@ -309,7 +325,12 @@ impl Walker<'_> {
 
     /// Bind one scope-level `use` item, block-wide.
     fn bind_use_item(&mut self, item: &syn::ItemUse) {
-        self.bind_use_tree(item.leading_colon.is_some(), &[], &item.tree);
+        self.bind_use_tree(
+            item.leading_colon.is_some(),
+            &[],
+            &item.tree,
+            crate::context::blocking_attr(&item.attrs),
+        );
     }
 
     /// Bind the block-wide `use` leaves of a scope.
@@ -320,12 +341,18 @@ impl Walker<'_> {
     }
 
     /// Bind the leaf aliases of one `use` tree, resolving each written target.
-    fn bind_use_tree(&mut self, rooted: bool, prefix: &[String], tree: &syn::UseTree) {
+    fn bind_use_tree(
+        &mut self,
+        rooted: bool,
+        prefix: &[String],
+        tree: &syn::UseTree,
+        opaque: bool,
+    ) {
         match tree {
             syn::UseTree::Path(path) => {
                 let mut prefix = prefix.to_vec();
                 prefix.push(path.ident.to_string());
-                self.bind_use_tree(rooted, &prefix, &path.tree);
+                self.bind_use_tree(rooted, &prefix, &path.tree, opaque);
             }
             syn::UseTree::Name(name) if name.ident == "self" => {
                 // `a::{self}` imports the module itself under its own name.
@@ -335,18 +362,19 @@ impl Walker<'_> {
                         crate::drift::import_rebound(&segments, alias, alias);
                     let (rooted, segments) =
                         resolve_target_path(&|name| self.resolve_first_seg(name), rooted, prefix);
-                    self.bind_alias_target(rooted, segments, alias);
+                    self.bind_alias_target(rooted, segments, alias, opaque);
                 }
             }
             syn::UseTree::Name(name) => {
-                self.bind_alias_leaf(rooted, prefix, &name.ident, &name.ident);
+                self.bind_alias_leaf(rooted, prefix, &name.ident, &name.ident, opaque);
             }
             syn::UseTree::Rename(rename) => {
-                self.bind_alias_leaf(rooted, prefix, &rename.ident, &rename.rename);
+                self.bind_alias_leaf(rooted, prefix, &rename.ident, &rename.rename, opaque);
             }
             // A glob outside `std` and the inline modules in view can bring in a macro under
             // any std name.
             syn::UseTree::Glob(_) => {
+                self.frames.last_mut().expect("a scope frame").glob = true;
                 let segments: Vec<&str> = prefix.iter().map(String::as_str).collect();
                 if crate::drift::macro_glob(&segments, self.inline_depth) {
                     self.frames.last_mut().expect("a scope frame").std_rebound =
@@ -355,21 +383,50 @@ impl Walker<'_> {
             }
             syn::UseTree::Group(group) => {
                 for tree in &group.items {
-                    self.bind_use_tree(rooted, prefix, tree);
+                    self.bind_use_tree(rooted, prefix, tree, opaque);
                 }
             }
         }
     }
 
     /// Bind one written target under `alias`.
-    fn bind_alias_target(&mut self, rooted: bool, segments: Vec<TargetSeg>, alias: &str) {
+    fn bind_alias_target(
+        &mut self,
+        rooted: bool,
+        segments: Vec<TargetSeg>,
+        alias: &str,
+        opaque: bool,
+    ) {
+        let target = Target { rooted, segments };
+        let opaque = opaque
+            || self
+                .frames
+                .last()
+                .and_then(|frame| frame.lookup(Ns::Macro, alias))
+                .is_some()
+            || self.lookup(&[Ns::Macro], alias).is_some_and(|binding| {
+                binding.origin == Origin::MacroRule
+                    || binding.macro_resolution == Some(crate::macros::MacroResolution::Opaque)
+            });
+        let resolution = if opaque {
+            Some(crate::macros::MacroResolution::Opaque)
+        } else {
+            crate::macros::MacroResolution::external_target(&target)
+        };
         let index = self.targets.len();
-        self.targets.push(Target { rooted, segments });
-        self.bind_value_and_type(alias, Some(index), Origin::Use);
+        self.targets.push(target);
+        self.bind_value_and_type(alias, Some(index), Origin::Use, resolution);
     }
 
     /// Bind one `use` leaf that imports `ident` under `alias`.
-    fn bind_alias_leaf(&mut self, rooted: bool, prefix: &[String], ident: &Ident, alias: &Ident) {
+    fn bind_alias_leaf(
+        &mut self,
+        rooted: bool,
+        prefix: &[String],
+        ident: &Ident,
+        alias: &Ident,
+        opaque: bool,
+    ) {
         let segments: Vec<&str> = prefix.iter().map(String::as_str).collect();
         self.frames.last_mut().expect("a scope frame").std_rebound |= crate::drift::import_rebound(
             &segments,
@@ -380,9 +437,7 @@ impl Walker<'_> {
         path.push(ident.to_string());
         let (rooted, segments) =
             resolve_target_path(&|name| self.resolve_first_seg(name), rooted, &path);
-        let index = self.targets.len();
-        self.targets.push(Target { rooted, segments });
-        self.bind_value_and_type(&alias.to_string(), Some(index), Origin::Use);
+        self.bind_alias_target(rooted, segments, &alias.to_string(), opaque);
     }
 
     /// Resolve the first-segment question of a written `use` prefix.
@@ -414,7 +469,12 @@ impl Walker<'_> {
                 }
                 syn::GenericParam::Const(r#const) => {
                     // A bare reference in `Foo<N>` reads as a type argument.
-                    self.bind_value_and_type(&r#const.ident.to_string(), None, Origin::Generic);
+                    self.bind_value_and_type(
+                        &r#const.ident.to_string(),
+                        None,
+                        Origin::Generic,
+                        None,
+                    );
                 }
             }
         }
@@ -519,10 +579,22 @@ impl Walker<'_> {
     fn pop_item_path(&mut self) {
         self.item_path.pop();
     }
+
+    fn observe(&mut self, attrs: &[syn::Attribute]) -> bool {
+        let frame = self.frames.last_mut().expect("a scope frame");
+        let previous = frame.observed;
+        frame.observed |= crate::context::live_attr(attrs);
+        previous
+    }
+
+    fn restore_observation(&mut self, observed: bool) {
+        self.frames.last_mut().expect("a scope frame").observed = observed;
+    }
 }
 
 impl Visit<'_> for Walker<'_> {
     fn visit_file(&mut self, file: &syn::File) {
+        self.observe(&file.attrs);
         prebind_items(
             &mut self.frames,
             &mut self.mod_frames,
@@ -538,6 +610,18 @@ impl Visit<'_> for Walker<'_> {
             _ => None,
         }));
         syn::visit::visit_file(self, file);
+    }
+
+    fn visit_item(&mut self, item: &syn::Item) {
+        let observed = self.observe(crate::helpers::item_attrs(item));
+        syn::visit::visit_item(self, item);
+        self.restore_observation(observed);
+    }
+
+    fn visit_expr(&mut self, expr: &syn::Expr) {
+        let observed = self.observe(crate::drift::expr_attrs(expr));
+        syn::visit::visit_expr(self, expr);
+        self.restore_observation(observed);
     }
 
     fn visit_block(&mut self, block: &syn::Block) {
@@ -600,7 +684,7 @@ impl Visit<'_> for Walker<'_> {
                 _ => None,
             }));
             for item in items {
-                syn::visit::visit_item(self, item);
+                self.visit_item(item);
             }
             self.inline_depth -= 1;
             let frame = self.frames.pop().expect("a scope frame");
@@ -646,6 +730,7 @@ impl Visit<'_> for Walker<'_> {
                 target: None,
                 raw: false,
                 helper: None,
+                macro_resolution: None,
             },
         );
         syn::visit::visit_item_trait(self, item);
@@ -720,7 +805,7 @@ impl Visit<'_> for Walker<'_> {
                 .frames
                 .last()
                 .and_then(|frame| frame.lookup(Ns::Macro, &name))
-                .is_none()
+                .is_none_or(|binding| binding.origin != Origin::MacroRule)
             {
                 self.bind(Ns::Macro, &name, Origin::MacroRule);
             }
@@ -737,6 +822,14 @@ impl Visit<'_> for Walker<'_> {
     }
 
     fn visit_impl_item(&mut self, item: &syn::ImplItem) {
+        let attrs: &[syn::Attribute] = match item {
+            syn::ImplItem::Fn(item) => &item.attrs,
+            syn::ImplItem::Const(item) => &item.attrs,
+            syn::ImplItem::Type(item) => &item.attrs,
+            syn::ImplItem::Macro(item) => &item.attrs,
+            _ => &[],
+        };
+        let observed = self.observe(attrs);
         match item {
             syn::ImplItem::Fn(f) => {
                 self.push_item_path(&f.sig.ident);
@@ -758,9 +851,18 @@ impl Visit<'_> for Walker<'_> {
             }
             syn::ImplItem::Verbatim(_) | _ => {}
         }
+        self.restore_observation(observed);
     }
 
     fn visit_trait_item(&mut self, item: &syn::TraitItem) {
+        let attrs: &[syn::Attribute] = match item {
+            syn::TraitItem::Fn(item) => &item.attrs,
+            syn::TraitItem::Const(item) => &item.attrs,
+            syn::TraitItem::Type(item) => &item.attrs,
+            syn::TraitItem::Macro(item) => &item.attrs,
+            _ => &[],
+        };
+        let observed = self.observe(attrs);
         match item {
             syn::TraitItem::Fn(f) => {
                 self.push_item_path(&f.sig.ident);
@@ -788,6 +890,7 @@ impl Visit<'_> for Walker<'_> {
             }
             syn::TraitItem::Verbatim(_) | _ => {}
         }
+        self.restore_observation(observed);
     }
 
     fn visit_expr_closure(&mut self, closure: &syn::ExprClosure) {
@@ -951,9 +1054,12 @@ impl Visit<'_> for Walker<'_> {
 /// Normalize one cloned function body against the inherited environment.
 fn build_function_body_form(inherited: Inherited<'_>, body: &syn::Block) -> CanonicalForm {
     let mut block = body.clone();
-    crate::drift::normalize_block(&mut block, inherited.frames);
-    crate::drift::fold_fn_body(&mut block);
+    let frames = inherited.frames;
     let mut renamer = Renamer::contextual(inherited);
+    if !renamer.observes_tokens() {
+        crate::drift::normalize_block(&mut block, frames);
+        crate::drift::fold_fn_body(&mut block);
+    }
     renamer.visit_block_mut(&mut block);
     let facts = renamer.into_reference_facts();
     crate::form::from_node(&block, &facts)
@@ -962,8 +1068,11 @@ fn build_function_body_form(inherited: Inherited<'_>, body: &syn::Block) -> Cano
 /// Normalize one cloned block slot, a loop body or an `if` branch.
 fn build_block_slot_form(inherited: Inherited<'_>, block: &syn::Block) -> CanonicalForm {
     let mut block = block.clone();
-    crate::drift::normalize_block(&mut block, inherited.frames);
+    let frames = inherited.frames;
     let mut renamer = Renamer::contextual(inherited);
+    if !renamer.observes_tokens() {
+        crate::drift::normalize_block(&mut block, frames);
+    }
     renamer.visit_block_mut(&mut block);
     let facts = renamer.into_reference_facts();
     crate::form::from_node(&block, &facts)
@@ -972,8 +1081,11 @@ fn build_block_slot_form(inherited: Inherited<'_>, block: &syn::Block) -> Canoni
 /// Normalize one cloned block expression, the label and block included.
 fn build_block_expr_form(inherited: Inherited<'_>, expr: syn::Expr) -> CanonicalForm {
     let mut expr = expr;
-    crate::drift::normalize_expr(&mut expr, inherited.frames);
+    let frames = inherited.frames;
     let mut renamer = Renamer::contextual(inherited);
+    if !renamer.observes_tokens() {
+        crate::drift::normalize_expr(&mut expr, frames);
+    }
     renamer.visit_expr_mut(&mut expr);
     let facts = renamer.into_reference_facts();
     crate::form::from_node(&expr, &facts)
@@ -982,8 +1094,11 @@ fn build_block_expr_form(inherited: Inherited<'_>, expr: syn::Expr) -> Canonical
 /// Normalize one cloned match arm.
 fn build_arm_form(inherited: Inherited<'_>, arm: &syn::Arm) -> CanonicalForm {
     let mut arm = arm.clone();
-    crate::drift::normalize_arm(&mut arm, inherited.frames);
+    let frames = inherited.frames;
     let mut renamer = Renamer::contextual(inherited);
+    if !renamer.observes_tokens() {
+        crate::drift::normalize_arm(&mut arm, frames);
+    }
     renamer.visit_arm_mut(&mut arm);
     let facts = renamer.into_reference_facts();
     crate::form::from_node(&arm, &facts)
@@ -992,8 +1107,11 @@ fn build_arm_form(inherited: Inherited<'_>, arm: &syn::Arm) -> CanonicalForm {
 /// Normalize one cloned closure, inputs and body included.
 fn build_closure_form(inherited: Inherited<'_>, closure: &syn::ExprClosure) -> CanonicalForm {
     let mut expr = syn::Expr::Closure(closure.clone());
-    crate::drift::normalize_expr(&mut expr, inherited.frames);
+    let frames = inherited.frames;
     let mut renamer = Renamer::contextual(inherited);
+    if !renamer.observes_tokens() {
+        crate::drift::normalize_expr(&mut expr, frames);
+    }
     renamer.visit_expr_mut(&mut expr);
     let facts = renamer.into_reference_facts();
     crate::form::from_node(&expr, &facts)

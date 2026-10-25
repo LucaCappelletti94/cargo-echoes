@@ -131,7 +131,7 @@ pub(crate) fn normalize_expr(expr: &mut syn::Expr, frames: &[crate::scope::Frame
 }
 
 /// The std names the scopes `frames` record bind to something else.
-fn frames_rebound(frames: &[crate::scope::Frame]) -> u32 {
+fn frames_rebound(frames: &[crate::scope::Frame]) -> u64 {
     use crate::scope::Ns;
 
     let imported = frames
@@ -139,7 +139,7 @@ fn frames_rebound(frames: &[crate::scope::Frame]) -> u32 {
         .fold(0, |rebound, frame| rebound | frame.std_rebound);
     STD_DERIVES
         .into_iter()
-        .chain(FORMAT_MACROS.map(|(name, _, _)| name))
+        .chain(crate::COMMA_BLIND_MACROS)
         .map(|name| (Ns::Macro, name))
         .chain(CRATE_ROOTS.map(|name| (Ns::Type, name)))
         .filter(|&(ns, name)| frames.iter().any(|frame| frame.lookup(ns, name).is_some()))
@@ -164,7 +164,7 @@ struct Drift<'a> {
     /// The scopes around the file leave every std name bound to the std item.
     std_names: bool,
     /// The std names the file rebinds wherever it sits.
-    file_rebound: u32,
+    file_rebound: u64,
     /// The std name bindings of the scopes around the current node, innermost last.
     std_scopes: Vec<StdScope>,
     helpers: Option<&'a mut crate::helpers::HelperSyntax>,
@@ -821,7 +821,7 @@ impl Drift<'_> {
     /// The std names the scopes from the innermost module scope inward may bind to something
     /// else, with every module a `use super::*` reaches, all of them when one reaches past the
     /// outermost scope.
-    fn rebound_names(&self) -> u32 {
+    fn rebound_names(&self) -> u64 {
         let mut rebound = self.file_rebound;
         // The module levels past the innermost one a `use super::*` brings into view.
         let mut levels = 0;
@@ -1452,12 +1452,11 @@ const FORMAT_MACROS: [(&str, usize, bool); 18] = [
 /// The crate roots the paths of std macros start from.
 const CRATE_ROOTS: [&str; 3] = ["std", "core", "alloc"];
 
-/// The bit of a std name a local binding can change, a std derive, a std formatting macro or a
-/// crate root, zero for any other name.
-pub(crate) fn std_name_bit(name: &str) -> u32 {
+/// The bit of a standard derive, supported macro or crate root, zero for other names.
+pub(crate) fn std_name_bit(name: &str) -> u64 {
     STD_DERIVES
         .into_iter()
-        .chain(FORMAT_MACROS.map(|(name, _, _)| name))
+        .chain(crate::COMMA_BLIND_MACROS)
         .chain(CRATE_ROOTS)
         .position(|std| std == name)
         .map_or(0, |index| 1 << index)
@@ -1469,14 +1468,14 @@ pub(crate) fn std_name_bit(name: &str) -> u32 {
 struct StdScope {
     /// A module scope, whose bindings hide nothing from the scopes outside it.
     module: bool,
-    rebound: u32,
+    rebound: u64,
     /// The most enclosing module levels a `use super::*` of the scope reaches, whose bindings
     /// the scope sees too.
     supers: usize,
 }
 
 impl StdScope {
-    const ALL: u32 = ALL_STD_NAMES;
+    const ALL: u64 = ALL_STD_NAMES;
 
     fn of<'a>(items: impl Iterator<Item = &'a syn::Item>, module: bool) -> Self {
         let mut scope = Self {
@@ -1587,8 +1586,8 @@ pub(crate) fn macro_glob<S: ?Sized + PartialEq<str>>(prefix: &[&S], depth: usize
 }
 
 /// Every std name bit of [`std_name_bit`].
-pub(crate) const ALL_STD_NAMES: u32 =
-    (1 << (STD_DERIVES.len() + FORMAT_MACROS.len() + CRATE_ROOTS.len())) - 1;
+pub(crate) const ALL_STD_NAMES: u64 =
+    (1 << (STD_DERIVES.len() + crate::COMMA_BLIND_MACROS.len() + CRATE_ROOTS.len())) - 1;
 
 /// The std name bit an import of `prefix` under `alias` rebinds, zero for a path through a std
 /// crate root that keeps the std item under its own name.
@@ -1596,7 +1595,7 @@ pub(crate) fn import_rebound<S: ?Sized + PartialEq<str>>(
     prefix: &[&S],
     name: &str,
     alias: &str,
-) -> u32 {
+) -> u64 {
     if matches!(glob_target(prefix), GlobTarget::Std) && name == alias {
         0
     } else {
@@ -1607,8 +1606,8 @@ pub(crate) fn import_rebound<S: ?Sized + PartialEq<str>>(
 /// The std names a file rebinds wherever it sits, by a `macro_rules!` definition of the name,
 /// whose textual scope reaches past its module, or by a `#[macro_use] extern crate`, whose
 /// macros the whole crate sees ahead of the std ones.
-pub(crate) fn file_rebound(file: &syn::File) -> u32 {
-    struct Definitions(u32);
+pub(crate) fn file_rebound(file: &syn::File) -> u64 {
+    struct Definitions(u64);
 
     impl<'ast> syn::visit::Visit<'ast> for Definitions {
         fn visit_item_macro(&mut self, item: &'ast syn::ItemMacro) {
@@ -2068,7 +2067,7 @@ pub(crate) fn format_operand(path: &syn::Path) -> Option<(usize, bool)> {
 /// The [`format_operand`] of a call `path` proves to name a std formatting macro, with
 /// `rebound` the std names the scopes around the call bind to something else. A bare name
 /// needs its own name free, a `std::`, `alloc::format` or `core::format_args` path its root.
-fn std_format_operand(path: &syn::Path, rebound: u32) -> Option<(usize, bool)> {
+fn std_format_operand(path: &syn::Path, rebound: u64) -> Option<(usize, bool)> {
     let operand = format_operand(path)?;
     let free = |ident: &syn::Ident| rebound & std_name_bit(&crate::scope::ident_name(ident)) == 0;
     let leaf = &path.segments.last()?.ident;
@@ -2094,7 +2093,7 @@ fn std_format_operand(path: &syn::Path, rebound: u32) -> Option<(usize, bool)> {
 /// `println!("{}", x)` becoming `println!("{x}")`, in `mac` and in every proven formatting
 /// call among its arguments, with `rebound` the std names the scopes around `mac` bind to
 /// something else. Any other macro keeps its tokens as written. Returns whether `mac` changed.
-fn inline_format_args(mac: &mut syn::Macro, rebound: u32) -> bool {
+fn inline_format_args(mac: &mut syn::Macro, rebound: u64) -> bool {
     use syn::parse::Parser;
 
     let Some((at, panic)) = std_format_operand(&mac.path, rebound) else {
@@ -2121,7 +2120,7 @@ fn inline_format_args(mac: &mut syn::Macro, rebound: u32) -> bool {
 /// Inlines the proven formatting calls inside a macro's arguments, which the drift visit never
 /// enters.
 struct NestedFormat {
-    rebound: u32,
+    rebound: u64,
     changed: bool,
 }
 
