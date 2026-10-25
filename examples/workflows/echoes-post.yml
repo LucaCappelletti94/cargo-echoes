@@ -3,8 +3,12 @@ on:
   workflow_run:
     workflows: [echoes]
     types: [completed]
+permissions: {}
 jobs:
   post:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -16,11 +20,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: echoes-payload
-          path: echoes-payload
+          pattern: echoes-payload*
+          path: ${{ runner.temp }}/echoes-payloads
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
       - uses: LucaCappelletti94/cargo-echoes@v1
         with:
           mode: post
-          payload: echoes-payload
+          payload: ${{ runner.temp }}/echoes-payloads

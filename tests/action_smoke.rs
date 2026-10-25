@@ -1496,6 +1496,239 @@ fn post_world(name: &str, prepared: &World, event: &str, inputs: &[(&str, &str)]
         .changed(&changed)
 }
 
+fn copy_payload(prepared: &World, destination: &Path) {
+    fs::create_dir_all(destination).unwrap();
+    let source = prepared.workspace_path().join("echoes-payload");
+    for file in ["meta.json", "report.json", "base-report.json", "blank.txt"] {
+        if source.join(file).is_file() {
+            fs::copy(source.join(file), destination.join(file)).unwrap();
+        }
+    }
+}
+
+#[test]
+fn post_collection_posts_seven_workspaces_with_independent_caps() {
+    let prep = prepared("collection-seven", 4, "app::parse", "doctest");
+    let root = prep.workspace_path().join("payloads");
+    let mut changed = Vec::new();
+    for workspace in [
+        "connetto-web",
+        "dioxus-demo",
+        "root",
+        "tauri-leptos-demo",
+        "wasm-smoke",
+        "webauthn-unlock",
+        "yew-web-demo",
+    ] {
+        let child = root.join(format!("echoes-payload-{workspace}"));
+        copy_payload(&prep, &child);
+        let mut meta: Value =
+            serde_json::from_str(&fs::read_to_string(child.join("meta.json")).unwrap()).unwrap();
+        meta["scope"] = json!(workspace);
+        fs::write(child.join("meta.json"), meta.to_string()).unwrap();
+        let mut report: Value =
+            serde_json::from_str(&fs::read_to_string(child.join("report.json")).unwrap()).unwrap();
+        for site in report["groups"][0]["sites"].as_array_mut().unwrap() {
+            let file = format!("{workspace}/{}", site["file"].as_str().unwrap());
+            changed.push(file.clone());
+            site["file"] = json!(file);
+        }
+        fs::write(child.join("report.json"), report.to_string()).unwrap();
+    }
+    let changed: Vec<&str> = changed.iter().map(String::as_str).collect();
+    let mut post = post_world(
+        "collection-seven-post",
+        &prep,
+        "workflow_run",
+        &[("payload", "payloads"), ("max-comments", "1")],
+    )
+    .changed(&changed);
+    assert_eq!(post.run(), 0);
+    let comments = post.runner().comment_posts();
+    let reviews = post.runner().review_posts();
+    assert_eq!(comments.len(), 7);
+    assert_eq!(reviews.len(), 7);
+    let posted_paths: std::collections::BTreeSet<&str> = comments
+        .iter()
+        .map(|comment| comment["params"]["path"].as_str().unwrap())
+        .collect();
+    let expected_paths = changed
+        .iter()
+        .copied()
+        .filter(|path| path.ends_with("/src/c1.rs"))
+        .collect();
+    assert_eq!(posted_paths, expected_paths);
+    for review in reviews {
+        assert_eq!(review["params"]["event"], "REQUEST_CHANGES");
+        assert!(
+            review["params"]["body"]
+                .as_str()
+                .unwrap()
+                .contains("2 inline copies were not posted")
+        );
+    }
+}
+
+#[test]
+fn post_collection_rejects_bad_siblings_and_posts_the_others() {
+    let prep = prepared("collection-validation", 2, "app::parse", "doctest");
+    let root = prep.workspace_path().join("payloads");
+    for name in [
+        "00-valid",
+        "01-pr",
+        "02-head",
+        "03-report",
+        "04-size",
+        "05-missing",
+        "99-valid",
+    ] {
+        copy_payload(&prep, &root.join(name));
+    }
+    for (name, field, value) in [("01-pr", "pr", "99"), ("02-head", "head_sha", "bad")] {
+        let path = root.join(name).join("meta.json");
+        let mut meta: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        meta[field] = json!(value);
+        fs::write(path, meta.to_string()).unwrap();
+    }
+    fs::write(root.join("03-report/report.json"), r#"{"groups": false}"#).unwrap();
+    fs::File::create(root.join("04-size/blank.txt"))
+        .unwrap()
+        .set_len(PAYLOAD_LIMIT + 1)
+        .unwrap();
+    fs::remove_file(root.join("05-missing/meta.json")).unwrap();
+    let mut post = post_world(
+        "collection-validation-post",
+        &prep,
+        "workflow_run",
+        &[("payload", "payloads")],
+    );
+    assert_eq!(post.run(), 1);
+    assert_eq!(post.runner().review_posts().len(), 2);
+    assert_eq!(post.runner().comment_posts().len(), 2);
+    let out = post
+        .runner()
+        .step_stdout("Review the findings on the pull request")
+        .unwrap();
+    for name in ["01-pr", "02-head", "03-report", "04-size", "05-missing"] {
+        assert!(out.contains(name), "{out}");
+    }
+}
+
+#[test]
+fn post_collection_bounds_candidates_before_posting() {
+    let prep = prepared("collection-limit", 2, "app::parse", "doctest");
+    let root = prep.workspace_path().join("payloads");
+    for i in 0..64 {
+        copy_payload(&prep, &root.join(format!("{i:02}")));
+    }
+    let mut allowed = post_world(
+        "collection-64",
+        &prep,
+        "workflow_run",
+        &[("payload", "payloads")],
+    )
+    .open_prs(json!([]));
+    assert_eq!(allowed.run(), 0);
+    assert_eq!(posts(allowed.runner()), 0);
+    copy_payload(&prep, &root.join("65"));
+    let mut overflow = post_world(
+        "collection-65",
+        &prep,
+        "workflow_run",
+        &[("payload", "payloads")],
+    );
+    assert_eq!(overflow.run(), 1);
+    assert_eq!(posts(overflow.runner()), 0);
+    let out = overflow
+        .runner()
+        .step_stdout("Review the findings on the pull request")
+        .unwrap();
+    assert!(out.contains("payloads") && out.contains("64"), "{out}");
+}
+
+#[test]
+fn post_collection_does_not_recurse_into_grandchildren() {
+    let prep = prepared("collection-depth", 2, "app::parse", "doctest");
+    let root = prep.workspace_path().join("payloads");
+    copy_payload(&prep, &root.join("valid"));
+    copy_payload(&prep, &root.join("incomplete/nested"));
+    let mut post = post_world(
+        "collection-depth-post",
+        &prep,
+        "workflow_run",
+        &[("payload", "payloads")],
+    );
+    assert_eq!(post.run(), 1);
+    assert_eq!(post.runner().review_posts().len(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn post_collection_ignores_symlinks_and_treats_names_as_data() {
+    let prep = prepared("collection-names", 2, "app::parse", "doctest");
+    let root = prep.workspace_path().join("payloads");
+    let name = "-$(touch OWNED)\n::error::injected";
+    copy_payload(&prep, &root.join(name));
+    copy_payload(&prep, &root.join(".hidden"));
+    fs::write(root.join("ordinary-file"), "ignored").unwrap();
+    std::os::unix::fs::symlink(
+        prep.workspace_path().join("echoes-payload"),
+        root.join("link"),
+    )
+    .unwrap();
+    std::os::unix::fs::symlink("missing", root.join("broken-link")).unwrap();
+    let mut post = post_world(
+        "collection-names-post",
+        &prep,
+        "workflow_run",
+        &[("payload", "payloads")],
+    );
+    assert_eq!(post.run(), 0);
+    assert_eq!(post.runner().review_posts().len(), 2);
+    assert!(!prep.workspace_path().join("OWNED").exists());
+    let out = post
+        .runner()
+        .step_stdout("Review the findings on the pull request")
+        .unwrap();
+    assert!(
+        !out.lines()
+            .any(|line| line.starts_with("::error::injected")),
+        "{out}"
+    );
+}
+
+#[test]
+fn post_collection_empty_or_missing_directory_names_the_root() {
+    let prep = prepared("collection-empty", 2, "app::parse", "doctest");
+    for name in ["empty", "missing"] {
+        if name == "empty" {
+            fs::create_dir_all(prep.workspace_path().join(name)).unwrap();
+            fs::write(
+                prep.workspace_path().join(name).join("ordinary-file"),
+                "ignored",
+            )
+            .unwrap();
+        }
+        let mut post = post_world(name, &prep, "workflow_run", &[("payload", name)]);
+        assert_eq!(post.run(), 1);
+        assert_eq!(posts(post.runner()), 0);
+        let out = post
+            .runner()
+            .step_stdout("Review the findings on the pull request")
+            .unwrap();
+        assert!(out.contains(name), "{out}");
+    }
+}
+
+#[test]
+fn post_collection_root_metadata_takes_precedence() {
+    let prep = prepared("collection-root", 2, "app::parse", "doctest");
+    fs::create_dir_all(prep.workspace_path().join("echoes-payload/invalid-child")).unwrap();
+    let mut post = post_world("collection-root-post", &prep, "workflow_run", &[]);
+    assert_eq!(post_status(&mut post), (0, "posted".into()));
+    assert_eq!(post.runner().review_posts().len(), 1);
+}
+
 #[test]
 fn s48_prepare_writes_a_payload_for_a_clean_scan() {
     let mut prep = World::pull_request("s48a")

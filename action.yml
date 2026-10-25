@@ -122,11 +122,11 @@ inputs:
     required: false
     default: 'review'
   payload:
-    description: Directory holding the prepared scan, written by prepare and checked and rendered again by post
+    description: Directory for prepare output or post input, holding one prepared scan or up to 64 immediate payload subdirectories, ignoring linked subdirectories. Each payload is checked and posted independently, and any invalid payload or empty collection fails the step.
     required: false
     default: ''
   max-comments:
-    description: Inline comments posted per run, the omitted copies go to the review body and the run summary
+    description: Inline comments posted per review, the omitted copies go to the review body and the run summary
     required: false
     default: '50'
   exclude:
@@ -296,7 +296,12 @@ runs:
         RUN_EVENT: ${{ github.event.workflow_run.event }}
         RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         RUN_HEAD_REPO_ID: ${{ github.event.workflow_run.head_repository.id }}
-      run: bash "$GITHUB_ACTION_PATH/scripts/review.sh"
+      run: |
+        if [ "$MODE" = "post" ]; then
+          bash "$GITHUB_ACTION_PATH/scripts/post.sh"
+        else
+          bash "$GITHUB_ACTION_PATH/scripts/review.sh"
+        fi
 
     - name: Save the dependency index
       if: ${{ always() && !cancelled() && inputs.mode != 'post' && inputs.context-dependency-depth > 0 && steps.scan.outputs.index-ok == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
