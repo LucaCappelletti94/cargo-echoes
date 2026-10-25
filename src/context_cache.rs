@@ -131,10 +131,18 @@ pub mod alpha {
         if value > 1u32 { value - 1u32 } else { u32::from(zeta) }
     }
 }
+mod custom {
+    macro_rules! vec {
+        (1) => { 10u32 };
+        (1,) => { 20u32 };
+    }
+    pub(crate) use vec;
+}
 fn main() {
     let beta = alpha::Beta { gamma: 3u32 };
     beta.delta(1u32);
     alpha::epsilon(2u32);
+    custom::vec!(1,);
 }
 ";
 

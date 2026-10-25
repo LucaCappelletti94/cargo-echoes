@@ -527,6 +527,7 @@ pub(crate) struct ImportedTarget {
     pub(crate) canon: String,
     pub(crate) prim: Option<PrimTy>,
     module: Option<Vec<String>>,
+    macro_resolution: Option<crate::macros::MacroResolution>,
 }
 
 impl ImportedTarget {
@@ -534,6 +535,9 @@ impl ImportedTarget {
     fn agree(self, other: &Self) -> Option<Self> {
         (self.canon == other.canon).then(|| Self {
             prim: self.prim.filter(|prim| other.prim == Some(*prim)),
+            macro_resolution: self
+                .macro_resolution
+                .filter(|standard| other.macro_resolution == Some(*standard)),
             module: self
                 .module
                 .filter(|module| other.module.as_ref() == Some(module)),
@@ -574,6 +578,14 @@ impl ImportedName {
     /// Make every namespace the opaque module-scoped alias when gated imports
     /// bind the alias to both a resolved item and an unknown target.
     fn settle(&mut self, from: &[String], alias: &str) {
+        if self.gated {
+            for target in self.resolved.iter_mut().flatten() {
+                target.macro_resolution = Some(crate::macros::MacroResolution::Opaque);
+            }
+            if let UnknownImport::Unique(target) = &mut self.unknown {
+                target.macro_resolution = Some(crate::macros::MacroResolution::Opaque);
+            }
+        }
         if !self.gated
             || matches!(self.unknown, UnknownImport::None)
             || self.resolved.iter().all(Option::is_none)
@@ -585,6 +597,7 @@ impl ImportedName {
                 canon: qualified_name(from, alias),
                 prim: None,
                 module: None,
+                macro_resolution: None,
             });
         }
         self.unknown = UnknownImport::Ambiguous;
@@ -667,6 +680,7 @@ fn merge_import_slots(
                 canon: qualified_name(from, alias),
                 prim: None,
                 module: None,
+                macro_resolution: None,
             }),
         });
     }
@@ -687,6 +701,7 @@ fn bind_imports(
                 canon: qualified_name(from, &alias),
                 prim: None,
                 module: None,
+                macro_resolution: None,
             }),
         };
         if let Some(target) = unknown {
@@ -712,6 +727,7 @@ fn bind_imports(
                         port: 0,
                         value_port: None,
                         helper: None,
+                        macro_resolution: target.macro_resolution,
                     },
                 );
                 *next_id += 1;
@@ -804,11 +820,13 @@ fn bind_use_name(binder: &mut UseBinder<'_>, path: &[String], alias: &str) {
                     .primitives_known()
             }),
             module: None,
+            macro_resolution: crate::macros::MacroResolution::external_path(path),
         },
         UseTarget::Unresolved => ImportedTarget {
             canon: qualified_name(binder.from, alias),
             prim: None,
             module: None,
+            macro_resolution: None,
         },
     };
     imported.unknown = match imported.unknown {
@@ -876,6 +894,7 @@ fn resolve_use_at(
             ImportedTarget {
                 canon: qualified_name(&base[..base.len() - 1], name),
                 prim: None,
+                macro_resolution: None,
                 module: Some(base.clone()),
             },
             [false, true, false, false, false],
@@ -1028,6 +1047,7 @@ fn resolve_declared(
             ImportedTarget {
                 canon: qualified_name(module, name),
                 prim,
+                macro_resolution: None,
                 module: items.iter().find_map(|item| {
                     if let syn::Item::Mod(item) = item
                         && ident_name(&item.ident) == name
@@ -1265,9 +1285,56 @@ fn bind_item_ident(
         port: 0,
         value_port: None,
         helper: None,
+        macro_resolution: None,
     };
     frame.bind(ns, &name, binding);
     *next_id += 1;
+}
+
+fn bind_extern_crate(
+    frame: &mut Frame,
+    module: &[String],
+    item: &syn::ItemExternCrate,
+    next_id: &mut usize,
+) {
+    let ident = item.rename.as_ref().map_or(&item.ident, |(_, alias)| alias);
+    let name = ident.to_string();
+    frame.bind(
+        Ns::Type,
+        &name,
+        Binding {
+            id: BindingId(*next_id),
+            canon: qualified_name(module, &name),
+            origin: Origin::Use,
+            target: None,
+            raw: false,
+            prim: None,
+            port: 0,
+            value_port: None,
+            helper: None,
+            macro_resolution: crate::macros::MacroResolution::external_crate(item),
+        },
+    );
+    *next_id += 1;
+}
+
+fn bind_macro_rule(
+    frame: &mut Frame,
+    module: &[String],
+    item: &syn::ItemMacro,
+    next_id: &mut usize,
+) {
+    if let Some(ident) = &item.ident {
+        bind_item_ident(
+            frame,
+            module,
+            Ns::Macro,
+            ident,
+            Origin::MacroRule,
+            None,
+            next_id,
+        );
+    }
 }
 
 /// The identity a module item seeds at its own spelling: the namespace it
@@ -1356,7 +1423,11 @@ fn seed_scope<'a>(
             continue;
         }
         match item {
+            syn::Item::ExternCrate(item) => {
+                bind_extern_crate(&mut frame, path, item, &mut next_id);
+            }
             syn::Item::Use(use_item) => {
+                frame.glob |= has_glob(&use_item.tree);
                 use_tree_bindings(
                     &mut UseBinder {
                         scopes,
@@ -1372,19 +1443,7 @@ fn seed_scope<'a>(
                     &use_item.tree,
                 );
             }
-            syn::Item::Macro(i) => {
-                if let Some(ident) = &i.ident {
-                    bind_item_ident(
-                        &mut frame,
-                        path,
-                        Ns::Macro,
-                        ident,
-                        Origin::MacroRule,
-                        None,
-                        &mut next_id,
-                    );
-                }
-            }
+            syn::Item::Macro(item) => bind_macro_rule(&mut frame, path, item, &mut next_id),
             _ => {}
         }
     }
@@ -1453,6 +1512,7 @@ fn bind_generic_param(
         port: 0,
         value_port: None,
         helper: None,
+        macro_resolution: None,
     };
     for ns in namespaces {
         frame.bind(*ns, &name, binding.clone());

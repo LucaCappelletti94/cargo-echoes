@@ -1108,6 +1108,7 @@ impl<'a> Collector<'a, '_> {
                     target: None,
                     raw: false,
                     helper: None,
+                    macro_resolution: None,
                 },
             );
             next += 1;
@@ -1431,7 +1432,7 @@ fn sanitize_imports(
     }
 }
 
-fn item_attrs(item: &syn::Item) -> &[syn::Attribute] {
+pub(crate) fn item_attrs(item: &syn::Item) -> &[syn::Attribute] {
     match item {
         syn::Item::Const(item) => &item.attrs,
         syn::Item::Enum(item) => &item.attrs,

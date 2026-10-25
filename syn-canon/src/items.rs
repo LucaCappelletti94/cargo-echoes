@@ -1262,6 +1262,7 @@ fn marker_frame(markers: &BTreeMap<String, Ns>) -> Frame {
                 target: None,
                 raw: false,
                 helper: None,
+                macro_resolution: None,
             },
         );
     }

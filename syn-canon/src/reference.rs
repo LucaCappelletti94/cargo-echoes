@@ -58,6 +58,7 @@ pub(crate) type MarkerMacroOrigins =
 
 #[derive(Default)]
 pub(crate) struct ReferenceFacts {
+    pub(crate) observed: bool,
     pub(crate) paths: BTreeMap<*const syn::Path, Resolution>,
     pub(crate) macros: BTreeMap<*const syn::Macro, Vec<Resolution>>,
     pub(crate) blocks: BTreeMap<*const syn::Block, BlockProof>,
