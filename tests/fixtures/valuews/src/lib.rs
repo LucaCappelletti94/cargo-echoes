@@ -2,19 +2,19 @@
 //! let input = 7u32;
 //! let mask = input & 15u32;
 //! let copied = mask;
-//! assert_eq!(copied ^ 3u32, 4u32);
+//! assert_eq!(copied ^ 3u32, 4u32)
 //! ```
 //!
 //! ```rust
 //! let input = 7u32;
 //! let mask = input & 15u32;
-//! assert_eq!(mask ^ 3u32, 4u32);
+//! assert_eq!(mask ^ 3u32, 4u32)
 //! ```
 //!
 //! ```rust
 //! let input = 7u32;
 //! let mask = input & 15u32;
-//! assert_eq!(mask | 3u32, 7u32);
+//! assert_eq!(mask | 3u32, 7u32)
 //! ```
 
 pub mod left {

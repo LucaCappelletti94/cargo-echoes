@@ -111,10 +111,10 @@ fn three_char_operators_count_as_one_body_unit() {
 
 #[test]
 fn opaque_macro_punct_runs_keep_their_body_units() {
-    let triple = syn_canon::canonicalize(syn::parse_str("fn f() { m!(x === y); }").unwrap());
-    let double = syn_canon::canonicalize(syn::parse_str("fn f() { m!(x == y); }").unwrap());
-    let lean = syn_canon::canonicalize(syn::parse_str("fn f() { m!(x <== y); }").unwrap());
-    let short = syn_canon::canonicalize(syn::parse_str("fn f() { m!(x <= y); }").unwrap());
+    let triple = syn_canon::canonicalize(syn::parse_str("fn f() { m!(x === y) }").unwrap());
+    let double = syn_canon::canonicalize(syn::parse_str("fn f() { m!(x == y) }").unwrap());
+    let lean = syn_canon::canonicalize(syn::parse_str("fn f() { m!(x <== y) }").unwrap());
+    let short = syn_canon::canonicalize(syn::parse_str("fn f() { m!(x <= y) }").unwrap());
     assert_eq!(triple.body_units(), 6);
     assert_ne!(triple.body_units(), double.body_units());
     assert_eq!(lean.body_units(), 6);
@@ -123,8 +123,9 @@ fn opaque_macro_punct_runs_keep_their_body_units() {
 
 #[test]
 fn body_unit_boundaries_count_lifetimes_paths_and_groups_as_one() {
-    let lifetime =
-        syn_canon::canonicalize(syn::parse_str("fn f() { let x: &'static i32 = &1; x; }").unwrap());
+    let lifetime = syn_canon::canonicalize(
+        syn::parse_str("fn f() -> &'static i32 { let x: &'static i32 = &1; x }").unwrap(),
+    );
     let path = syn_canon::canonicalize(
         syn::parse_str("fn f() { let _ = std::f32::consts::PI; }").unwrap(),
     );

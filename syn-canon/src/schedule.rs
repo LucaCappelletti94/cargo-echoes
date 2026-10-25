@@ -19,6 +19,8 @@ use crate::scope::{FreeKey, Ns, PrimTy, unraw};
 
 mod values;
 
+pub(crate) use values::{expression_within_bounds, within_bounds};
+
 /// The graph nodes a region may still be labeled with.
 pub(crate) const MAX_REGION_NODES: usize = 16_384;
 /// The block nesting level a function scope may analyze.

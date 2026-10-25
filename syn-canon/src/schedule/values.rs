@@ -81,7 +81,7 @@ fn bounds(block: &syn::Block, outer: usize) -> Bounds {
     scan
 }
 
-pub(super) fn within_bounds(block: &syn::Block, outer: usize) -> bool {
+pub(crate) fn within_bounds(block: &syn::Block, outer: usize) -> bool {
     bounds(block, outer).valid
 }
 
@@ -199,6 +199,10 @@ fn expression_bounds(expr: &syn::Expr, outer: usize) -> Bounds {
     };
     scan.visit_expr(expr);
     scan
+}
+
+pub(crate) fn expression_within_bounds(expr: &syn::Expr) -> bool {
+    expression_bounds(expr, 0).valid
 }
 
 fn expand(

@@ -205,3 +205,16 @@ fn shared_spans_do_not_change_the_canonical_form() {
         "a constructed file sharing every token span keeps the failing form"
     );
 }
+
+#[test]
+fn native_tail_scope_witnesses_preserve_both_public_relations() {
+    let cases: Vec<support::Case> =
+        serde_json::from_str(include_str!("fixtures/dependency/tail_cases.json")).unwrap();
+    for case in cases {
+        if case.expected == "same" {
+            expect_same(&case.id, &case.a, &case.b);
+        } else {
+            expect_separate(&case.id, &case.a, &case.b);
+        }
+    }
+}

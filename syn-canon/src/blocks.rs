@@ -1058,8 +1058,8 @@ fn build_function_body_form(inherited: Inherited<'_>, body: &syn::Block) -> Cano
     let mut renamer = Renamer::contextual(inherited);
     if !renamer.observes_tokens() {
         crate::drift::normalize_block(&mut block, frames);
-        crate::drift::fold_fn_body(&mut block);
     }
+    renamer.normalize_return_body(&mut block);
     renamer.visit_block_mut(&mut block);
     let facts = renamer.into_reference_facts();
     crate::form::from_node(&block, &facts)

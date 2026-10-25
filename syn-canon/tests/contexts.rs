@@ -1162,10 +1162,10 @@ fn independent_closures_normalize_literal_and_parenthesis_spelling() {
 
 #[test]
 fn independent_function_bodies_fold_their_own_tail_return() {
-    let (a, _) = sites("fn first(x: u32) -> u32 { return x + x; }");
-    let (b, _) = sites("fn second(y: u32) -> u32 { y + y }");
+    let (a, _) = sites("fn first() -> u32 { return 1u32 + 1u32; }");
+    let (b, _) = sites("fn second() -> u32 { 1u32 + 1u32 }");
     assert_eq!(body_of(&a, "first"), body_of(&b, "second"));
-    let (different, _) = sites("fn third(x: u32) -> u32 { if ready() { return x + x; } x - x }");
+    let (different, _) = sites("fn third() -> u32 { if ready() { return 1u32 + 1u32; } 3u32 }");
     assert_ne!(body_of(&a, "first"), body_of(&different, "third"));
 }
 
