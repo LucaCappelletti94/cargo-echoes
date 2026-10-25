@@ -51,7 +51,7 @@ jobs:
           functions: true
 ```
 
-The [action](https://github.com/marketplace/actions/cargo-echoes) reviews the pull request and suggests removing each copy it introduces. On every new commit it dismisses its earlier requests for changes and resolves the threads of copies that are gone, which needs `contents: write`. [`action.yml`](https://github.com/LucaCappelletti94/cargo-echoes/blob/main/action.yml) lists every input, and [these two workflows](https://github.com/LucaCappelletti94/cargo-echoes/tree/main/examples/workflows) review pull requests from forks.
+The [action](https://github.com/marketplace/actions/cargo-echoes) reviews the pull request and suggests removing each copy it introduces, with links to report a wrong review and support echoes. On every new commit it dismisses its earlier requests for changes and resolves the threads of copies that are gone, which needs `contents: write`. [`action.yml`](https://github.com/LucaCappelletti94/cargo-echoes/blob/main/action.yml) lists every input, and [these two workflows](https://github.com/LucaCappelletti94/cargo-echoes/tree/main/examples/workflows) review pull requests from forks.
 
 ## Library
 

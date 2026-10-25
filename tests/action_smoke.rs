@@ -254,6 +254,13 @@ fn s04_pr_local_onlynew() {
         Some("REQUEST_CHANGES"),
         "local duplicates keep the existing request-changes behavior"
     );
+    let body = reviews[0]["params"]["body"].as_str().unwrap();
+    assert!(
+        body.contains("https://github.com/LucaCappelletti94/cargo-echoes)")
+            && body.contains("issues/new?template=wrong-review.yml")
+            && body.contains("https://github.com/sponsors/LucaCappelletti94"),
+        "the review body links the project, feedback form and sponsorship"
+    );
     let text = joined_bodies(&r.body_files());
     assert!(
         text.contains("added by this pull request"),
@@ -1253,6 +1260,46 @@ fn s18_perm_403_readonly() {
 }
 
 #[test]
+fn review_fallback_links_feedback_without_phantom_overflow() {
+    for code in ["422", "500"] {
+        let mut world = World::pull_request(&format!("review-fallback-{code}"))
+            .inputs(&[("only-new", "false")])
+            .json(report(
+                &[],
+                &[ctx_group(
+                    "c1",
+                    "C1",
+                    &[
+                        site("src/lib.rs", 3, 6, "app::original"),
+                        site("src/parser.rs", 10, 14, "app::copy"),
+                    ],
+                )],
+                None,
+                6,
+                3,
+            ))
+            .changed(&["src/parser.rs"])
+            .env("SCEN_GH_FAIL", code);
+        assert_eq!(world.run(), 0);
+        let reviews = world.runner().review_posts();
+        let body = reviews[0]["params"]["body"].as_str().unwrap();
+        assert!(body.contains("src/parser.rs:10-14"));
+        assert!(
+            !body.contains("/actions/runs/"),
+            "a complete fallback list needs no overflow link"
+        );
+        assert!(
+            body.contains("issues/new?template=wrong-review.yml")
+                && body.contains("review=https%3A%2F%2Fgithub.com%2Fowner%2Frepo%2Fpull%2F7")
+                && body.contains("src%2Fparser.rs%3A10%20%20app%3A%3Acopy")
+                && body.contains("https://github.com/sponsors/LucaCappelletti94")
+                && body.contains("[echoes](https://github.com/LucaCappelletti94/cargo-echoes)"),
+            "fallback feedback identifies the pull request and reported sites"
+        );
+    }
+}
+
+#[test]
 fn s19_oor_truncation() {
     let mut sites = Vec::new();
     for i in 0..800 {
@@ -1294,6 +1341,14 @@ fn s19_oor_truncation() {
     assert!(
         body.contains("more, they are in the run summary") && body.contains("src/lib.rs"),
         "the truncated list points at the run summary"
+    );
+    let listed = body
+        .lines()
+        .filter(|line| line.starts_with("- group "))
+        .count();
+    assert!(
+        body.contains(&format!("and {} more,", sites.len() - 1 - listed)),
+        "the overflow count includes only sites absent from the review"
     );
 }
 
