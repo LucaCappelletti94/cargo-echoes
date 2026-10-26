@@ -151,6 +151,9 @@ pub mod alpha {
     pub fn joined() -> &'static str {
         concat!("al", "pha")
     }
+    pub fn unset(flag: bool) -> bool {
+        flag == false
+    }
 }
 mod custom {
     macro_rules! vec {

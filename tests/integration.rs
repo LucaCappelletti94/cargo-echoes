@@ -1014,6 +1014,56 @@ fn concat_functions_keep_non_string_arguments_separate() {
     assert_eq!(function_groups(&dropped).len(), 0);
 }
 
+const BOOLEAN_LITERAL_FIXTURE: &str = "tests/fixtures/boollitws";
+
+#[test]
+fn boolean_literal_doctests_group_only_the_proven_negations() {
+    let report = Echoes::default().run(BOOLEAN_LITERAL_FIXTURE).unwrap();
+    assert_eq!(report.total, 6);
+    assert_eq!(report.unique, 4);
+    let expected = [vec![
+        "boollitws::Compared",
+        "boollitws::Negated",
+        "boollitws::Reversed",
+    ]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(12)
+        .run(BOOLEAN_LITERAL_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(13)
+        .run(BOOLEAN_LITERAL_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn boolean_literal_functions_keep_effects_and_polarity_separate() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(BOOLEAN_LITERAL_FIXTURE)
+            .unwrap()
+    };
+    let negations = vec![
+        "boollitws::compared",
+        "boollitws::negated",
+        "boollitws::reversed",
+    ];
+    let identities = vec!["boollitws::identity", "boollitws::kept"];
+    for tokens in [0, 1] {
+        assert_eq!(
+            function_groups(&scan(tokens)),
+            [negations.clone(), identities.clone()]
+        );
+    }
+    assert_eq!(function_groups(&scan(2)), [negations]);
+    assert_eq!(function_groups(&scan(3)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

@@ -697,22 +697,49 @@ pub(crate) fn positive_condition(cond: &Lbl) -> Option<Lbl> {
     matches!(cond, Lbl::Op('≤' | '!', ..)).then(|| not_label(cond.clone()))
 }
 
-/// A reduced equality over total scalar operands.
+/// How an equality over total scalar operands reduces.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Equality {
+    /// Both operands are the same primitive value.
+    Reflexive,
+    /// One operand is a boolean literal, so the comparison is the other operand, negated when
+    /// `negated` holds.
+    Operand { left: bool, negated: bool },
+}
+
+/// The reduction of `==` or `!=` over total scalar operands.
+pub(crate) fn equality(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<Equality> {
+    let unequal = match bin_op {
+        syn::BinOp::Eq(_) => false,
+        syn::BinOp::Ne(_) => true,
+        _ => return None,
+    };
+    if !unequal && left.prim().is_some() && left == right {
+        return Some(Equality::Reflexive);
+    }
+    let (left, literal) = match (left, right) {
+        (other, Lbl::Bool(value)) if other.prim() == Some(PrimTy::Bool) => (true, *value),
+        (Lbl::Bool(value), other) if other.prim() == Some(PrimTy::Bool) => (false, *value),
+        _ => return None,
+    };
+    Some(Equality::Operand {
+        left,
+        negated: literal == unequal,
+    })
+}
+
+/// The label of a reduced equality over total scalar operands.
 pub(crate) fn equality_label(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<Lbl> {
-    if !matches!(bin_op, syn::BinOp::Eq(_)) {
-        return None;
-    }
-    if left.prim().is_some() && left == right {
-        return Some(Lbl::Bool(true));
-    }
-    match (left, right) {
-        (other, Lbl::Bool(true)) | (Lbl::Bool(true), other)
-            if other.prim() == Some(PrimTy::Bool) =>
-        {
-            Some(other.clone())
+    Some(match equality(bin_op, left, right)? {
+        Equality::Reflexive => Lbl::Bool(true),
+        Equality::Operand {
+            left: kept,
+            negated,
+        } => {
+            let operand = if kept { left } else { right }.clone();
+            if negated { not_label(operand) } else { operand }
         }
-        _ => None,
-    }
+    })
 }
 
 /// The operands of a flat chain, flattening chains of the same operator

@@ -35,12 +35,16 @@ assert_eq!(
     canonical(r#"fn f() -> &'static str { concat!("a", r"\n") }"#),
     canonical(r#"fn f() -> &'static str { "a\\n" }"#),
 );
+assert_eq!(
+    canonical("fn f(p: bool) -> bool { p == false }"),
+    canonical("fn f(p: bool) -> bool { !p }"),
+);
 println!("{forms:?}");
 ```
 
 `no_std` with `alloc`. It powers [`cargo-echoes`](https://github.com/LucaCappelletti94/cargo-echoes), which finds duplicated doctests.
 
-Equal forms mean approximate duplication, since the normalization cannot see what the compiler resolves, such as inferred types, macro expansions or an enclosing `cfg`. Tail `return` folds require temporary-free values and forwarded control heads, preserving return boundaries for unknown calls, borrows, destructor dependencies and unresolved values in both comparison modes. Reflexive equality, `^` cancellation, `wrapping_add` operand order and boolean `match` folding require compiling mode and proven total boolean or fixed-width integer values, and `concat!` folding requires compiling mode, the built-in macro and string literal arguments.
+Equal forms mean approximate duplication, since the normalization cannot see what the compiler resolves, such as inferred types, macro expansions or an enclosing `cfg`. Tail `return` folds require temporary-free values and forwarded control heads, preserving return boundaries for unknown calls, borrows, destructor dependencies and unresolved values in both comparison modes. Reflexive equality, comparison with a `bool` literal, `^` cancellation, `wrapping_add` operand order and boolean `match` folding require compiling mode and proven total boolean or fixed-width integer values, and `concat!` folding requires compiling mode, the built-in macro and string literal arguments.
 
 Macro input retains significant commas unless lexical resolution proves a supported standard grammar. Enclosing macros and live attributes preserve comma spelling.
 

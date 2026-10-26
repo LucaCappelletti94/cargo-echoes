@@ -386,3 +386,43 @@ fn an_observing_impl_retains_the_boolean_match() {
         view(&source("if p { x } else { y }"))
     );
 }
+
+#[test]
+fn proven_literal_comparisons_fold_in_the_borrowed_view() {
+    let body = |expression: &str| format!("fn f(p: bool) -> bool {{ {expression} }}");
+    for (written, folded) in [
+        ("p == false", "!p"),
+        ("true != p", "!p"),
+        ("read(); p != false", "read(); p"),
+    ] {
+        assert_eq!(view(&body(written)), view(&body(folded)), "{written}");
+    }
+}
+
+#[test]
+fn unproven_literal_comparisons_stay_comparisons_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f(z: Unknown) -> bool { z == false }"),
+        view("fn f(z: Unknown) -> bool { !z }")
+    );
+    assert_ne!(
+        view("fn f() -> bool { read() != true }"),
+        view("fn f() -> bool { !read() }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_literal_comparison() {
+    assert_ne!(
+        failing_form("fn f(p: bool) -> bool { p == false }"),
+        failing_form("fn f(p: bool) -> bool { !p }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_literal_comparison() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f(p: bool) -> bool {{ {body} }}\n}}")
+    };
+    assert_ne!(view(&source("p == false")), view(&source("!p")));
+}

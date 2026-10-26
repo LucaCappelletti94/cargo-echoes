@@ -177,14 +177,6 @@ fn compare_true_removes_literal_equality_in_both_positions() {
 #[test]
 fn compare_true_guards_keep_foreign_and_non_literal_equalities() {
     separate(
-        "fn f(p: bool) -> bool { p == false }",
-        "fn g(x: bool) -> bool { !x }",
-    );
-    separate(
-        "fn f(p: bool) -> bool { p != true }",
-        "fn g(x: bool) -> bool { !x }",
-    );
-    separate(
         "fn f(p: bool, q: bool) -> bool { p == q }",
         "fn g(p: bool, q: bool) -> bool { p }",
     );
