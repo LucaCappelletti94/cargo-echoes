@@ -117,7 +117,8 @@ pub(crate) enum Lbl {
     /// A total bitwise or valid shift over proven scalars.
     Op(char, Box<Lbl>, Box<Lbl>, PrimTy),
     /// A flattened bitwise chain: one operator and type, sorted leaves,
-    /// multiplicity retained, literal leaves folded.
+    /// multiplicity retained, literal leaves folded. The `WRAPPING_ADD`
+    /// tag holds the sorted operand pair of one native integer call.
     Flat(char, Vec<Lbl>, PrimTy),
     /// Any other expression, by a kind tag and its ordered children.
     Other(String, Vec<Lbl>),
@@ -1289,7 +1290,8 @@ fn total_helper(
 }
 
 /// The label of a method call, the receiver's sites marked on its storage,
-/// its arguments in operand order.
+/// its arguments in operand order. A native integer `wrapping_add` over
+/// total operands reads both by value as an unordered pair.
 fn label_method(
     renamer: &Renamer,
     env: &Env<'_>,
@@ -1307,13 +1309,53 @@ fn label_method(
             ..site
         })
         .collect();
-    let mut children = vec![Lbl::Lit(method.method.to_string()), receiver];
+    let mut children = Vec::with_capacity(method.args.len() + 2);
+    children.push(receiver);
     for arg in &method.args {
         let (label, a_sites) = label_expr(renamer, env, arg, consumer, locals, orders);
         children.push(label);
         sites.extend(a_sites);
     }
+    if wrapping_add_shape(method)
+        && let [receiver, argument] = children.as_slice()
+        && let Some(prim) = wrapping_add_prim(receiver, argument)
+    {
+        let argument = children.pop().expect("a wrapping argument");
+        let receiver = children.pop().expect("a wrapping receiver");
+        let label = wrapping_add_label(prim, receiver, argument);
+        sites.clear();
+        value_sites(&label, &mut sites);
+        return (label, sites);
+    }
+    children.insert(0, Lbl::Lit(method.method.to_string()));
     (Lbl::Other("m".into(), children), sites)
+}
+
+/// The `Flat` tag of a native integer `wrapping_add`.
+const WRAPPING_ADD: char = '⊞';
+
+/// An unattributed one-argument `wrapping_add` call without turbofish.
+pub(crate) fn wrapping_add_shape(method: &syn::ExprMethodCall) -> bool {
+    method.attrs.is_empty()
+        && method.turbofish.is_none()
+        && method.args.len() == 1
+        && method.method == "wrapping_add"
+}
+
+/// The fixed-width integer type of a native `wrapping_add`: a proven receiver
+/// type, whose inherent method resolution precedes every trait method, and an
+/// argument of that type.
+pub(crate) fn wrapping_add_prim(receiver: &Lbl, argument: &Lbl) -> Option<PrimTy> {
+    let prim = receiver.prim()?;
+    (matches!(prim, PrimTy::Int { .. }) && scalar_prim(receiver, argument) == Some(prim))
+        .then_some(prim)
+}
+
+/// The unordered operand pair of a native `wrapping_add`.
+pub(crate) fn wrapping_add_label(prim: PrimTy, receiver: Lbl, argument: Lbl) -> Lbl {
+    let mut operands = vec![receiver, argument];
+    operands.sort();
+    Lbl::Flat(WRAPPING_ADD, operands, prim)
 }
 
 /// The label of a reference, its inner sites marked on the referenced
