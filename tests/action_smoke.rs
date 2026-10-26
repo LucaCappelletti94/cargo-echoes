@@ -361,19 +361,9 @@ fn s05_pr_reuse_only() {
     let exit = world.run();
     let r = world.runner();
     assert_eq!(exit, 0, "advisory reuse findings do not fail the run");
-    let reviews = r.review_posts();
-    assert_eq!(
-        reviews.len(),
-        1,
-        "one review is posted for the reuse findings"
-    );
-    assert_eq!(
-        reviews[0]
-            .get("params")
-            .and_then(|p| p.get("event"))
-            .and_then(Value::as_str),
-        Some("COMMENT"),
-        "dependency-only advice posts a comment review, not request changes"
+    assert!(
+        r.review_posts().is_empty(),
+        "advice-only findings need no summary review"
     );
     assert_eq!(
         r.comment_posts().len(),
@@ -386,8 +376,10 @@ fn s05_pr_reuse_only() {
         "reuse advice carries no deletion suggestion"
     );
     assert!(
-        text.contains("can be reused"),
-        "the accessible API alternative is rendered"
+        text.contains(&format!(
+            "{ECHOES} found this code in a dependency. These items match it, the public ones first."
+        )) && text.contains("can be reused"),
+        "the reuse advice names echoes and renders the accessible API alternative"
     );
     assert!(
         text.contains("direct::public::helper"),
@@ -483,15 +475,9 @@ fn s06_pr_context_groups() {
     let exit = world.run();
     let r = world.runner();
     assert_eq!(exit, 0, "the context group run exits 0");
-    let reviews = r.review_posts();
-    assert_eq!(
-        reviews
-            .first()
-            .and_then(|c| c.get("params"))
-            .and_then(|p| p.get("event"))
-            .and_then(Value::as_str),
-        Some("COMMENT"),
-        "context group advice posts a comment review"
+    assert!(
+        r.review_posts().is_empty(),
+        "context advice needs no summary review"
     );
     assert_eq!(
         r.comment_posts().len(),
@@ -500,8 +486,11 @@ fn s06_pr_context_groups() {
     );
     let text = joined_bodies(&r.body_files());
     assert!(
-        text.contains("repeated in this scan"),
-        "the context advice is neutral"
+        text.contains(&format!(
+            "{ECHOES} found this code at the places below too. A shared helper could hold it once."
+        )) && text
+            .contains("Check that the copies agree in types and behaviour before sharing them."),
+        "the context advice names echoes and reads plainly"
     );
     assert!(
         !text.contains("```suggestion"),
@@ -1090,16 +1079,11 @@ fn s15_prepare_post_reuse_only() {
     let exit2 = world2.run();
     let r2 = world2.runner();
     assert_eq!(exit2, 0, "the reuse-only post run exits 0");
-    let reviews = r2.review_posts();
-    assert_eq!(
-        reviews
-            .first()
-            .and_then(|c| c.get("params"))
-            .and_then(|p| p.get("event"))
-            .and_then(Value::as_str),
-        Some("COMMENT"),
-        "dependency-only advice never triggers request changes through post"
+    assert!(
+        r2.review_posts().is_empty() && r2.comment_posts().len() == 1,
+        "dependency-only advice posts its inline entry and no summary review through post"
     );
+    assert_eq!(r2.status(), "posted", "the inline advice counts as posted");
 }
 
 #[test]
@@ -2532,6 +2516,7 @@ fn review_marker(scope: &str) -> String {
 const CONTEXT_NOTE: &str =
     "This context is repeated in this scan. A shared helper can carry it once.";
 const LEGACY_OOR: &str = "These duplicates are not on lines GitHub shows in this pull request diff, the inline comment cannot attach there. The links point at the copies on the head commit.";
+const ECHOES: &str = "[echoes](https://github.com/LucaCappelletti94/cargo-echoes)";
 const BOT: &str = "github-actions[bot]";
 const DUP_KEY: &str = "doctest%3AH1%3Asrc%2Fdup.rs%3Aapp%3A%3Aparse";
 
@@ -2607,6 +2592,7 @@ fn s60_clean_head_resolves_gone_threads_and_dismisses_reviews() {
                 &format!("{LEGACY_OOR}\n\n- group context  `sub/src/lib.rs:3`  `x`")
             ),
             review(104, "COMMENTED", BOT, &review_marker(".")),
+            review(108, "COMMENTED", BOT, ""),
             review(105, "CHANGES_REQUESTED", BOT, &review_marker("sub")),
             review(106, "CHANGES_REQUESTED", "luca", ""),
             review(
@@ -2630,9 +2616,37 @@ fn s60_clean_head_resolves_gone_threads_and_dismisses_reviews() {
         ["101", "102", "107"],
         "only this workspace's requests for changes are dismissed"
     );
+    assert_clean_summaries(r);
     assert!(
         r.comment_posts().is_empty() && r.review_posts().is_empty(),
         "a clean head posts nothing"
+    );
+}
+
+/// Asserts a clean head dismissed with the clean message and rewrote only review 104.
+fn assert_clean_summaries(r: &Runner) {
+    assert!(
+        r.dismissal_messages()
+            .iter()
+            .all(|m| m.starts_with("No echoes finding of this workspace remains at ")),
+        "a clean head dismisses with the clean message: {:?}",
+        r.dismissal_messages()
+    );
+    let rewritten = r.rewritten_reviews();
+    assert_eq!(
+        rewritten
+            .iter()
+            .map(|(id, _)| id.as_str())
+            .collect::<Vec<_>>(),
+        ["104"],
+        "only this workspace's comment-only summary is rewritten, never an inline comment's review"
+    );
+    assert!(
+        rewritten[0].1.starts_with(&format!(
+            "No {ECHOES} finding of this workspace remains at `"
+        )) && rewritten[0].1.ends_with(&review_marker(".")),
+        "the rewritten summary says no finding remains and keeps its mark: {}",
+        rewritten[0].1
     );
 }
 
@@ -2677,6 +2691,12 @@ fn s61_threaded_finding_is_not_posted_again() {
         // The listing already holds the review this run posts, id 9001, which must stay.
         .reviews(json!([
             review(201, "CHANGES_REQUESTED", BOT, &review_marker(".")),
+            review(
+                202,
+                "COMMENTED",
+                BOT,
+                &format!("x\n\n{}", review_marker("."))
+            ),
             review(9001, "CHANGES_REQUESTED", BOT, &review_marker(".")),
         ]));
     assert_eq!(world.run(), 0, "the review run exits 0");
@@ -2699,13 +2719,7 @@ fn s61_threaded_finding_is_not_posted_again() {
         reviews[0].pointer("/params/event").and_then(Value::as_str),
         Some("REQUEST_CHANGES")
     );
-    assert!(
-        reviews[0]
-            .pointer("/params/body")
-            .and_then(Value::as_str)
-            .is_some_and(|b| b.contains(&review_marker("."))),
-        "the renewed review carries its workspace mark"
-    );
+    assert_renewed_summary(r, &reviews[0]);
     assert_eq!(
         r.dismissed_reviews(),
         ["201"],
@@ -2719,6 +2733,33 @@ fn s61_threaded_finding_is_not_posted_again() {
     assert!(
         posted < dismissed,
         "the new review is posted before the old one is dismissed"
+    );
+}
+
+/// Asserts the renewed review's lead and footer and the superseded rewrite of review 202.
+fn assert_renewed_summary(r: &Runner, review: &Value) {
+    let body = review
+        .pointer("/params/body")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    assert!(
+        body.starts_with(&format!(
+            "{ECHOES} still finds the duplicates it reported on earlier commits"
+        )) && body.contains(&review_marker(".")),
+        "the renewed review names echoes in its lead and carries its workspace mark: {body}"
+    );
+    assert!(
+        !body.contains(&format!("{ECHOES} ·")),
+        "the footer does not repeat the echoes link: {body}"
+    );
+    let rewritten = r.rewritten_reviews();
+    assert!(
+        rewritten.len() == 1
+            && rewritten[0].0 == "202"
+            && rewritten[0]
+                .1
+                .starts_with(&format!("Superseded by the {ECHOES} review of `")),
+        "the earlier comment-only summary is marked superseded: {rewritten:?}"
     );
 }
 
@@ -2804,6 +2845,11 @@ fn s63_context_out_of_range_links_and_requests_nothing() {
             && body.contains("/src/mod.rs#L10-L13)"),
         "the out-of-range copy links its lines: {body}"
     );
+    assert!(
+        body.starts_with(&format!("{ECHOES} found repeated code in this pull request.\n\nThese duplicates are on lines this diff does not show, so they have no inline comment. The links point at the head commit."))
+            && !body.contains(&format!("{ECHOES} ·")),
+        "the summary names echoes once, in its lead: {body}"
+    );
 }
 
 #[test]
@@ -2829,6 +2875,137 @@ fn s64_refused_resolution_leaves_a_notice() {
         .unwrap_or_default();
     assert!(
         out.contains("contents: write"),
+        "the notice names the missing permission: {out}"
+    );
+}
+
+/// The context world of `s06`, whose one inline finding is keyed by `CTX_KEY`.
+fn advice_world(name: &str) -> World {
+    World::pull_request(name)
+        .inputs(&[("context-select", "crate:app")])
+        .git()
+        .json(report(
+            &[],
+            &[ctx_group(
+                "c9f8",
+                "C1",
+                &[
+                    site("src/parser.rs", 3, 6, "app::parser::selected"),
+                    site("src/mod.rs", 10, 13, "app::other::selected"),
+                ],
+            )],
+            None,
+            6,
+            3,
+        ))
+        .base_json(report(&[], &[], None, 6, 3))
+        .changed(&["Cargo.toml", "src/lib.rs", "src/parser.rs", "src/mod.rs"])
+        .extra_base("src/mod.rs", SRC_PARSER)
+}
+
+const CTX_KEY: &str = "context%3AC1%3Asrc%2Fmod.rs%3Aapp%3A%3Aother%3A%3Aselected";
+
+/// The earlier echoes summaries of this workspace, one of each state.
+fn earlier_summaries() -> Value {
+    json!([
+        review(301, "CHANGES_REQUESTED", BOT, &review_marker(".")),
+        review(
+            302,
+            "COMMENTED",
+            BOT,
+            &format!("x\n\n{}", review_marker("."))
+        ),
+    ])
+}
+
+/// Asserts the earlier summaries were cleaned up while advice findings remain.
+fn assert_advice_cleanup(r: &Runner) {
+    assert!(
+        r.review_posts().is_empty(),
+        "advice findings need no summary review"
+    );
+    assert_eq!(
+        r.dismissed_reviews(),
+        ["301"],
+        "the earlier request is dismissed"
+    );
+    assert!(
+        r.dismissal_messages()[0]
+            .starts_with("No echoes finding of this workspace requests changes at "),
+        "the dismissal says nothing requests changes: {:?}",
+        r.dismissal_messages()
+    );
+    let rewritten = r.rewritten_reviews();
+    assert!(
+        rewritten.len() == 1
+            && rewritten[0].0 == "302"
+            && rewritten[0].1.starts_with(&format!(
+                "The open {ECHOES} threads carry the findings that remain at `"
+            ))
+            && rewritten[0].1.ends_with(&review_marker(".")),
+        "the earlier comment-only summary points at the open threads: {rewritten:?}"
+    );
+}
+
+#[test]
+fn s70_new_advice_cleans_up_without_a_summary() {
+    let mut world = advice_world("s70").reviews(earlier_summaries());
+    assert_eq!(world.run(), 0, "the advice run exits 0");
+    let r = world.runner();
+    assert_eq!(r.comment_posts().len(), 1, "the advice is posted inline");
+    assert_eq!(r.status(), "posted", "the inline advice counts as posted");
+    assert_advice_cleanup(r);
+}
+
+#[test]
+fn s71_remaining_advice_cleans_up_without_a_summary() {
+    let mut world = advice_world("s71")
+        .threads(json!([thread(
+            "t1",
+            false,
+            "src/mod.rs",
+            None,
+            "github-actions",
+            &format!("x\n\n{}", thread_marker(".", CTX_KEY))
+        )]))
+        .reviews(earlier_summaries());
+    assert_eq!(world.run(), 0, "the remaining-advice run exits 0");
+    let r = world.runner();
+    assert!(
+        r.comment_posts().is_empty() && r.resolved_threads().is_empty(),
+        "the threaded advice is neither posted again nor resolved"
+    );
+    assert_advice_cleanup(r);
+}
+
+#[test]
+fn s72_comment_summary_rewrite_is_idempotent_and_refusal_is_reported() {
+    let head = "1111111111111111111111111111111111111111";
+    let settled = format!(
+        "No {ECHOES} finding of this workspace remains at `{head}`.\n\n{}",
+        review_marker(".")
+    );
+    let mut world = World::pull_request("s72a")
+        .json(report(&[], &[], None, 6, 3))
+        .head_sha(head)
+        .reviews(json!([review(401, "COMMENTED", BOT, &settled)]));
+    assert_eq!(world.run(), 0, "a clean run exits 0");
+    assert!(
+        world.runner().rewritten_reviews().is_empty(),
+        "a summary already saying the same is left alone"
+    );
+    let mut refused = World::pull_request("s72b")
+        .json(report(&[], &[], None, 6, 3))
+        .head_sha(head)
+        .reviews(json!([review(402, "COMMENTED", BOT, &review_marker("."))]))
+        .env("SCEN_GH_REVIEW_EDIT_403", "1");
+    assert_eq!(refused.run(), 0, "a refused rewrite does not fail the run");
+    let out = refused
+        .runner()
+        .step_stdout("Review the findings on the pull request")
+        .unwrap_or_default();
+    assert!(
+        out.contains("rewriting a review needs pull-requests: write"),
         "the notice names the missing permission: {out}"
     );
 }
