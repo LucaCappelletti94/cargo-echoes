@@ -1,0 +1,565 @@
+[
+  {
+    "id": "c_pair",
+    "family": "concat",
+    "a": "fn f()->&'static str{concat!(\"a\",\"b\")} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"ab\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_trailing_comma",
+    "family": "concat",
+    "a": "fn f()->&'static str{concat!(\"a\",\"b\",)} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"ab\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_brackets",
+    "family": "concat",
+    "a": "fn f()->&'static str{concat![\"a\",\"b\"]} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"ab\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_single",
+    "family": "concat",
+    "a": "fn f()->&'static str{concat!(\"a\")} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"a\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_empty_call",
+    "family": "concat",
+    "a": "fn f()->&'static str{concat!()} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_empty_parts",
+    "family": "concat",
+    "a": "fn f()->&'static str{concat!(\"\",\"a\",\"\")} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"a\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_escapes",
+    "family": "concat",
+    "a": "fn f()->&'static str{concat!(\"a\\n\",\"\\u{e9}\",\"\\x41\",\"\\t\")} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"a\\néA\\t\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\\néA\\t\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\\néA\\t\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\\néA\\t\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\\néA\\t\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_raw",
+    "family": "concat",
+    "a": "fn f()->&'static str{concat!(r\"a\\n\",r#\"b\"c\"#)} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"a\\\\nb\\\"c\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\\\\nb\\\"c\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\\\\nb\\\"c\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\\\\nb\\\"c\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\\\\nb\\\"c\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_unicode",
+    "family": "concat",
+    "a": "fn f()->&'static str{concat!(\"ü\",\"日本\",\"🦀\")} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"ü日本🦀\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ü日本🦀\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ü日本🦀\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ü日本🦀\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ü日本🦀\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_continuation",
+    "family": "concat",
+    "a": "fn f()->&'static str{concat!(\"line\\\n   continued\")} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"linecontinued\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"linecontinued\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"linecontinued\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"linecontinued\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"linecontinued\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_std_path",
+    "family": "concat",
+    "a": "fn f()->&'static str{std::concat!(\"a\",\"b\")} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"ab\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_core_path",
+    "family": "concat",
+    "a": "fn f()->&'static str{core::concat!(\"a\",\"b\")} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"ab\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_let_bound",
+    "family": "concat",
+    "a": "fn f()->&'static str{let s=concat!(\"a\",\"b\");s} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{let s=\"ab\";s} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_const_item",
+    "family": "concat",
+    "a": "const S:&str=concat!(\"a\",\"b\"); fn f()->&'static str{S} fn main(){println!(\"{:?}\",f());}",
+    "b": "const S:&str=\"ab\"; fn f()->&'static str{S} fn main(){println!(\"{:?}\",f());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_shadowed_rules",
+    "family": "concat",
+    "a": "macro_rules! concat{($($t:tt)*)=>{\"x\"}} fn f()->&'static str{concat!(\"a\",\"b\")} fn main(){println!(\"{:?}\",f());}",
+    "b": "macro_rules! concat{($($t:tt)*)=>{\"x\"}} fn f()->&'static str{\"ab\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"x\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"x\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_custom_path",
+    "family": "concat",
+    "a": "mod m{macro_rules! concat{($($t:tt)*)=>{\"x\"}} pub(crate) use concat;} fn f()->&'static str{m::concat!(\"a\",\"b\")} fn main(){println!(\"{:?}\",f());}",
+    "b": "mod m{macro_rules! concat{($($t:tt)*)=>{\"x\"}} pub(crate) use concat;} fn f()->&'static str{\"ab\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"x\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"x\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"ab\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "c_byte_string",
+    "family": "concat",
+    "a": "fn f()->&'static str{concat!(b\"a\")} fn main(){println!(\"{:?}\",f());}",
+    "b": "fn f()->&'static str{\"a\"} fn main(){println!(\"{:?}\",f());}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": [
+            "cannot concatenate a byte string literal"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "cannot concatenate a byte string literal"
+          ],
+          "run": "absent"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\"\n"
+        }
+      }
+    }
+  }
+]

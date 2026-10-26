@@ -580,6 +580,86 @@ pub fn check_value_schedules(data: &[u8]) {
     );
 }
 
+/// Built-in string-literal `concat!` calls group with their joined literal, apart from shadowed,
+/// changed and non-string neighbors. Newlines stay out, since rustdoc rewrites `#` line starts.
+pub fn check_concat_literals(data: &[u8]) {
+    let flags = data.first().copied().unwrap_or(0);
+    let text: String = data
+        .iter()
+        .skip(1)
+        .take(24)
+        .map(|&byte| char::from(byte))
+        .filter(|c| !c.is_control() || *c == '\t')
+        .collect();
+    let cut = text.char_indices().map(|(at, _)| at).collect::<Vec<_>>();
+    let (first, rest) = text.split_at(cut.get(cut.len() / 3).copied().unwrap_or(text.len()));
+    let (second, third) = rest.split_at(
+        rest.char_indices()
+            .nth(rest.chars().count() / 2)
+            .map_or(rest.len(), |(at, _)| at),
+    );
+    let spell = |part: &str, raw: bool| {
+        if raw && !part.contains('"') {
+            format!("r\"{part}\"")
+        } else {
+            format!("{part:?}")
+        }
+    };
+    let args = [first, second, third]
+        .iter()
+        .enumerate()
+        .map(|(index, part)| spell(part, flags & (1 << index) != 0))
+        .collect::<Vec<_>>()
+        .join(",");
+    let trailing = if flags & 8 == 0 { "" } else { "," };
+    let body = |value: String| format!("fn f()->&'static str{{{value}}}");
+    let shadow = "macro_rules! concat{($($t:tt)*)=>{\"x\"}}";
+    let site = |item: &str, code: String| DocTest {
+        file: format!("src/{item}.rs"),
+        line: 1,
+        end: None,
+        item: format!("c::{item}"),
+        info: Vec::new(),
+        code,
+        allow: false,
+        self_type: None,
+        public: false,
+    };
+    let report = echoes::group(
+        &[
+            site("original", body(format!("concat!({args}{trailing})"))),
+            site("path", body(format!("core::concat!({args})"))),
+            site("literal", body(format!("{text:?}"))),
+            site("changed", body(format!("{:?}", format!("{text}!")))),
+            site("numeric", body(format!("concat!({args},1)"))),
+            site(
+                "shadowed",
+                format!("{shadow}{}", body(format!("concat!({args})"))),
+            ),
+            site(
+                "shadowed_literal",
+                format!("{shadow}{}", body(format!("{text:?}"))),
+            ),
+        ],
+        2,
+        0,
+    );
+    let groups: Vec<_> = report
+        .groups
+        .iter()
+        .map(|group| {
+            let mut members: Vec<_> = group.sites.iter().map(|site| site.item.as_str()).collect();
+            members.sort_unstable();
+            members
+        })
+        .collect();
+    assert_eq!(
+        groups,
+        [vec!["c::literal", "c::original", "c::path"]],
+        "{text:?}"
+    );
+}
+
 /// Pure helper schedules preserve origins, effects, shadowing and argument order.
 pub fn check_helper_schedules(data: &[u8]) {
     let byte = |index| u32::from(data.get(index).copied().unwrap_or(0));

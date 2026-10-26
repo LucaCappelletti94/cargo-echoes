@@ -966,6 +966,54 @@ fn boolean_match_functions_keep_wildcards_and_effects_separate() {
     assert_eq!(function_groups(&dropped).len(), 0);
 }
 
+const CONCAT_FIXTURE: &str = "tests/fixtures/concatws";
+
+#[test]
+fn concat_doctests_group_only_the_built_in_string_literal_forms() {
+    let report = Echoes::default().run(CONCAT_FIXTURE).unwrap();
+    assert_eq!(report.total, 7);
+    assert_eq!(report.unique, 5);
+    let expected = [vec![
+        "concatws::Concatenated",
+        "concatws::Escaped",
+        "concatws::Literal",
+    ]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(11)
+        .run(CONCAT_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(12)
+        .run(CONCAT_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn concat_functions_keep_non_string_arguments_separate() {
+    let expected = [vec![
+        "concatws::concatenated",
+        "concatws::escaped",
+        "concatws::literal",
+    ]];
+    for tokens in [0, 1] {
+        let report = Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(CONCAT_FIXTURE)
+            .unwrap();
+        assert_eq!(function_groups(&report), expected);
+    }
+    let dropped = Echoes::default()
+        .functions()
+        .fn_min_tokens(2)
+        .run(CONCAT_FIXTURE)
+        .unwrap();
+    assert_eq!(function_groups(&dropped).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {
