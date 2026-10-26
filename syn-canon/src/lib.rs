@@ -99,10 +99,11 @@ fn canonical(file: syn::File, compiles: bool) -> CanonicalForm {
 }
 
 /// The std macros that accept an optional trailing comma and treat it as nothing.
-pub(crate) const COMMA_BLIND_MACROS: [&str; 21] = [
+pub(crate) const COMMA_BLIND_MACROS: [&str; 22] = [
     "assert",
     "assert_eq",
     "assert_ne",
+    "concat",
     "dbg",
     "debug_assert",
     "debug_assert_eq",

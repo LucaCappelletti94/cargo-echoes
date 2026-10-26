@@ -14,6 +14,7 @@ fuzz_target!(|data: &[u8]| {
         echoes_fuzz::check_helper_schedules(&data);
         echoes_fuzz::check_structure_schedules(&data);
         echoes_fuzz::check_item_schedules(&data);
+        echoes_fuzz::check_concat_literals(&data);
         let Ok(code) = std::str::from_utf8(&data) else {
             return;
         };

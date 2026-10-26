@@ -111,7 +111,7 @@ impl Store {
 }
 
 /// A file exercising the canonicalizer's rename, drift and context paths.
-const SENTINEL: &str = r"
+const SENTINEL: &str = r#"
 pub mod alpha {
     use core::mem;
     pub struct Beta {
@@ -148,6 +148,9 @@ pub mod alpha {
             true => value,
         }
     }
+    pub fn joined() -> &'static str {
+        concat!("al", "pha")
+    }
 }
 mod custom {
     macro_rules! vec {
@@ -166,7 +169,7 @@ fn main() {
     alpha::epsilon(2u32);
     custom::vec!(1,);
 }
-";
+"#;
 
 /// A fingerprint of canonicalization output and the crate version.
 pub(crate) fn canonicalization_fingerprint() -> String {

@@ -1200,6 +1200,58 @@ impl<'env> Renamer<'env> {
             && !self.cfg_blocked()
     }
 
+    /// Replace a built-in `concat!` of string literals with the literal of its joined value.
+    fn fold_concat(&self, expr: &mut syn::Expr) {
+        if let syn::Expr::Macro(call) = expr
+            && let Some(literal) = self.concat_literal(call)
+        {
+            *expr = syn::Expr::Lit(syn::ExprLit {
+                attrs: Vec::new(),
+                lit: syn::Lit::Str(literal),
+            });
+        }
+    }
+
+    /// The literal of an unattributed built-in `concat!` of string literals, in compiling
+    /// mode outside observed syntax.
+    fn concat_literal(&self, call: &syn::ExprMacro) -> Option<syn::LitStr> {
+        if !call.attrs.is_empty() || !self.constants_allowed() || self.macro_punctuation_observed {
+            return None;
+        }
+        let value = self.concat_value(&call.mac)?;
+        Some(syn::LitStr::new(&value, call.mac.bang_token.span))
+    }
+
+    /// The joined value of a call the scopes resolve to the built-in `concat!`, every
+    /// argument an unsuffixed, unattributed string literal.
+    fn concat_value(&self, mac: &syn::Macro) -> Option<String> {
+        let Some(crate::macros::MacroResolution::Macro(_)) = self.standard_name(&mac.path, false)
+        else {
+            return None;
+        };
+        if crate::scope::ident_name(&mac.path.segments.last()?.ident) != "concat" {
+            return None;
+        }
+        let MacroArgs::List(args) = syn::parse2::<MacroArgs>(mac.tokens.clone()).ok()? else {
+            return None;
+        };
+        let mut value = String::new();
+        for arg in &args {
+            let syn::Expr::Lit(syn::ExprLit {
+                attrs,
+                lit: syn::Lit::Str(literal),
+            }) = arg
+            else {
+                return None;
+            };
+            if !attrs.is_empty() || !literal.suffix().is_empty() {
+                return None;
+            }
+            value.push_str(&literal.value());
+        }
+        Some(value)
+    }
+
     /// Whether an open frame carries a glob import that may shadow a
     /// type name.
     pub(crate) fn glob_uncertain(&self) -> bool {
@@ -3049,6 +3101,7 @@ fn visit_value_item(
     renamer.visit_attrs(attrs);
     syn::visit_mut::visit_type_mut(renamer, ty);
     syn::visit_mut::visit_expr_mut(renamer, expr);
+    renamer.fold_concat(expr);
 }
 
 impl VisitMut for Renamer<'_> {
@@ -3095,6 +3148,7 @@ impl VisitMut for Renamer<'_> {
         }
         self.constants_prepared = true;
         syn::visit_mut::visit_expr_mut(self, expr);
+        self.fold_concat(expr);
         self.constants_prepared = prepared;
         self.constants_observed = observed;
         self.tail_blocked = tail_blocked;
@@ -3196,6 +3250,7 @@ impl VisitMut for Renamer<'_> {
         // The initializer resolves under the outer bindings.
         if let Some(init) = &mut local.init {
             syn::visit_mut::visit_expr_mut(self, &mut init.expr);
+            self.fold_concat(&mut init.expr);
             if let Some(diverge) = &mut init.diverge {
                 syn::visit_mut::visit_expr_mut(self, &mut diverge.1);
             }
@@ -3560,6 +3615,7 @@ impl VisitMut for Renamer<'_> {
             crate::tails::unwrap(self, &mut closure.body);
         }
         syn::visit_mut::visit_expr_mut(self, &mut closure.body);
+        self.fold_concat(&mut closure.body);
         self.pop();
     }
 
@@ -3582,6 +3638,7 @@ impl VisitMut for Renamer<'_> {
             crate::tails::unwrap(self, &mut arm.body);
         }
         syn::visit_mut::visit_expr_mut(self, &mut arm.body);
+        self.fold_concat(&mut arm.body);
         self.pop();
         self.constants_observed = observed;
         self.tail_blocked = tail_blocked;
@@ -3768,7 +3825,8 @@ impl VisitMut for Renamer<'_> {
         };
         let punctuation_parent = self.macro_punctuation_observed;
         self.macro_punctuation_observed |= grammar.is_none();
-        let known = self.std_format_path(&mac.path, Self::macro_shadowed);
+        let known = self.std_format_path(&mac.path, Self::macro_shadowed)
+            || self.concat_value(mac).is_some();
         // Another macro under a formatting name reads its string literal as written.
         let captures = self.std_format_path(
             &mac.path,
@@ -3859,6 +3917,7 @@ impl VisitMut for Renamer<'_> {
         }
         if let Some(expr) = &mut node.expr {
             syn::visit_mut::visit_expr_mut(self, expr);
+            self.fold_concat(expr);
         }
     }
 
