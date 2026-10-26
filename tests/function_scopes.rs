@@ -469,3 +469,45 @@ fn an_observing_impl_retains_the_logical_operand_order() {
     };
     assert_ne!(view(&source("q && p")), view(&source("p && q")));
 }
+
+#[test]
+fn proven_compound_assignments_expand_in_the_borrowed_view() {
+    let body = |statements: &str| format!("fn f(mut x: u32, y: u32) -> u32 {{ {statements} x }}");
+    for (written, expanded) in [
+        ("x += y;", "x = x + y;"),
+        ("x <<= 3; x |= y;", "x = x << 3; x = x | y;"),
+        ("read(); x -= y;", "read(); x = x - y;"),
+    ] {
+        assert_eq!(view(&body(written)), view(&body(expanded)), "{written}");
+    }
+}
+
+#[test]
+fn unproven_compound_targets_stay_compound_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f(mut x: Unknown, y: Unknown) -> Unknown { x += y; x }"),
+        view("fn f(mut x: Unknown, y: Unknown) -> Unknown { x = x + y; x }")
+    );
+    assert_ne!(
+        view("fn f(x: &mut u32, y: u32) { *x += y; }"),
+        view("fn f(x: &mut u32, y: u32) { *x = *x + y; }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_compound_assignment() {
+    assert_ne!(
+        failing_form("fn f(mut x: u32, y: u32) -> u32 { x += y; x }"),
+        failing_form("fn f(mut x: u32, y: u32) -> u32 { x = x + y; x }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_compound_assignment() {
+    let source = |body: &str| {
+        format!(
+            "struct S;\n#[observe]\nimpl S {{\n    fn f(mut x: u32, y: u32) -> u32 {{ {body} x }}\n}}"
+        )
+    };
+    assert_ne!(view(&source("x += y;")), view(&source("x = x + y;")));
+}

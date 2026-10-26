@@ -1,6 +1,8 @@
 //! Primitive value laws over resolved, bounded expression trees.
 
 use alloc::boxed::Box;
+use alloc::collections::BTreeMap;
+use alloc::string::{String, ToString as _};
 use alloc::vec::Vec;
 use syn::spanned::Spanned as _;
 use syn::visit::{self, Visit};
@@ -62,6 +64,7 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block, facts: &B
     let mut walker = Walker {
         renamer,
         env,
+        types: BTreeMap::new(),
         locals: 0,
         dedup: true,
     };
@@ -81,6 +84,10 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block, facts: &B
                     walker.visit_expr_mut(&mut init.expr);
                 }
                 for name in schedule::pat_names(&local.pat) {
+                    match plan.and_then(|plan| plan.prim) {
+                        Some(prim) => walker.types.insert(name.clone(), prim),
+                        None => walker.types.remove(&name),
+                    };
                     let value = if let Some(plan) = plan {
                         Value {
                             port: plan.port.clone(),
@@ -101,6 +108,9 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block, facts: &B
             syn::Stmt::Expr(expr, _) => {
                 walker.visit_expr_mut(expr);
                 if let Some(name) = schedule::assign_target(stmt) {
+                    if let Some(prim) = walker.binding_prim(&name) {
+                        walker.types.insert(name.clone(), prim);
+                    }
                     walker.locals += 1;
                     walker.env.insert(
                         name,
@@ -123,6 +133,10 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block, facts: &B
 struct Walker<'a, 'env> {
     renamer: &'a Renamer<'env>,
     env: Env<'env>,
+    /// The proven primitive types of the bindings this block declares or assigns, kept
+    /// apart from the value environment because an assignment changes a binding's value and
+    /// never its type.
+    types: BTreeMap<String, PrimTy>,
     locals: usize,
     dedup: bool,
 }
@@ -138,6 +152,19 @@ fn tail_expr_mut(block: &mut syn::Block) -> Option<&mut syn::Expr> {
     Some(expr)
 }
 
+/// The name of a binding `expr` reads by one unattributed identifier, the only place a compound
+/// assignment expands without reading a field, an index or a dereference twice.
+fn local_name(expr: &syn::Expr) -> Option<String> {
+    match expr {
+        syn::Expr::Path(path)
+            if path.attrs.is_empty() && path.qself.is_none() && path.path.segments.len() == 1 =>
+        {
+            Some(crate::scope::unraw(&path.path.segments[0].ident.to_string()).to_string())
+        }
+        _ => None,
+    }
+}
+
 impl Walker<'_, '_> {
     fn scalar_in_place(&self, expr: &mut syn::Expr, total_calls: bool) -> Option<Lbl> {
         let owned = core::mem::replace(expr, empty_expr());
@@ -146,22 +173,52 @@ impl Walker<'_, '_> {
         label
     }
 
+    /// The proven primitive type of the binding `name` names here, its value proof or the type
+    /// it kept through an assignment.
+    fn binding_prim(&self, name: &str) -> Option<PrimTy> {
+        self.env
+            .get(name)
+            .and_then(|value| value.prim)
+            .or_else(|| self.types.get(name).copied())
+    }
+
     fn binary(&self, mut binary: syn::ExprBinary, total_calls: bool) -> (syn::Expr, Option<Lbl>) {
         let total_calls = total_calls
             || self.dedup
-                && matches!(
-                    binary.op,
-                    syn::BinOp::Eq(_)
-                        | syn::BinOp::Ne(_)
-                        | syn::BinOp::BitXor(_)
-                        | syn::BinOp::And(_)
-                        | syn::BinOp::Or(_)
-                );
+                && (schedule::is_assign_op(binary.op)
+                    || matches!(
+                        binary.op,
+                        syn::BinOp::Eq(_)
+                            | syn::BinOp::Ne(_)
+                            | syn::BinOp::BitXor(_)
+                            | syn::BinOp::And(_)
+                            | syn::BinOp::Or(_)
+                    ));
         let left = self.scalar_in_place(&mut binary.left, total_calls);
         let right = self.scalar_in_place(&mut binary.right, total_calls);
         let (Some(left), Some(right)) = (left, right) else {
             return (syn::Expr::Binary(binary), None);
         };
+        if self.dedup
+            && let Some(prim) = local_name(&binary.left).and_then(|name| self.binding_prim(&name))
+            && let Some(op) = schedule::compound_operator(binary.op, prim, &right)
+        {
+            let place = binary.left.clone();
+            let value = syn::ExprBinary {
+                attrs: Vec::new(),
+                left: binary.left,
+                op,
+                right: binary.right,
+            };
+            let (value, _) = self.binary(value, total_calls);
+            let assign = syn::ExprAssign {
+                attrs: Vec::new(),
+                left: place,
+                eq_token: syn::token::Eq::default(),
+                right: Box::new(value),
+            };
+            return (syn::Expr::Assign(assign), None);
+        }
         if self.dedup
             && let Some(equality) = schedule::equality(binary.op, &left, &right)
         {

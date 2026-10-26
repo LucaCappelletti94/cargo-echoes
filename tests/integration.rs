@@ -1109,6 +1109,51 @@ fn boolean_logic_functions_keep_effects_and_operators_separate() {
     assert_eq!(function_groups(&scan(4)).len(), 0);
 }
 
+const COMPOUND_FIXTURE: &str = "tests/fixtures/compoundws";
+
+#[test]
+fn compound_doctests_group_only_the_proven_local_targets() {
+    let report = Echoes::default().run(COMPOUND_FIXTURE).unwrap();
+    assert_eq!(report.total, 5);
+    assert_eq!(report.unique, 3);
+    let expected = [vec![
+        "compoundws::Compound",
+        "compoundws::Expanded",
+        "compoundws::Reordered",
+    ]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(27)
+        .run(COMPOUND_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(28)
+        .run(COMPOUND_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn compound_functions_keep_field_targets_separate() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(COMPOUND_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec![
+        "compoundws::compound",
+        "compoundws::expanded",
+        "compoundws::reordered",
+    ]];
+    for tokens in [0, 13] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(14)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {
