@@ -152,8 +152,8 @@ impl Walker<'_, '_> {
         }
         match expr {
             syn::Expr::Binary(mut binary) => {
-                let total_calls =
-                    total_calls || self.dedup && matches!(binary.op, syn::BinOp::Eq(_));
+                let total_calls = total_calls
+                    || self.dedup && matches!(binary.op, syn::BinOp::Eq(_) | syn::BinOp::BitXor(_));
                 let left = self.scalar_in_place(&mut binary.left, total_calls);
                 let right = self.scalar_in_place(&mut binary.right, total_calls);
                 let (Some(left), Some(right)) = (left, right) else {
@@ -173,29 +173,8 @@ impl Walker<'_, '_> {
                 }
                 match schedule::total_binary(binary.op, &left, &right) {
                     Some(TotalBinary::Flat(op, prim)) => {
-                        let span = binary.span();
-                        let mut pieces = Vec::new();
-                        extend(op, prim, left, *binary.left, &mut pieces);
-                        extend(op, prim, right, *binary.right, &mut pieces);
-                        pieces.sort_by(|a, b| a.0.cmp(&b.0));
-                        if self.dedup && op != BitwiseOp::Xor {
-                            pieces.dedup_by(|a, b| a.0 == b.0);
-                        }
-                        fold_literals(op, prim, &mut pieces, span);
-                        if pieces.len() == 1 {
-                            let (label, expr) = pieces.pop().expect("a single operand");
-                            return (expr, Some(label));
-                        }
-                        let count = pieces.len();
-                        let mut labels = Vec::with_capacity(count);
-                        let expression = {
-                            let mut expressions = pieces.into_iter().map(|(label, expr)| {
-                                labels.push(label);
-                                expr
-                            });
-                            emit(op, &mut expressions, count, span)
-                        };
-                        (expression, Some(Lbl::Flat(op.tag(), labels, prim)))
+                        let (expr, label) = self.flat(binary, op, prim, left, right);
+                        (expr, Some(label))
                     }
                     Some(TotalBinary::Ordered { tag, reverse, prim }) => {
                         let (left, right) = if let Some(reverse) = reverse {
@@ -245,6 +224,58 @@ impl Walker<'_, '_> {
             }
             expr => (expr, None),
         }
+    }
+
+    fn flat(
+        &self,
+        binary: syn::ExprBinary,
+        op: BitwiseOp,
+        prim: PrimTy,
+        left: Lbl,
+        right: Lbl,
+    ) -> (syn::Expr, Lbl) {
+        let span = binary.span();
+        let mut pieces = Vec::new();
+        extend(op, prim, left, *binary.left, &mut pieces);
+        extend(op, prim, right, *binary.right, &mut pieces);
+        pieces.sort_by(|a, b| a.0.cmp(&b.0));
+        if self.dedup {
+            if op == BitwiseOp::Xor {
+                schedule::retain_odd(&mut pieces, |left, right| left.0 == right.0);
+            } else {
+                pieces.dedup_by(|a, b| a.0 == b.0);
+            }
+        }
+        fold_literals(op, prim, &mut pieces, span);
+        if self.dedup && op == BitwiseOp::Xor {
+            pieces.retain(|piece| piece.0.literal_bits() != Some(0));
+            if pieces.is_empty() {
+                return (
+                    crate::constants::literal_expr(prim, 0, span),
+                    schedule::literal_label(prim, 0),
+                );
+            }
+        }
+        if pieces.len() == 1 {
+            let (label, expr) = pieces.pop().expect("a single operand");
+            return match label {
+                Lbl::Int(bits, None) => (
+                    crate::constants::literal_expr(prim, bits, span),
+                    schedule::literal_label(prim, bits),
+                ),
+                label => (expr, label),
+            };
+        }
+        let count = pieces.len();
+        let mut labels = Vec::with_capacity(count);
+        let expression = {
+            let mut expressions = pieces.into_iter().map(|(label, expr)| {
+                labels.push(label);
+                expr
+            });
+            emit(op, &mut expressions, count, span)
+        };
+        (expression, Lbl::Flat(op.tag(), labels, prim))
     }
 
     fn condition(&self, expr: syn::Expr, total_calls: bool) -> (syn::Expr, Option<Lbl>, bool) {

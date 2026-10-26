@@ -671,6 +671,151 @@ fn reflexive_functions_keep_float_partial_and_custom_equality_separate() {
     );
 }
 
+const XOR_FIXTURE: &str = "tests/fixtures/xorws";
+
+/// The function groups of a report, member-sorted and group-sorted.
+fn xor_function_groups(report: &Report) -> Vec<Vec<&str>> {
+    let mut groups: Vec<Vec<&str>> = report
+        .groups
+        .iter()
+        .filter(|group| group.kind == echoes::Kind::Function)
+        .map(|group| group.sites.iter().map(|site| site.item.as_str()).collect())
+        .collect();
+    for group in &mut groups {
+        group.sort_unstable();
+    }
+    groups.sort_unstable();
+    groups
+}
+
+#[test]
+fn xor_doctests_group_only_the_proven_primitive_cancellations() {
+    let report = Echoes::default().run(XOR_FIXTURE).unwrap();
+    assert_eq!(report.total, 16);
+    assert_eq!(report.unique, 11);
+    let mut groups: Vec<Vec<&str>> = report
+        .groups
+        .iter()
+        .map(|group| {
+            assert_eq!(group.kind, echoes::Kind::Doctest);
+            group.sites.iter().map(|site| site.item.as_str()).collect()
+        })
+        .collect();
+    for group in &mut groups {
+        group.sort_unstable();
+    }
+    groups.sort_unstable();
+    assert_eq!(
+        groups,
+        [
+            vec!["xorws::BoolFalse", "xorws::BoolWritten"],
+            vec!["xorws::Chain", "xorws::Remaining"],
+            vec![
+                "xorws::LiteralIdentity",
+                "xorws::OddWritten",
+                "xorws::Plain"
+            ],
+            vec!["xorws::Written", "xorws::Zero"],
+        ]
+    );
+}
+
+#[test]
+fn xor_doctest_groups_carry_their_normalized_token_size() {
+    let report = Echoes::default().run(XOR_FIXTURE).unwrap();
+    for group in &report.groups {
+        assert_eq!(
+            group.tokens,
+            if group.sites.iter().any(|site| site.item == "xorws::Chain") {
+                15
+            } else {
+                11
+            }
+        );
+    }
+    let kept = Echoes::default().min_tokens(12).run(XOR_FIXTURE).unwrap();
+    let mut groups: Vec<Vec<&str>> = kept
+        .groups
+        .iter()
+        .map(|group| group.sites.iter().map(|site| site.item.as_str()).collect())
+        .collect();
+    for group in &mut groups {
+        group.sort_unstable();
+    }
+    groups.sort_unstable();
+    assert_eq!(groups, [vec!["xorws::Chain", "xorws::Remaining"]]);
+    assert_eq!(
+        Echoes::default()
+            .min_tokens(16)
+            .run(XOR_FIXTURE)
+            .unwrap()
+            .groups
+            .len(),
+        0
+    );
+}
+
+#[test]
+fn xor_functions_keep_the_unproven_cancellations_separate() {
+    let report = Echoes::default()
+        .functions()
+        .fn_min_tokens(0)
+        .run(XOR_FIXTURE)
+        .unwrap();
+    assert_eq!(
+        xor_function_groups(&report),
+        [
+            vec!["xorws::boolean::folded", "xorws::boolean::written"],
+            vec!["xorws::chain", "xorws::remaining"],
+            vec![
+                "xorws::literal_identity",
+                "xorws::odd_written",
+                "xorws::plain"
+            ],
+            vec!["xorws::written", "xorws::zero"],
+        ]
+    );
+}
+
+#[test]
+fn xor_function_groups_carry_their_normalized_body_size() {
+    let kept = Echoes::default()
+        .functions()
+        .fn_min_tokens(1)
+        .run(XOR_FIXTURE)
+        .unwrap();
+    assert_eq!(
+        xor_function_groups(&kept),
+        [
+            vec!["xorws::boolean::folded", "xorws::boolean::written"],
+            vec!["xorws::chain", "xorws::remaining"],
+            vec![
+                "xorws::literal_identity",
+                "xorws::odd_written",
+                "xorws::plain"
+            ],
+            vec!["xorws::written", "xorws::zero"],
+        ]
+    );
+    assert!(
+        kept.groups
+            .iter()
+            .filter(|group| group.kind == echoes::Kind::Function)
+            .all(|group| group.tokens == 1)
+    );
+    let dropped = Echoes::default()
+        .functions()
+        .fn_min_tokens(2)
+        .run(XOR_FIXTURE)
+        .unwrap();
+    assert!(
+        dropped
+            .groups
+            .iter()
+            .all(|group| group.kind != echoes::Kind::Function)
+    );
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

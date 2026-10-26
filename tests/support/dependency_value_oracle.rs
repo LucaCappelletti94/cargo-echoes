@@ -1,3 +1,7 @@
+extern crate alloc;
+
+use alloc::collections::BTreeMap;
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Value {
     Literal(u32),
@@ -13,10 +17,33 @@ pub fn operation(op: char, operands: impl IntoIterator<Item = Value>) -> Value {
             other => leaves.push(other),
         }
     }
-    leaves.sort();
-    if op != '^' {
+    if op == '^' {
+        xor_form(leaves)
+    } else {
+        leaves.sort();
         leaves.dedup();
+        emit(op, leaves)
     }
+}
+
+fn xor_form(leaves: Vec<Value>) -> Value {
+    let mut counts = BTreeMap::new();
+    for leaf in leaves {
+        *counts.entry(leaf).or_insert(0usize) += 1;
+    }
+    let mut odd: Vec<Value> = counts
+        .into_iter()
+        .filter_map(|(leaf, count)| (count % 2 == 1).then_some(leaf))
+        .collect();
+    odd.retain(|leaf| !matches!(leaf, Value::Literal(0)));
+    if odd.is_empty() {
+        Value::Literal(0)
+    } else {
+        emit('^', odd)
+    }
+}
+
+fn emit(op: char, mut leaves: Vec<Value>) -> Value {
     let mut literal = None;
     leaves.retain(|leaf| {
         let Value::Literal(value) = leaf else {
@@ -33,7 +60,9 @@ pub fn operation(op: char, operands: impl IntoIterator<Item = Value>) -> Value {
         });
         false
     });
-    if let Some(value) = literal {
+    if let Some(value) = literal
+        && (op != '^' || value != 0 || leaves.is_empty())
+    {
         leaves.push(Value::Literal(value));
     }
     leaves.sort();

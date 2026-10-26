@@ -266,12 +266,19 @@ fn a_block_over_the_nesting_cap_stays_opaque() {
     assert_ne!(form(&a), form(&b), "over-cap block keeps source order");
 }
 
+#[derive(Clone, Copy)]
+enum XorStep {
+    Repeated,
+    Shifted,
+}
+
 fn future_region(
     prefix: &str,
     reversed: bool,
     changed: bool,
     depth: usize,
     consumed: bool,
+    step: XorStep,
 ) -> String {
     let declarations = if reversed {
         "let second=2u32; let first=1u32;"
@@ -282,10 +289,14 @@ fn future_region(
     let mut source = format!(
         "{header}fn f()->(u32,u32){{{declarations} println!(\"barrier\"); let {prefix}0=3u32;"
     );
+    let shift = match step {
+        XorStep::Repeated => "",
+        XorStep::Shifted => " << 1u32",
+    };
     for index in 1..=depth {
         write!(
             source,
-            "let {prefix}{index}={prefix}{} ^ {prefix}{};",
+            "let {prefix}{index}={prefix}{} ^ ({prefix}{}{shift});",
             index - 1,
             index - 1,
         )
@@ -308,18 +319,28 @@ fn future_region(
 
 #[test]
 fn shared_future_region_dependencies_preserve_schedule_and_origins() {
-    let original = future_region("v", false, false, 32, true);
-    let scheduled = future_region("w", true, false, 32, true);
-    let changed = future_region("v", false, true, 32, true);
+    let original = future_region("v", false, false, 32, true, XorStep::Shifted);
+    let scheduled = future_region("w", true, false, 32, true, XorStep::Shifted);
+    let changed = future_region("v", false, true, 32, true, XorStep::Shifted);
     let original_form = form(&original);
     assert_eq!(original_form, form(&scheduled));
     assert_ne!(original_form, form(&changed));
 }
 
 #[test]
+fn cancelled_shared_future_ties_retain_the_whole_region_at_the_state_limit() {
+    let original = future_region("v", false, false, 32, true, XorStep::Repeated);
+    let scheduled = future_region("w", true, false, 32, true, XorStep::Repeated);
+    let changed = future_region("v", false, true, 32, true, XorStep::Repeated);
+    let original_form = form(&original);
+    assert_ne!(original_form, form(&scheduled));
+    assert_ne!(original_form, form(&changed));
+}
+
+#[test]
 fn projected_future_nodes_over_the_cap_retain_the_entire_region() {
     let source = |reversed| {
-        future_region("v", reversed, false, 16_382, false)
+        future_region("v", reversed, false, 16_382, false, XorStep::Repeated)
             .replace("(second,last)", "let borrowed = &v16382; (second,last)")
     };
     assert_ne!(form(&source(false)), form(&source(true)));

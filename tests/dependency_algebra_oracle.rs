@@ -381,7 +381,19 @@ fn cross_graph(cells: &[Cell], obs: Option<[usize; 2]>, roots: [usize; 2]) -> St
                     })
                     .collect();
                 elems.sort_unstable();
-                if kind != 3 {
+                if kind == 3 {
+                    if elems[0] == elems[1] {
+                        elems.clear();
+                    } else if elems[0] == (0, 0) {
+                        elems.remove(0);
+                    }
+                    if elems.is_empty() {
+                        elems.push((0, 0));
+                    }
+                    if elems.len() == 1 {
+                        kind = 0;
+                    }
+                } else {
                     elems.dedup();
                     if elems.len() == 1 {
                         kind = 0;
@@ -575,7 +587,7 @@ fn cross_region_future_sharing_ties_keep_exact_relations() {
         (&base, &[0, 1], &[2, 3, 4], [1, 0], [3, 4]),
         // The ordered output positions.
         (&base, &[0, 1], &[2, 3, 4], [0, 1], [4, 3]),
-        // XOR multiplicity of a repeated value.
+        // The repeated future value cancels to zero.
         (&REPEATED_XOR, &[0, 1], &[2, 3, 4], [0, 1], [3, 4]),
         // The future definition operator.
         (&OR_DEFINITION, &[0, 1], &[2, 3, 4], [0, 1], [3, 4]),
