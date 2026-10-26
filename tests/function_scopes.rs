@@ -426,3 +426,46 @@ fn an_observing_impl_retains_the_literal_comparison() {
     };
     assert_ne!(view(&source("p == false")), view(&source("!p")));
 }
+
+#[test]
+fn proven_logical_chains_take_one_form_in_the_borrowed_view() {
+    let body = |expression: &str| format!("fn f(p: bool, q: bool) -> bool {{ {expression} }}");
+    for (written, folded) in [
+        ("q && p", "p && q"),
+        ("if p { q } else { false }", "p && q"),
+        ("p || false || p", "p"),
+        ("read(); q || p", "read(); p || q"),
+    ] {
+        assert_eq!(view(&body(written)), view(&body(folded)), "{written}");
+    }
+}
+
+#[test]
+fn unproven_logical_operands_keep_their_order_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f(p: bool, z: Unknown) -> bool { z && p }"),
+        view("fn f(p: bool, z: Unknown) -> bool { p && z }")
+    );
+    assert_ne!(
+        view("fn f(p: bool) -> bool { read() && p }"),
+        view("fn f(p: bool) -> bool { p && read() }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_logical_operand_order() {
+    assert_ne!(
+        failing_form("fn f(p: bool, q: bool) -> bool { q && p }"),
+        failing_form("fn f(p: bool, q: bool) -> bool { p && q }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_logical_operand_order() {
+    let source = |body: &str| {
+        format!(
+            "struct S;\n#[observe]\nimpl S {{\n    fn f(p: bool, q: bool) -> bool {{ {body} }}\n}}"
+        )
+    };
+    assert_ne!(view(&source("q && p")), view(&source("p && q")));
+}

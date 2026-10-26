@@ -326,17 +326,38 @@ fn xor_tree(leaf: &str, count: usize) -> String {
     )
 }
 
-/// A balanced conjunction over `leaves` copies of `t`, one of them negated.
+/// A balanced conjunction over `leaves` operands, a negated `!t` and then the distinct
+/// parameters `a1`, `a2`, …, so no operand repeats.
 fn final_syntax(leaves: usize, flag_first: bool) -> String {
-    let tree = xor_tree("t", leaves)
-        .replace('^', "&&")
-        .replacen('t', "!t", 1);
+    let mut next = 0;
+    let tree = xor_tree("t", leaves).replace('^', "&&");
+    let tree: String = tree
+        .split('t')
+        .enumerate()
+        .map(|(index, piece)| {
+            if index == 0 {
+                piece.to_owned()
+            } else {
+                next += 1;
+                let leaf = if next == 1 {
+                    "!t".to_owned()
+                } else {
+                    format!("a{}", next - 1)
+                };
+                format!("{leaf}{piece}")
+            }
+        })
+        .collect();
+    let params = (1..leaves)
+        .map(|i| format!(",a{i}:bool"))
+        .collect::<Vec<_>>()
+        .concat();
     let statements = if flag_first {
         format!("let a=flag(true);let t=p;let r=!({tree});(a,r)")
     } else {
         format!("let t=p;let r=!({tree});let a=flag(true);(a,r)")
     };
-    format!("fn flag(p:bool)->bool{{p}} fn f(p:bool)->(bool,bool){{{statements}}}")
+    format!("fn flag(p:bool)->bool{{p}} fn f(p:bool{params})->(bool,bool){{{statements}}}")
 }
 
 #[derive(Default)]

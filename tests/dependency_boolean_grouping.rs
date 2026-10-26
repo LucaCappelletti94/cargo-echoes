@@ -352,14 +352,19 @@ fn boolean_cli_fixture_preserves_exact_function_and_doctest_members() {
     );
 }
 
-fn logical_tree(out: &mut String, leaves: usize, op: &str, leaf: &str) {
+/// A balanced tree of `leaves` distinct parameters `a0`, `a1`, … joined by `op`, each written
+/// with `prefix`, so no operand repeats and the tree keeps its node count.
+fn logical_tree(out: &mut String, next: &mut usize, leaves: usize, op: &str, prefix: &str) {
     if leaves == 1 {
-        out.push_str(leaf);
+        out.push_str(prefix);
+        out.push('a');
+        out.push_str(&next.to_string());
+        *next += 1;
     } else {
         out.push('(');
-        logical_tree(out, leaves / 2, op, leaf);
+        logical_tree(out, next, leaves / 2, op, prefix);
         out.push_str(op);
-        logical_tree(out, leaves - leaves / 2, op, leaf);
+        logical_tree(out, next, leaves - leaves / 2, op, prefix);
         out.push(')');
     }
 }
@@ -367,18 +372,25 @@ fn logical_tree(out: &mut String, leaves: usize, op: &str, leaf: &str) {
 #[test]
 fn boolean_expansion_node_bound_retains_the_complete_region() {
     for leaves in [5_461, 5_462] {
-        let mut conjunction = String::new();
-        logical_tree(&mut conjunction, leaves, "&&", "a");
-        let mut disjunction = String::new();
-        logical_tree(&mut disjunction, leaves, "||", "!a");
-        let source = format!("fn f(a:bool,b:bool)->(bool,bool){{(!!b,!({conjunction}))}}");
-        let normalized = format!("fn f(a:bool,b:bool)->(bool,bool){{(b,{disjunction})}}");
+        let tree = |op: &str, prefix: &str| {
+            let mut out = String::new();
+            logical_tree(&mut out, &mut 0, leaves, op, prefix);
+            out
+        };
+        let conjunction = tree("&&", "");
+        let disjunction = tree("||", "!");
+        let params = (0..leaves)
+            .map(|i| format!(",a{i}:bool"))
+            .collect::<Vec<_>>()
+            .concat();
+        let source = format!("fn f(b:bool{params})->(bool,bool){{(!!b,!({conjunction}))}}");
+        let normalized = format!("fn f(b:bool{params})->(bool,bool){{(b,{disjunction})}}");
         let original = form(&source);
         if leaves == 5_461 {
             assert_eq!(original, form(&normalized));
         } else {
             assert_ne!(original, form(&normalized));
-            let partial = format!("fn f(a:bool,b:bool)->(bool,bool){{(b,!({conjunction}))}}");
+            let partial = format!("fn f(b:bool{params})->(bool,bool){{(b,!({conjunction}))}}");
             assert_ne!(original, form(&partial));
             assert_eq!(original, form(&source));
         }

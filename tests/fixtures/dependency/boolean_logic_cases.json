@@ -1,0 +1,633 @@
+[
+  {
+    "id": "lg_and_true",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool)->bool{p&&true} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "b": "fn f(p:bool)->bool{p} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_false_or",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool)->bool{false||p} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "b": "fn f(p:bool)->bool{p} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_false_and",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool)->bool{false&&p} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "b": "fn f(p:bool)->bool{false} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_or_true",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool)->bool{p||true} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "b": "fn f(p:bool)->bool{true} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_repeated",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,q:bool)->bool{p&&q&&p} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "b": "fn f(p:bool,q:bool)->bool{p&&q} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_commuted_and",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,q:bool)->bool{q&&p} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "b": "fn f(p:bool,q:bool)->bool{p&&q} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_commuted_or",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,q:bool)->bool{q||p} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "b": "fn f(p:bool,q:bool)->bool{p||q} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_commuted_comparison_u32",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,x:u32,y:u32)->bool{x<y&&p} fn main(){for p in [false,true]{for (x,y) in [(1u32,2u32),(2,2),(3,2)]{println!(\"{}\",f(p,x,y));}}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->bool{p&&x<y} fn main(){for p in [false,true]{for (x,y) in [(1u32,2u32),(2,2),(3,2)]{println!(\"{}\",f(p,x,y));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\nfalse\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\nfalse\nfalse\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\nfalse\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\nfalse\nfalse\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_regrouped",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,q:bool,r:bool)->bool{r&&(q&&p)} fn main(){for p in [false,true]{for q in [false,true]{for r in [false,true]{println!(\"{}\",f(p,q,r));}}}}",
+    "b": "fn f(p:bool,q:bool,r:bool)->bool{(p&&q)&&r} fn main(){for p in [false,true]{for q in [false,true]{for r in [false,true]{println!(\"{}\",f(p,q,r));}}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_negated_chain",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,x:u32,y:u32)->bool{!(x<y&&p)} fn main(){for p in [false,true]{for (x,y) in [(1u32,2u32),(2,2),(3,2)]{println!(\"{}\",f(p,x,y));}}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->bool{x>=y||!p} fn main(){for p in [false,true]{for (x,y) in [(1u32,2u32),(2,2),(3,2)]{println!(\"{}\",f(p,x,y));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\nfalse\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\nfalse\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\nfalse\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\nfalse\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_if_and",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,q:bool)->bool{if p{q}else{false}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "b": "fn f(p:bool,q:bool)->bool{p&&q} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_if_or",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,q:bool)->bool{if p{true}else{q}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "b": "fn f(p:bool,q:bool)->bool{p||q} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_if_negated_and",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,q:bool)->bool{if p{false}else{q}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "b": "fn f(p:bool,q:bool)->bool{!p&&q} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\nfalse\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\nfalse\nfalse\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\nfalse\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\nfalse\nfalse\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_if_negated_or",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,q:bool)->bool{if p{q}else{true}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "b": "fn f(p:bool,q:bool)->bool{!p||q} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\nfalse\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\nfalse\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\nfalse\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\nfalse\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_total_helper",
+    "family": "boolean_logic",
+    "a": "fn h(x:u32)->bool{x<7u32} fn f(p:bool,x:u32)->bool{h(x)&&p} fn main(){for p in [false,true]{for x in [3u32,9]{println!(\"{}\",f(p,x));}}}",
+    "b": "fn h(x:u32)->bool{x<7u32} fn f(p:bool,x:u32)->bool{p&&h(x)} fn main(){for p in [false,true]{for x in [3u32,9]{println!(\"{}\",f(p,x));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\ntrue\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\ntrue\nfalse\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\ntrue\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\ntrue\nfalse\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_effect_order",
+    "family": "boolean_logic",
+    "a": "fn read()->bool{println!(\"read\");true} fn f(p:bool)->bool{read()&&p} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "b": "fn read()->bool{println!(\"read\");true} fn f(p:bool)->bool{p&&read()} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "read\nfalse\nread\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "read\nfalse\nread\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nread\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nread\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_effect_absorbed",
+    "family": "boolean_logic",
+    "a": "fn read()->bool{println!(\"read\");true} fn f(p:bool)->bool{read()&&false} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "b": "fn read()->bool{println!(\"read\");true} fn f(p:bool)->bool{false} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "read\nfalse\nread\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "read\nfalse\nread\nfalse\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_partial_order",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,x:u32,y:u32)->bool{x/y>0u32&&p} fn main(){std::panic::set_hook(Box::new(|_|{}));for p in [false,true]{println!(\"{}\",f(p,4u32,0u32));}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->bool{p&&x/y>0u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for p in [false,true]{println!(\"{}\",f(p,4u32,0u32));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        },
+        "on": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "false\n",
+          "exit": 101
+        },
+        "on": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "false\n",
+          "exit": 101
+        }
+      }
+    }
+  },
+  {
+    "id": "lg_operator_kept",
+    "family": "boolean_logic",
+    "a": "fn f(p:bool,q:bool)->bool{p&&q} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "b": "fn f(p:bool,q:bool)->bool{p||q} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q));}}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\nfalse\nfalse\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\ntrue\n"
+        }
+      }
+    }
+  }
+]

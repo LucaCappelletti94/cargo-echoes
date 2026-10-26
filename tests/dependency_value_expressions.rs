@@ -25,8 +25,8 @@ fn grouped(source: &str) -> syn_canon::CanonicalForm {
 
 #[test]
 fn substituted_condition_initializer_folds_to_the_inline_form() {
-    let original = "fn f(x:bool)->bool{let cond=x;let c=if cond&&x{true}else{false};c}";
-    let inline = "fn f(x:bool)->bool{if x&&x{true}else{false}}";
+    let original = "fn f(x:bool,y:bool)->bool{let cond=x;let c=if cond&&y{true}else{false};c}";
+    let inline = "fn f(x:bool,y:bool)->bool{if x&&y{true}else{false}}";
     assert_eq!(form(original), form(inline));
     assert_ne!(
         syn_canon::canonicalize_failing(syn::parse_str(original).unwrap()),
@@ -37,8 +37,8 @@ fn substituted_condition_initializer_folds_to_the_inline_form() {
 
 #[test]
 fn substituted_condition_tail_folds_to_the_inline_form() {
-    let original = "fn f(x:bool)->bool{let g=x;if g&&x{true}else{false}}";
-    let inline = "fn f(x:bool)->bool{if x&&x{true}else{false}}";
+    let original = "fn f(x:bool,y:bool)->bool{let g=x;if g&&y{true}else{false}}";
+    let inline = "fn f(x:bool,y:bool)->bool{if x&&y{true}else{false}}";
     assert_eq!(form(original), form(inline));
     assert_ne!(
         syn_canon::canonicalize_failing(syn::parse_str(original).unwrap()),
