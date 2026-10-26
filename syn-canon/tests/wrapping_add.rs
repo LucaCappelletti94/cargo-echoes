@@ -118,8 +118,6 @@ fn associativity_and_other_wrapping_identities_stay_out_of_scope() {
         ("x.wrapping_add(0u32)", "x"),
         ("1u32.wrapping_add(2u32)", "3u32"),
         ("x.wrapping_sub(y)", "y.wrapping_sub(x)"),
-        ("x.wrapping_mul(y)", "y.wrapping_mul(x)"),
-        ("x.saturating_add(y)", "y.saturating_add(x)"),
         ("x.wrapping_add(y)", "x + y"),
     ] {
         separate(&function("u32", written), &function("u32", other));

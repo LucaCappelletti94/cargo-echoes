@@ -557,3 +557,45 @@ fn an_observing_impl_retains_the_let_annotation() {
         view(&source("let v = 5u32; v"))
     );
 }
+
+#[test]
+fn proven_commutative_operands_take_one_order_in_the_borrowed_view() {
+    let body = |expression: &str| format!("fn f(x: u32, y: u32) -> u32 {{ {expression} }}");
+    for (written, reordered) in [
+        ("x + y", "y + x"),
+        ("x.saturating_mul(y)", "y.saturating_mul(x)"),
+        ("read(); x * y", "read(); y * x"),
+    ] {
+        assert_eq!(view(&body(written)), view(&body(reordered)), "{written}");
+    }
+}
+
+#[test]
+fn unproven_commutative_operands_keep_their_order_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f(x: u32, y: Unknown) -> u32 { (x + y) ^ x }"),
+        view("fn f(x: u32, y: Unknown) -> u32 { (y + x) ^ x }")
+    );
+    assert_ne!(
+        view("fn f(x: u32) -> u32 { read() + x }"),
+        view("fn f(x: u32) -> u32 { x + read() }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_commutative_operand_order() {
+    assert_ne!(
+        failing_form("fn f(x: u32, y: u32) -> u32 { y + x }"),
+        failing_form("fn f(x: u32, y: u32) -> u32 { x + y }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_commutative_operand_order() {
+    let source = |body: &str| {
+        format!(
+            "struct S;\n#[observe]\nimpl S {{\n    fn f(x: u32, y: u32) -> u32 {{ {body} }}\n}}"
+        )
+    };
+    assert_ne!(view(&source("y * x")), view(&source("x * y")));
+}
