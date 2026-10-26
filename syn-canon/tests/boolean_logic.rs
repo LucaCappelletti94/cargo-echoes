@@ -51,6 +51,8 @@ fn identity_literals_leave_the_operand() {
         ("false || p", "p"),
         ("true && p && true", "p"),
         ("(x < y) && true", "x < y"),
+        ("true && true", "true"),
+        ("false || false", "false"),
     ]);
 }
 
@@ -123,6 +125,26 @@ fn accepted_total_helpers_order_like_values() {
             &format!("{helper} fn f(p: bool, x: u32) -> bool {{ {folded} }}"),
         );
     }
+}
+
+#[test]
+fn helpers_with_logical_bodies_stay_total() {
+    let helper = "fn h(p: bool, q: bool) -> bool { q && (p || false) }";
+    equivalent(
+        &format!("{helper} fn f(p: bool, q: bool) -> bool {{ h(p, q) == h(p, q) }}"),
+        &format!("{helper} fn f(p: bool, q: bool) -> bool {{ true }}"),
+    );
+}
+
+#[test]
+fn local_item_order_observes_logical_initializers_like_values() {
+    let first = "fn f() -> bool { fn one() -> u32 { 1 } fn two() -> u32 { 2 } let c = (two() < one()) || (one() < two()); println!(\"{:?}\", c); c }";
+    let second = "fn f() -> bool { fn two() -> u32 { 2 } fn one() -> u32 { 1 } let c = (one() < two()) || (two() < one()); println!(\"{:?}\", c); c }";
+    equivalent(first, second);
+    assert_eq!(
+        view::view_of(&parse(first), "f"),
+        view::view_of(&parse(second), "f")
+    );
 }
 
 #[test]

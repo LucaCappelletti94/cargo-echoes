@@ -1258,15 +1258,12 @@ fn label_binary(
     } else {
         match total_binary(bin.op, &left, &right) {
             Some(TotalBinary::Ordered {
+                tag: '∧' | '∨', ..
+            }) if !bin.attrs.is_empty() => Lbl::Other(op_text(bin.op), vec![left, right]),
+            Some(TotalBinary::Ordered {
                 tag: tag @ ('∧' | '∨'),
                 ..
-            }) => {
-                if bin.attrs.is_empty() {
-                    logical_label(tag, left, right)
-                } else {
-                    Lbl::Other(op_text(bin.op), vec![left, right])
-                }
-            }
+            }) => logical_label(tag, left, right),
             Some(TotalBinary::Ordered { tag, reverse, prim }) => {
                 let (lo, hi) = if reverse.is_some() {
                     (right, left)
