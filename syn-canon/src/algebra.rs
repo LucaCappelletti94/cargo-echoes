@@ -211,6 +211,10 @@ impl Walker<'_, '_> {
             }
             syn::Expr::If(branch) if self.dedup => self.branch(branch, total_calls),
             syn::Expr::Group(group) => self.scalar(*group.expr, total_calls),
+            syn::Expr::MethodCall(mut method) if self.native_wrapping_add(&method) => {
+                let label = self.wrapping_add(&mut method);
+                (syn::Expr::MethodCall(method), label)
+            }
             expr @ syn::Expr::Call(_) if total_calls => {
                 let mut locals = 0;
                 let label =
@@ -374,6 +378,37 @@ impl Walker<'_, '_> {
             (expr, Some(label))
         }
     }
+
+    /// Whether `method` is `wrapping_add` on a proven fixed-width integer receiver,
+    /// which inherent resolution binds to the native by-value method.
+    fn native_wrapping_add(&self, method: &syn::ExprMethodCall) -> bool {
+        if !schedule::wrapping_add_shape(method) {
+            return false;
+        }
+        let mut locals = 0;
+        let (receiver, _) = schedule::label_expr(
+            self.renamer,
+            &self.env,
+            &method.receiver,
+            0,
+            &mut locals,
+            None,
+        );
+        matches!(receiver.prim(), Some(PrimTy::Int { .. }))
+    }
+
+    /// The label of a native `wrapping_add`, its operands put in label order,
+    /// a literal whose type the receiver infers staying the argument.
+    fn wrapping_add(&self, method: &mut syn::ExprMethodCall) -> Option<Lbl> {
+        let receiver = self.scalar_in_place(&mut method.receiver, true);
+        let argument = self.scalar_in_place(&mut method.args[0], true);
+        let (receiver, argument) = (receiver?, argument?);
+        let prim = schedule::wrapping_add_prim(&receiver, &argument)?;
+        if argument < receiver && argument.prim().is_some() {
+            core::mem::swap(&mut *method.receiver, &mut method.args[0]);
+        }
+        Some(schedule::wrapping_add_label(prim, receiver, argument))
+    }
 }
 
 impl VisitMut for Walker<'_, '_> {
@@ -400,6 +435,9 @@ impl VisitMut for Walker<'_, '_> {
                 let dedup = core::mem::replace(&mut self.dedup, false);
                 self.visit_expr_mut(&mut raw.expr);
                 self.dedup = dedup;
+            }
+            syn::Expr::MethodCall(method) if self.native_wrapping_add(method) => {
+                self.wrapping_add(method);
             }
             syn::Expr::MethodCall(method) => {
                 let dedup = core::mem::replace(&mut self.dedup, false);

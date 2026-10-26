@@ -1,0 +1,797 @@
+[
+  {
+    "id": "w_u8_pair",
+    "family": "wrapping_add",
+    "a": "fn f(x:u8,y:u8)->u8{x.wrapping_add(y)} fn main(){for (x,y) in [(0u8,0u8),(1u8,255u8),(255u8,255u8),(128u8,128u8),(3u8,5u8)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:u8,y:u8)->u8{y.wrapping_add(x)} fn main(){for (x,y) in [(0u8,0u8),(1u8,255u8),(255u8,255u8),(128u8,128u8),(3u8,5u8)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n254\n0\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n254\n0\n8\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n254\n0\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n254\n0\n8\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_u16_pair",
+    "family": "wrapping_add",
+    "a": "fn f(x:u16,y:u16)->u16{x.wrapping_add(y)} fn main(){for (x,y) in [(0u16,0u16),(1u16,65535u16),(65535u16,65535u16),(32768u16,32768u16),(3u16,5u16)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:u16,y:u16)->u16{y.wrapping_add(x)} fn main(){for (x,y) in [(0u16,0u16),(1u16,65535u16),(65535u16,65535u16),(32768u16,32768u16),(3u16,5u16)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n65534\n0\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n65534\n0\n8\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n65534\n0\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n65534\n0\n8\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_u32_pair",
+    "family": "wrapping_add",
+    "a": "fn f(x:u32,y:u32)->u32{x.wrapping_add(y)} fn main(){for (x,y) in [(0u32,0u32),(1u32,4294967295u32),(4294967295u32,4294967295u32),(2147483648u32,2147483648u32),(3u32,5u32)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:u32,y:u32)->u32{y.wrapping_add(x)} fn main(){for (x,y) in [(0u32,0u32),(1u32,4294967295u32),(4294967295u32,4294967295u32),(2147483648u32,2147483648u32),(3u32,5u32)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n4294967294\n0\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n4294967294\n0\n8\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n4294967294\n0\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n4294967294\n0\n8\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_u64_pair",
+    "family": "wrapping_add",
+    "a": "fn f(x:u64,y:u64)->u64{x.wrapping_add(y)} fn main(){for (x,y) in [(0u64,0u64),(1u64,18446744073709551615u64),(18446744073709551615u64,18446744073709551615u64),(9223372036854775808u64,9223372036854775808u64),(3u64,5u64)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:u64,y:u64)->u64{y.wrapping_add(x)} fn main(){for (x,y) in [(0u64,0u64),(1u64,18446744073709551615u64),(18446744073709551615u64,18446744073709551615u64),(9223372036854775808u64,9223372036854775808u64),(3u64,5u64)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n18446744073709551614\n0\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n18446744073709551614\n0\n8\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n18446744073709551614\n0\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n18446744073709551614\n0\n8\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_u128_pair",
+    "family": "wrapping_add",
+    "a": "fn f(x:u128,y:u128)->u128{x.wrapping_add(y)} fn main(){for (x,y) in [(0u128,0u128),(1u128,340282366920938463463374607431768211455u128),(340282366920938463463374607431768211455u128,340282366920938463463374607431768211455u128),(170141183460469231731687303715884105728u128,170141183460469231731687303715884105728u128),(3u128,5u128)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:u128,y:u128)->u128{y.wrapping_add(x)} fn main(){for (x,y) in [(0u128,0u128),(1u128,340282366920938463463374607431768211455u128),(340282366920938463463374607431768211455u128,340282366920938463463374607431768211455u128),(170141183460469231731687303715884105728u128,170141183460469231731687303715884105728u128),(3u128,5u128)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n340282366920938463463374607431768211454\n0\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n340282366920938463463374607431768211454\n0\n8\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n340282366920938463463374607431768211454\n0\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n340282366920938463463374607431768211454\n0\n8\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_i8_pair",
+    "family": "wrapping_add",
+    "a": "fn f(x:i8,y:i8)->i8{x.wrapping_add(y)} fn main(){for (x,y) in [(-128i8,-1i8),(127i8,1i8),(-128i8,-128i8),(127i8,127i8),(-3i8,5i8)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:i8,y:i8)->i8{y.wrapping_add(x)} fn main(){for (x,y) in [(-128i8,-1i8),(127i8,1i8),(-128i8,-128i8),(127i8,127i8),(-3i8,5i8)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "127\n-128\n0\n-2\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "127\n-128\n0\n-2\n2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "127\n-128\n0\n-2\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "127\n-128\n0\n-2\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_i16_pair",
+    "family": "wrapping_add",
+    "a": "fn f(x:i16,y:i16)->i16{x.wrapping_add(y)} fn main(){for (x,y) in [(-32768i16,-1i16),(32767i16,1i16),(-32768i16,-32768i16),(32767i16,32767i16),(-3i16,5i16)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:i16,y:i16)->i16{y.wrapping_add(x)} fn main(){for (x,y) in [(-32768i16,-1i16),(32767i16,1i16),(-32768i16,-32768i16),(32767i16,32767i16),(-3i16,5i16)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "32767\n-32768\n0\n-2\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "32767\n-32768\n0\n-2\n2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "32767\n-32768\n0\n-2\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "32767\n-32768\n0\n-2\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_i32_pair",
+    "family": "wrapping_add",
+    "a": "fn f(x:i32,y:i32)->i32{x.wrapping_add(y)} fn main(){for (x,y) in [(-2147483648i32,-1i32),(2147483647i32,1i32),(-2147483648i32,-2147483648i32),(2147483647i32,2147483647i32),(-3i32,5i32)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:i32,y:i32)->i32{y.wrapping_add(x)} fn main(){for (x,y) in [(-2147483648i32,-1i32),(2147483647i32,1i32),(-2147483648i32,-2147483648i32),(2147483647i32,2147483647i32),(-3i32,5i32)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n-2147483648\n0\n-2\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n-2147483648\n0\n-2\n2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n-2147483648\n0\n-2\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n-2147483648\n0\n-2\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_i64_pair",
+    "family": "wrapping_add",
+    "a": "fn f(x:i64,y:i64)->i64{x.wrapping_add(y)} fn main(){for (x,y) in [(-9223372036854775808i64,-1i64),(9223372036854775807i64,1i64),(-9223372036854775808i64,-9223372036854775808i64),(9223372036854775807i64,9223372036854775807i64),(-3i64,5i64)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:i64,y:i64)->i64{y.wrapping_add(x)} fn main(){for (x,y) in [(-9223372036854775808i64,-1i64),(9223372036854775807i64,1i64),(-9223372036854775808i64,-9223372036854775808i64),(9223372036854775807i64,9223372036854775807i64),(-3i64,5i64)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9223372036854775807\n-9223372036854775808\n0\n-2\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9223372036854775807\n-9223372036854775808\n0\n-2\n2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9223372036854775807\n-9223372036854775808\n0\n-2\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9223372036854775807\n-9223372036854775808\n0\n-2\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_i128_pair",
+    "family": "wrapping_add",
+    "a": "fn f(x:i128,y:i128)->i128{x.wrapping_add(y)} fn main(){for (x,y) in [(-170141183460469231731687303715884105728i128,-1i128),(170141183460469231731687303715884105727i128,1i128),(-170141183460469231731687303715884105728i128,-170141183460469231731687303715884105728i128),(170141183460469231731687303715884105727i128,170141183460469231731687303715884105727i128),(-3i128,5i128)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:i128,y:i128)->i128{y.wrapping_add(x)} fn main(){for (x,y) in [(-170141183460469231731687303715884105728i128,-1i128),(170141183460469231731687303715884105727i128,1i128),(-170141183460469231731687303715884105728i128,-170141183460469231731687303715884105728i128),(170141183460469231731687303715884105727i128,170141183460469231731687303715884105727i128),(-3i128,5i128)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "170141183460469231731687303715884105727\n-170141183460469231731687303715884105728\n0\n-2\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "170141183460469231731687303715884105727\n-170141183460469231731687303715884105728\n0\n-2\n2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "170141183460469231731687303715884105727\n-170141183460469231731687303715884105728\n0\n-2\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "170141183460469231731687303715884105727\n-170141183460469231731687303715884105728\n0\n-2\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_typed_literal_u8",
+    "family": "wrapping_add",
+    "a": "fn f(x:u8)->u8{x.wrapping_add(200u8)} fn main(){for x in [0u8,55u8,56u8,255u8]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:u8)->u8{200u8.wrapping_add(x)} fn main(){for x in [0u8,55u8,56u8,255u8]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "200\n255\n0\n199\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "200\n255\n0\n199\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "200\n255\n0\n199\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "200\n255\n0\n199\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_signed_literal_i8",
+    "family": "wrapping_add",
+    "a": "fn f(x:i8)->i8{x.wrapping_add(-1i8)} fn main(){for x in [-128i8,0i8,127i8]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:i8)->i8{(-1i8).wrapping_add(x)} fn main(){for x in [-128i8,0i8,127i8]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "127\n-1\n126\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "127\n-1\n126\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "127\n-1\n126\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "127\n-1\n126\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_total_expression_u16",
+    "family": "wrapping_add",
+    "a": "fn f(x:u16,y:u16)->u16{x.wrapping_add(y&0xff00u16)} fn main(){for (x,y) in [(65535u16,65280u16),(1u16,65535u16),(255u16,3855u16)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:u16,y:u16)->u16{(y&0xff00u16).wrapping_add(x)} fn main(){for (x,y) in [(65535u16,65280u16),(1u16,65535u16),(255u16,3855u16)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "65279\n65281\n4095\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "65279\n65281\n4095\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "65279\n65281\n4095\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "65279\n65281\n4095\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_nested_u32",
+    "family": "wrapping_add",
+    "a": "fn f(x:u32,y:u32,z:u32)->u32{x.wrapping_add(y).wrapping_add(z)} fn main(){for (x,y,z) in [(4294967295u32,4294967295u32,4294967295u32),(1u32,4294967295u32,0u32),(7u32,9u32,11u32)]{println!(\"{}\",f(x,y,z));}}",
+    "b": "fn f(x:u32,y:u32,z:u32)->u32{z.wrapping_add(y.wrapping_add(x))} fn main(){for (x,y,z) in [(4294967295u32,4294967295u32,4294967295u32),(1u32,4294967295u32,0u32),(7u32,9u32,11u32)]{println!(\"{}\",f(x,y,z));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967293\n0\n27\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967293\n0\n27\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967293\n0\n27\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967293\n0\n27\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_total_helper_u32",
+    "family": "wrapping_add",
+    "a": "fn h(x:u32)->u32{x&7u32} fn f(x:u32,y:u32)->u32{h(x).wrapping_add(y)} fn main(){for (x,y) in [(4294967295u32,15u32),(4294967292u32,4u32),(5u32,6u32)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn h(x:u32)->u32{x&7u32} fn f(x:u32,y:u32)->u32{y.wrapping_add(h(x))} fn main(){for (x,y) in [(4294967295u32,15u32),(4294967292u32,4u32),(5u32,6u32)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "22\n8\n11\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "22\n8\n11\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "22\n8\n11\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "22\n8\n11\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_let_bound_u64",
+    "family": "wrapping_add",
+    "a": "fn f(x:u64,y:u64)->u64{let a=x.wrapping_add(1u64);let b=y;a.wrapping_add(b)} fn main(){for (x,y) in [(18446744073709551615u64,1u64),(18446744073709551615u64,18446744073709551615u64),(2u64,3u64)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:u64,y:u64)->u64{let b=y;let a=1u64.wrapping_add(x);b.wrapping_add(a)} fn main(){for (x,y) in [(18446744073709551615u64,1u64),(18446744073709551615u64,18446744073709551615u64),(2u64,3u64)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n18446744073709551615\n6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n18446744073709551615\n6\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n18446744073709551615\n6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n18446744073709551615\n6\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_preserved_effect_u32",
+    "family": "wrapping_add",
+    "a": "fn f(x:u32,y:u32)->u32{println!(\"e\");x.wrapping_add(y)} fn main(){println!(\"{}\",f(4294967295u32,2u32));}",
+    "b": "fn f(x:u32,y:u32)->u32{println!(\"e\");y.wrapping_add(x)} fn main(){println!(\"{}\",f(4294967295u32,2u32));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "e\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "e\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "e\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "e\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_xor_law_u32",
+    "family": "wrapping_add",
+    "a": "fn f(x:u32,y:u32)->u32{x.wrapping_add(y)^y.wrapping_add(x)} fn main(){println!(\"{}\",f(4294967295u32,9u32));}",
+    "b": "fn f(x:u32,y:u32)->u32{0u32} fn main(){println!(\"{}\",f(4294967295u32,9u32));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_custom_method",
+    "family": "wrapping_add",
+    "a": "#[derive(Clone,Copy)] struct T(u32); impl T{fn wrapping_add(self,o:T)->T{T(self.0.wrapping_sub(o.0))}} fn f(x:T,y:T)->T{x.wrapping_add(y)} fn main(){println!(\"{}\",f(T(5),T(3)).0);}",
+    "b": "#[derive(Clone,Copy)] struct T(u32); impl T{fn wrapping_add(self,o:T)->T{T(self.0.wrapping_sub(o.0))}} fn f(x:T,y:T)->T{y.wrapping_add(x)} fn main(){println!(\"{}\",f(T(5),T(3)).0);}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967294\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967294\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_shadowed_u32",
+    "family": "wrapping_add",
+    "a": "#[allow(non_camel_case_types)] #[derive(Clone,Copy)] struct u32(i64); impl u32{fn wrapping_add(self,o:u32)->u32{u32(self.0-o.0)}} fn f(x:u32,y:u32)->u32{x.wrapping_add(y)} fn main(){println!(\"{}\",f(u32(5),u32(3)).0);}",
+    "b": "#[allow(non_camel_case_types)] #[derive(Clone,Copy)] struct u32(i64); impl u32{fn wrapping_add(self,o:u32)->u32{u32(self.0-o.0)}} fn f(x:u32,y:u32)->u32{y.wrapping_add(x)} fn main(){println!(\"{}\",f(u32(5),u32(3)).0);}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_effect_order",
+    "family": "wrapping_add",
+    "a": "fn a()->u32{println!(\"a\");1} fn b()->u32{println!(\"b\");2} fn f()->u32{a().wrapping_add(b())} fn main(){println!(\"{}\",f());}",
+    "b": "fn a()->u32{println!(\"a\");1} fn b()->u32{println!(\"b\");2} fn f()->u32{b().wrapping_add(a())} fn main(){println!(\"{}\",f());}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\n3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "b\na\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "b\na\n3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_wrapping_sub",
+    "family": "wrapping_add",
+    "a": "fn f(x:u32,y:u32)->u32{x.wrapping_sub(y)} fn main(){println!(\"{}\",f(5u32,3u32));}",
+    "b": "fn f(x:u32,y:u32)->u32{y.wrapping_sub(x)} fn main(){println!(\"{}\",f(5u32,3u32));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967294\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967294\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_unsuffixed_receiver",
+    "family": "wrapping_add",
+    "a": "fn f(x:u32)->u32{x.wrapping_add(7)} fn main(){println!(\"{}\",f(4294967295u32));}",
+    "b": "fn f(x:u32)->u32{7.wrapping_add(x)} fn main(){println!(\"{}\",f(4294967295u32));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": [
+            "E0689"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0689"
+          ],
+          "run": "absent"
+        }
+      }
+    }
+  },
+  {
+    "id": "w_operator_overflow_u8",
+    "family": "wrapping_add",
+    "a": "fn f(x:u8,y:u8)->u8{x.wrapping_add(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));println!(\"{}\",f(255u8,1u8));}",
+    "b": "fn f(x:u8,y:u8)->u8{x+y} fn main(){std::panic::set_hook(Box::new(|_|{}));println!(\"{}\",f(255u8,1u8));}",
+    "expected": "profile-dependent",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        }
+      }
+    }
+  }
+]

@@ -139,6 +139,9 @@ pub mod alpha {
     pub fn xor_literal(value: u32) -> u32 {
         value ^ 7 ^ value
     }
+    pub fn wrapping(value: u32, other: u32) -> u32 {
+        other.wrapping_add(value)
+    }
 }
 mod custom {
     macro_rules! vec {

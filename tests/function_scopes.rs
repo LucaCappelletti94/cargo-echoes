@@ -264,3 +264,76 @@ fn an_observing_impl_retains_the_xor_cancellation() {
     };
     assert_ne!(view(&source("x ^ x")), view(&source("0u32")));
 }
+
+#[test]
+fn proven_wrapping_add_operands_share_one_order_in_the_borrowed_view() {
+    let body = |expression: &str| format!("fn f(x: u32, y: u32) -> u32 {{ {expression} }}");
+    for (written, reordered) in [
+        ("x.wrapping_add(y)", "y.wrapping_add(x)"),
+        ("x.wrapping_add(7u32)", "7u32.wrapping_add(x)"),
+        ("read(); x.wrapping_add(y)", "read(); y.wrapping_add(x)"),
+    ] {
+        assert_eq!(view(&body(written)), view(&body(reordered)), "{written}");
+    }
+    assert_eq!(
+        view(
+            "fn h(x: u32) -> u32 { x & 7u32 }\nfn f(x: u32, y: u32) -> u32 { h(x).wrapping_add(y) }"
+        ),
+        view(
+            "fn h(x: u32) -> u32 { x & 7u32 }\nfn f(x: u32, y: u32) -> u32 { y.wrapping_add(h(x)) }"
+        )
+    );
+}
+
+#[test]
+fn unproven_wrapping_add_operands_keep_their_order_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f(x: u32) -> u32 { read().wrapping_add(x) }"),
+        view("fn f(x: u32) -> u32 { x.wrapping_add(read()) }")
+    );
+    let custom = "#[derive(Clone, Copy)] struct T(u32);\nimpl T {\n    fn wrapping_add(self, other: T) -> T { T(self.0.wrapping_sub(other.0)) }\n}\n";
+    assert_ne!(
+        view(&format!(
+            "{custom}fn f(x: T, y: T) -> T {{ x.wrapping_add(y) }}"
+        )),
+        view(&format!(
+            "{custom}fn f(x: T, y: T) -> T {{ y.wrapping_add(x) }}"
+        ))
+    );
+}
+
+#[test]
+fn wrapping_add_module_views_respect_primitive_shadowing() {
+    let body = |expression: &str| format!("fn f(x: u32, y: u32) -> u32 {{ {expression} }}");
+    assert_eq!(
+        module_view("", &body("x.wrapping_add(y)")),
+        module_view("", &body("y.wrapping_add(x)")),
+    );
+    let root = "#[derive(Clone, Copy)] pub struct Token;\nimpl Token { pub fn wrapping_add(self, _: Token) -> Token { Token } }";
+    let shadowed = |expression: &str| format!("use super::Token as u32; {}", body(expression));
+    assert_ne!(
+        module_view(root, &shadowed("x.wrapping_add(y)")),
+        module_view(root, &shadowed("y.wrapping_add(x)")),
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_wrapping_add_operand_order() {
+    assert_ne!(
+        failing_form("fn f(x: u32, y: u32) -> u32 { x.wrapping_add(y) }"),
+        failing_form("fn f(x: u32, y: u32) -> u32 { y.wrapping_add(x) }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_wrapping_add_operand_order() {
+    let source = |body: &str| {
+        format!(
+            "struct S;\n#[observe]\nimpl S {{\n    fn f(x: u32, y: u32) -> u32 {{ {body} }}\n}}"
+        )
+    };
+    assert_ne!(
+        view(&source("x.wrapping_add(y)")),
+        view(&source("y.wrapping_add(x)"))
+    );
+}

@@ -674,7 +674,7 @@ fn reflexive_functions_keep_float_partial_and_custom_equality_separate() {
 const XOR_FIXTURE: &str = "tests/fixtures/xorws";
 
 /// The function groups of a report, member-sorted and group-sorted.
-fn xor_function_groups(report: &Report) -> Vec<Vec<&str>> {
+fn function_groups(report: &Report) -> Vec<Vec<&str>> {
     let mut groups: Vec<Vec<&str>> = report
         .groups
         .iter()
@@ -763,7 +763,7 @@ fn xor_functions_keep_the_unproven_cancellations_separate() {
         .run(XOR_FIXTURE)
         .unwrap();
     assert_eq!(
-        xor_function_groups(&report),
+        function_groups(&report),
         [
             vec!["xorws::boolean::folded", "xorws::boolean::written"],
             vec!["xorws::chain", "xorws::remaining"],
@@ -785,7 +785,7 @@ fn xor_function_groups_carry_their_normalized_body_size() {
         .run(XOR_FIXTURE)
         .unwrap();
     assert_eq!(
-        xor_function_groups(&kept),
+        function_groups(&kept),
         [
             vec!["xorws::boolean::folded", "xorws::boolean::written"],
             vec!["xorws::chain", "xorws::remaining"],
@@ -814,6 +814,105 @@ fn xor_function_groups_carry_their_normalized_body_size() {
             .iter()
             .all(|group| group.kind != echoes::Kind::Function)
     );
+}
+
+const WRAPPING_FIXTURE: &str = "tests/fixtures/wrappingws";
+
+/// The doctest groups of a report, member-sorted and group-sorted.
+fn doctest_groups(report: &Report) -> Vec<Vec<&str>> {
+    let mut groups: Vec<Vec<&str>> = report
+        .groups
+        .iter()
+        .filter(|group| group.kind == echoes::Kind::Doctest)
+        .map(|group| group.sites.iter().map(|site| site.item.as_str()).collect())
+        .collect();
+    for group in &mut groups {
+        group.sort_unstable();
+    }
+    groups.sort_unstable();
+    groups
+}
+
+#[test]
+fn wrapping_add_doctests_group_only_the_proven_native_operand_orders() {
+    let report = Echoes::default().run(WRAPPING_FIXTURE).unwrap();
+    assert_eq!(report.total, 14);
+    assert_eq!(report.unique, 11);
+    assert!(
+        report
+            .groups
+            .iter()
+            .all(|group| group.kind == echoes::Kind::Doctest)
+    );
+    assert_eq!(
+        doctest_groups(&report),
+        [
+            vec!["wrappingws::LiteralReordered", "wrappingws::LiteralWritten"],
+            vec!["wrappingws::Reordered", "wrappingws::Written"],
+            vec!["wrappingws::SignedReordered", "wrappingws::SignedWritten"],
+        ]
+    );
+}
+
+#[test]
+fn wrapping_add_doctest_groups_carry_their_source_token_size() {
+    let report = Echoes::default().run(WRAPPING_FIXTURE).unwrap();
+    for group in &report.groups {
+        let literal = group
+            .sites
+            .iter()
+            .any(|site| site.item == "wrappingws::LiteralWritten");
+        assert_eq!(group.tokens, if literal { 14 } else { 18 });
+    }
+    let kept = Echoes::default()
+        .min_tokens(15)
+        .run(WRAPPING_FIXTURE)
+        .unwrap();
+    assert_eq!(
+        doctest_groups(&kept),
+        [
+            vec!["wrappingws::Reordered", "wrappingws::Written"],
+            vec!["wrappingws::SignedReordered", "wrappingws::SignedWritten"],
+        ]
+    );
+    let dropped = Echoes::default()
+        .min_tokens(19)
+        .run(WRAPPING_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn wrapping_add_functions_keep_custom_effectful_and_other_operations_separate() {
+    let report = Echoes::default()
+        .functions()
+        .fn_min_tokens(0)
+        .run(WRAPPING_FIXTURE)
+        .unwrap();
+    let expected = [
+        vec![
+            "wrappingws::literal_reordered",
+            "wrappingws::literal_written",
+        ],
+        vec!["wrappingws::reordered", "wrappingws::written"],
+        vec![
+            "wrappingws::signed::reordered",
+            "wrappingws::signed::written",
+        ],
+    ];
+    assert_eq!(function_groups(&report), expected);
+    let kept = Echoes::default()
+        .functions()
+        .fn_min_tokens(4)
+        .run(WRAPPING_FIXTURE)
+        .unwrap();
+    assert_eq!(function_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .functions()
+        .fn_min_tokens(5)
+        .run(WRAPPING_FIXTURE)
+        .unwrap();
+    assert_eq!(function_groups(&dropped).len(), 0);
 }
 
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
