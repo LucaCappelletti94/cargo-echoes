@@ -142,6 +142,12 @@ pub mod alpha {
     pub fn wrapping(value: u32, other: u32) -> u32 {
         other.wrapping_add(value)
     }
+    pub fn selected(flag: bool, value: u32, other: u32) -> u32 {
+        match flag {
+            false => other,
+            true => value,
+        }
+    }
 }
 mod custom {
     macro_rules! vec {

@@ -210,6 +210,9 @@ impl Walker<'_, '_> {
                 (syn::Expr::Unary(unary), None)
             }
             syn::Expr::If(branch) if self.dedup => self.branch(branch, total_calls),
+            syn::Expr::Match(r#match) if self.dedup && self.boolean_match(&r#match) => {
+                self.branch(conditional(r#match), total_calls)
+            }
             syn::Expr::Group(group) => self.scalar(*group.expr, total_calls),
             syn::Expr::MethodCall(mut method) if self.native_wrapping_add(&method) => {
                 let label = self.wrapping_add(&mut method);
@@ -409,6 +412,55 @@ impl Walker<'_, '_> {
         }
         Some(schedule::wrapping_add_label(prim, receiver, argument))
     }
+
+    /// Whether `r#match` is a boolean match its conditional form proves.
+    fn boolean_match(&self, r#match: &syn::ExprMatch) -> bool {
+        let mut locals = 0;
+        schedule::boolean_match_value(self.renamer, &self.env, r#match, 0, &mut locals, None)
+            .is_some()
+    }
+}
+
+/// The conditional form of an admitted boolean match, its scrutinee the
+/// condition and its `true` arm the first branch.
+fn conditional(r#match: syn::ExprMatch) -> syn::ExprIf {
+    let mut arms = r#match.arms.into_iter();
+    let first = arms.next().expect("an admitted first arm");
+    let second = arms.next().expect("an admitted second arm");
+    let first_true = matches!(
+        &first.pat,
+        syn::Pat::Lit(syn::ExprLit { lit: syn::Lit::Bool(literal), .. }) if literal.value
+    );
+    let (then, otherwise) = if first_true {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    syn::ExprIf {
+        attrs: Vec::new(),
+        if_token: syn::token::If::default(),
+        cond: r#match.expr,
+        then_branch: branch_block(*then.body),
+        else_branch: Some((
+            syn::token::Else::default(),
+            Box::new(syn::Expr::Block(syn::ExprBlock {
+                attrs: Vec::new(),
+                label: None,
+                block: branch_block(*otherwise.body),
+            })),
+        )),
+    }
+}
+
+/// An arm body as a branch block, a bare expression becoming its tail.
+fn branch_block(body: syn::Expr) -> syn::Block {
+    match body {
+        syn::Expr::Block(block) if block.label.is_none() => block.block,
+        body => syn::Block {
+            brace_token: syn::token::Brace::default(),
+            stmts: alloc::vec![syn::Stmt::Expr(body, None)],
+        },
+    }
 }
 
 impl VisitMut for Walker<'_, '_> {
@@ -417,6 +469,10 @@ impl VisitMut for Walker<'_, '_> {
             return;
         }
         match expr {
+            syn::Expr::Match(r#match) if self.dedup && self.boolean_match(r#match) => {
+                let owned = core::mem::replace(expr, empty_expr());
+                *expr = self.scalar(owned, false).0;
+            }
             syn::Expr::Binary(_)
             | syn::Expr::Unary(_)
             | syn::Expr::If(_)

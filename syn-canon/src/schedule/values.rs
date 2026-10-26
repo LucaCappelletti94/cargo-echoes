@@ -108,6 +108,12 @@ fn scalar_shape(expr: &syn::Expr, calls: bool) -> bool {
                             && super::scalar_tail(&block.block).is_some_and(|expr| scalar_shape(expr, calls)))
                 })
         }
+        syn::Expr::Match(r#match) => super::boolean_match(r#match).is_some_and(|(scrutinee, then, otherwise)| {
+            scalar_shape(scrutinee, calls)
+                && [then, otherwise]
+                    .into_iter()
+                    .all(|body| super::arm_tail(body).is_some_and(|expr| scalar_shape(expr, calls)))
+        }),
         _ => false,
     }
 }

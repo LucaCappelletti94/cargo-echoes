@@ -1760,7 +1760,8 @@ fn label_loop(
 }
 
 /// The label of a `match` expression, each arm's pattern bindings fresh
-/// local ports before its guard and body.
+/// local ports before its guard and body. An admitted boolean match takes
+/// the branch value of its conditional form.
 fn label_match_expr(
     renamer: &Renamer,
     env: &Env<'_>,
@@ -1769,6 +1770,11 @@ fn label_match_expr(
     locals: &mut usize,
     orders: Option<&RefCell<FieldOrders>>,
 ) -> (Lbl, Vec<Site>) {
+    if let Some(value) = boolean_match_value(renamer, env, r#match, consumer, locals, orders) {
+        let mut sites = Vec::new();
+        value_sites(&value, &mut sites);
+        return (value, sites);
+    }
     let (scrutinee, mut sites) = label_expr(renamer, env, &r#match.expr, consumer, locals, orders);
     let mut children = vec![scrutinee];
     for arm in &r#match.arms {
@@ -1799,6 +1805,85 @@ fn label_match_expr(
         ));
     }
     (Lbl::Other("match".into(), children), sites)
+}
+
+/// The scrutinee and the `true` and `false` arm bodies of an unattributed,
+/// exhaustive two-arm match over literal boolean patterns.
+pub(crate) fn boolean_match(
+    r#match: &syn::ExprMatch,
+) -> Option<(&syn::Expr, &syn::Expr, &syn::Expr)> {
+    let [first, second] = r#match.arms.as_slice() else {
+        return None;
+    };
+    if !r#match.attrs.is_empty() {
+        return None;
+    }
+    let value = |arm: &syn::Arm| match &arm.pat {
+        syn::Pat::Lit(syn::ExprLit {
+            attrs,
+            lit: syn::Lit::Bool(literal),
+        }) if attrs.is_empty() && arm.attrs.is_empty() => Some(literal.value),
+        _ => None,
+    };
+    let (selected, other) = (value(first)?, value(second)?);
+    if selected == other {
+        return None;
+    }
+    let (then, otherwise) = if selected {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    Some((&r#match.expr, &then.body, &otherwise.body))
+}
+
+/// The single bounded scalar tail of an unattributed arm body.
+fn arm_tail(body: &syn::Expr) -> Option<&syn::Expr> {
+    let mut scan = BranchScan::new();
+    scan.visit_expr(body);
+    if !scan.valid || scan.attributed {
+        return None;
+    }
+    match body {
+        syn::Expr::Block(block) if block.label.is_none() => scalar_tail(&block.block),
+        body => crate::algebra::within_bounds(body).then_some(body),
+    }
+}
+
+/// The branch value of an admitted boolean match, proven like its
+/// conditional form with the scrutinee as the condition.
+pub(crate) fn boolean_match_value(
+    renamer: &Renamer,
+    env: &Env<'_>,
+    r#match: &syn::ExprMatch,
+    consumer: usize,
+    locals: &mut usize,
+    orders: Option<&RefCell<FieldOrders>>,
+) -> Option<Lbl> {
+    let (scrutinee, then, otherwise) = boolean_match(r#match)?;
+    let (positive, negated) = condition_polarity(scrutinee);
+    if !crate::drift::expr_attrs(positive).is_empty() {
+        return None;
+    }
+    let (then, otherwise) = if negated {
+        (otherwise, then)
+    } else {
+        (then, otherwise)
+    };
+    let (then, otherwise) = (arm_tail(then)?, arm_tail(otherwise)?);
+    let saved = *locals;
+    let (cond, _) = label_expr(renamer, env, positive, consumer, locals, orders);
+    let (then, _) = label_expr(renamer, env, then, consumer, locals, orders);
+    let (otherwise, _) = label_expr(renamer, env, otherwise, consumer, locals, orders);
+    let value = if cond.prim() == Some(PrimTy::Bool) {
+        branch_value(&cond, &then, &otherwise)
+    } else {
+        None
+    };
+    if value.is_none() {
+        *locals = saved;
+    }
+    value
 }
 
 /// The label of a closure, its inputs fresh local ports with their proven

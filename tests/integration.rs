@@ -915,6 +915,57 @@ fn wrapping_add_functions_keep_custom_effectful_and_other_operations_separate() 
     assert_eq!(function_groups(&dropped).len(), 0);
 }
 
+const BOOLEAN_MATCH_FIXTURE: &str = "tests/fixtures/boolmatchws";
+
+#[test]
+fn boolean_match_doctests_group_only_the_proven_conditional_forms() {
+    let report = Echoes::default().run(BOOLEAN_MATCH_FIXTURE).unwrap();
+    assert_eq!(report.total, 8);
+    assert_eq!(report.unique, 6);
+    assert_eq!(
+        doctest_groups(&report),
+        [vec![
+            "boolmatchws::Conditional",
+            "boolmatchws::Matched",
+            "boolmatchws::Reversed",
+        ]]
+    );
+    let group = &report.groups[0];
+    let kept = Echoes::default()
+        .min_tokens(group.tokens)
+        .run(BOOLEAN_MATCH_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), doctest_groups(&report));
+    let dropped = Echoes::default()
+        .min_tokens(group.tokens + 1)
+        .run(BOOLEAN_MATCH_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn boolean_match_functions_keep_wildcards_and_effects_separate() {
+    let expected = [vec![
+        "boolmatchws::conditional",
+        "boolmatchws::matched",
+        "boolmatchws::reversed",
+    ]];
+    for tokens in [0, 5] {
+        let report = Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(BOOLEAN_MATCH_FIXTURE)
+            .unwrap();
+        assert_eq!(function_groups(&report), expected);
+    }
+    let dropped = Echoes::default()
+        .functions()
+        .fn_min_tokens(6)
+        .run(BOOLEAN_MATCH_FIXTURE)
+        .unwrap();
+    assert_eq!(function_groups(&dropped).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {
