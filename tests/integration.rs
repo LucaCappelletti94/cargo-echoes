@@ -1064,6 +1064,51 @@ fn boolean_literal_functions_keep_effects_and_polarity_separate() {
     assert_eq!(function_groups(&scan(3)).len(), 0);
 }
 
+const BOOLEAN_LOGIC_FIXTURE: &str = "tests/fixtures/boollogicws";
+
+#[test]
+fn boolean_logic_doctests_group_only_the_proven_conjunctions() {
+    let report = Echoes::default().run(BOOLEAN_LOGIC_FIXTURE).unwrap();
+    assert_eq!(report.total, 6);
+    assert_eq!(report.unique, 4);
+    let expected = [vec![
+        "boollogicws::Commuted",
+        "boollogicws::Conditional",
+        "boollogicws::Padded",
+    ]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(18)
+        .run(BOOLEAN_LOGIC_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(19)
+        .run(BOOLEAN_LOGIC_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn boolean_logic_functions_keep_effects_and_operators_separate() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(BOOLEAN_LOGIC_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec![
+        "boollogicws::commuted",
+        "boollogicws::conditional",
+        "boollogicws::padded",
+    ]];
+    for tokens in [0, 3] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(4)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

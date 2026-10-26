@@ -146,63 +146,81 @@ impl Walker<'_, '_> {
         label
     }
 
+    fn binary(&self, mut binary: syn::ExprBinary, total_calls: bool) -> (syn::Expr, Option<Lbl>) {
+        let total_calls = total_calls
+            || self.dedup
+                && matches!(
+                    binary.op,
+                    syn::BinOp::Eq(_)
+                        | syn::BinOp::Ne(_)
+                        | syn::BinOp::BitXor(_)
+                        | syn::BinOp::And(_)
+                        | syn::BinOp::Or(_)
+                );
+        let left = self.scalar_in_place(&mut binary.left, total_calls);
+        let right = self.scalar_in_place(&mut binary.right, total_calls);
+        let (Some(left), Some(right)) = (left, right) else {
+            return (syn::Expr::Binary(binary), None);
+        };
+        if self.dedup
+            && let Some(equality) = schedule::equality(binary.op, &left, &right)
+        {
+            let (expr, label) = match equality {
+                Equality::Reflexive => (
+                    crate::constants::literal_expr(PrimTy::Bool, 1, binary.span()),
+                    Lbl::Bool(true),
+                ),
+                Equality::Operand {
+                    left: true,
+                    negated,
+                } => reduced_operand(*binary.left, left, negated),
+                Equality::Operand {
+                    left: false,
+                    negated,
+                } => reduced_operand(*binary.right, right, negated),
+            };
+            return (expr, Some(label));
+        }
+        if let Some(tag) = schedule::logical_tag(binary.op)
+            && left.prim() == Some(PrimTy::Bool)
+            && right.prim() == Some(PrimTy::Bool)
+        {
+            let (expr, label) = logical(
+                tag,
+                (*binary.left, left),
+                (*binary.right, right),
+                self.dedup,
+            );
+            return (expr, Some(label));
+        }
+        match schedule::total_binary(binary.op, &left, &right) {
+            Some(TotalBinary::Flat(op, prim)) => {
+                let (expr, label) = self.flat(binary, op, prim, left, right);
+                (expr, Some(label))
+            }
+            Some(TotalBinary::Ordered { tag, reverse, prim }) => {
+                let (left, right) = if let Some(reverse) = reverse {
+                    core::mem::swap(&mut binary.left, &mut binary.right);
+                    binary.op = reverse.bin_op();
+                    (right, left)
+                } else {
+                    (left, right)
+                };
+                (
+                    syn::Expr::Binary(binary),
+                    Some(Lbl::Op(tag, Box::new(left), Box::new(right), prim)),
+                )
+            }
+            None => (syn::Expr::Binary(binary), None),
+        }
+    }
+
     fn scalar(&self, expr: syn::Expr, total_calls: bool) -> (syn::Expr, Option<Lbl>) {
         if !crate::drift::expr_attrs(&expr).is_empty() {
             return (expr, None);
         }
         match expr {
-            syn::Expr::Binary(mut binary) => {
-                let total_calls = total_calls
-                    || self.dedup
-                        && matches!(
-                            binary.op,
-                            syn::BinOp::Eq(_) | syn::BinOp::Ne(_) | syn::BinOp::BitXor(_)
-                        );
-                let left = self.scalar_in_place(&mut binary.left, total_calls);
-                let right = self.scalar_in_place(&mut binary.right, total_calls);
-                let (Some(left), Some(right)) = (left, right) else {
-                    return (syn::Expr::Binary(binary), None);
-                };
-                if self.dedup
-                    && let Some(equality) = schedule::equality(binary.op, &left, &right)
-                {
-                    let (expr, label) = match equality {
-                        Equality::Reflexive => (
-                            crate::constants::literal_expr(PrimTy::Bool, 1, binary.span()),
-                            Lbl::Bool(true),
-                        ),
-                        Equality::Operand {
-                            left: true,
-                            negated,
-                        } => reduced_operand(*binary.left, left, negated),
-                        Equality::Operand {
-                            left: false,
-                            negated,
-                        } => reduced_operand(*binary.right, right, negated),
-                    };
-                    return (expr, Some(label));
-                }
-                match schedule::total_binary(binary.op, &left, &right) {
-                    Some(TotalBinary::Flat(op, prim)) => {
-                        let (expr, label) = self.flat(binary, op, prim, left, right);
-                        (expr, Some(label))
-                    }
-                    Some(TotalBinary::Ordered { tag, reverse, prim }) => {
-                        let (left, right) = if let Some(reverse) = reverse {
-                            core::mem::swap(&mut binary.left, &mut binary.right);
-                            binary.op = reverse.bin_op();
-                            (right, left)
-                        } else {
-                            (left, right)
-                        };
-                        (
-                            syn::Expr::Binary(binary),
-                            Some(Lbl::Op(tag, Box::new(left), Box::new(right), prim)),
-                        )
-                    }
-                    None => (syn::Expr::Binary(binary), None),
-                }
-            }
+            syn::Expr::Binary(binary) => self.binary(binary, total_calls),
             syn::Expr::Unary(mut unary) if self.dedup && matches!(unary.op, syn::UnOp::Not(_)) => {
                 if let Some(inner) = self.scalar_in_place(&mut unary.expr, total_calls)
                     && inner.prim() == Some(PrimTy::Bool)
@@ -389,6 +407,24 @@ impl Walker<'_, '_> {
             let expr = tail_expr_mut(block).expect("proven scalar tail");
             return (core::mem::replace(expr, empty_expr()), Some(value));
         }
+        if !complementary
+            && let Some((tag, negated, keep_then)) = schedule::literal_branch(&then, &otherwise)
+        {
+            let (block, operand) = if keep_then {
+                (&mut branch.then_branch, then)
+            } else {
+                (&mut else_block.block, otherwise)
+            };
+            let expr = tail_expr_mut(block).expect("proven scalar tail");
+            let operand = (core::mem::replace(expr, empty_expr()), operand);
+            let cond = if negated {
+                negate(*branch.cond, cond_label)
+            } else {
+                (*branch.cond, cond_label)
+            };
+            let (expr, label) = logical(tag, cond, operand, true);
+            return (expr, Some(label));
+        }
         if then == Lbl::Bool(true) {
             (*branch.cond, Some(value))
         } else {
@@ -545,27 +581,71 @@ fn reduced_operand(expr: syn::Expr, label: Lbl, negated: bool) -> (syn::Expr, Lb
     }
 }
 
+/// The canonical chain of `left` and `right` joined by the logical operator `tag` over total
+/// booleans, nested chains of the same operator flattened into one. With `reduce`, repeated
+/// operands and identity literals leave and an absorbing literal decides the chain.
+fn logical(
+    tag: char,
+    left: (syn::Expr, Lbl),
+    right: (syn::Expr, Lbl),
+    reduce: bool,
+) -> (syn::Expr, Lbl) {
+    fn collect(tag: char, (expr, label): (syn::Expr, Lbl), out: &mut Vec<(Lbl, syn::Expr)>) {
+        match (expr, label) {
+            (syn::Expr::Binary(binary), Lbl::Op(inner, left, right, _))
+                if inner == tag
+                    && binary.attrs.is_empty()
+                    && schedule::logical_tag(binary.op) == Some(tag) =>
+            {
+                collect(tag, (*binary.left, *left), out);
+                collect(tag, (*binary.right, *right), out);
+            }
+            (expr, label) => out.push((label, expr)),
+        }
+    }
+    let span = left.0.span();
+    let mut operands = Vec::new();
+    collect(tag, left, &mut operands);
+    collect(tag, right, &mut operands);
+    if let Some(value) = schedule::canonical_operands(tag, &mut operands, reduce) {
+        return (
+            crate::constants::literal_expr(PrimTy::Bool, u128::from(value), span),
+            Lbl::Bool(value),
+        );
+    }
+    let op = if tag == '∧' {
+        syn::BinOp::And(syn::token::AndAnd::default())
+    } else {
+        syn::BinOp::Or(syn::token::OrOr::default())
+    };
+    let (label, expr) =
+        schedule::balanced(operands, &mut |(left_label, left), (right_label, right)| {
+            (
+                Lbl::Op(
+                    tag,
+                    Box::new(left_label),
+                    Box::new(right_label),
+                    PrimTy::Bool,
+                ),
+                syn::Expr::Binary(syn::ExprBinary {
+                    attrs: Vec::new(),
+                    left: Box::new(left),
+                    op,
+                    right: Box::new(right),
+                }),
+            )
+        });
+    (expr, label)
+}
+
 fn negate(expr: syn::Expr, label: Lbl) -> (syn::Expr, Lbl) {
     let span = expr.span();
     match (expr, label) {
         (syn::Expr::Unary(unary), Lbl::Not(inner)) => (*unary.expr, *inner),
-        (syn::Expr::Binary(mut binary), Lbl::Op(tag @ ('∧' | '∨'), left, right, _)) => {
-            let (left_expr, left) =
-                negate(core::mem::replace(&mut *binary.left, empty_expr()), *left);
-            let (right_expr, right) =
-                negate(core::mem::replace(&mut *binary.right, empty_expr()), *right);
-            *binary.left = left_expr;
-            *binary.right = right_expr;
-            let tag = if tag == '∧' { '∨' } else { '∧' };
-            binary.op = if tag == '∧' {
-                syn::BinOp::And(syn::token::AndAnd::default())
-            } else {
-                syn::BinOp::Or(syn::token::OrOr::default())
-            };
-            (
-                syn::Expr::Binary(binary),
-                Lbl::Op(tag, Box::new(left), Box::new(right), PrimTy::Bool),
-            )
+        (syn::Expr::Binary(binary), Lbl::Op(tag @ ('∧' | '∨'), left, right, _)) => {
+            let left = negate(*binary.left, *left);
+            let right = negate(*binary.right, *right);
+            logical(schedule::dual(tag), left, right, false)
         }
         (syn::Expr::Binary(mut binary), label @ Lbl::Op('<' | '≤' | '=' | '!', ..)) => {
             let complement = schedule::not_label(label);

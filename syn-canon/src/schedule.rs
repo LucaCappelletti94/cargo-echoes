@@ -668,21 +668,14 @@ fn comparison(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<TotalBinary
     })
 }
 
-/// Negate a total boolean label without changing logical operand order, a
-/// comparison of integers or booleans turning into its complement.
+/// Negate a total boolean label, a comparison of integers or booleans turning into its
+/// complement and a logical chain into the canonical chain of its dual operator.
 pub(crate) fn not_label(operand: Lbl) -> Lbl {
     match operand {
         Lbl::Not(inner) => *inner,
         Lbl::Bool(value) => Lbl::Bool(!value),
-        Lbl::Op(tag @ ('∧' | '∨'), mut left, mut right, _) => {
-            *left = not_label(*left);
-            *right = not_label(*right);
-            Lbl::Op(
-                if tag == '∧' { '∨' } else { '∧' },
-                left,
-                right,
-                PrimTy::Bool,
-            )
+        Lbl::Op(tag @ ('∧' | '∨'), left, right, _) => {
+            logical_label(dual(tag), not_label(*left), not_label(*right))
         }
         Lbl::Op('<', left, right, prim) => Lbl::Op('≤', right, left, prim),
         Lbl::Op('≤', left, right, prim) => Lbl::Op('<', right, left, prim),
@@ -695,6 +688,84 @@ pub(crate) fn not_label(operand: Lbl) -> Lbl {
 /// The complement of a `<=` or `!=` condition, which an `if` tests with its branches exchanged.
 pub(crate) fn positive_condition(cond: &Lbl) -> Option<Lbl> {
     matches!(cond, Lbl::Op('≤' | '!', ..)).then(|| not_label(cond.clone()))
+}
+
+/// The label tag of `&&` or `||`.
+pub(crate) fn logical_tag(bin_op: syn::BinOp) -> Option<char> {
+    match bin_op {
+        syn::BinOp::And(_) => Some('∧'),
+        syn::BinOp::Or(_) => Some('∨'),
+        _ => None,
+    }
+}
+
+/// The other logical operator, which De Morgan's laws exchange under negation.
+pub(crate) fn dual(tag: char) -> char {
+    if tag == '∧' { '∨' } else { '∧' }
+}
+
+/// Put the operands of one chain of `&&` or `||` over total booleans in label order. With
+/// `reduce`, repeated operands and identity literals leave the chain, and an absorbing literal
+/// or an emptied chain returns the chain's value.
+pub(crate) fn canonical_operands<T>(
+    tag: char,
+    operands: &mut Vec<(Lbl, T)>,
+    reduce: bool,
+) -> Option<bool> {
+    let identity = tag == '∧';
+    if reduce {
+        if operands
+            .iter()
+            .any(|(label, _)| *label == Lbl::Bool(!identity))
+        {
+            return Some(!identity);
+        }
+        operands.retain(|(label, _)| *label != Lbl::Bool(identity));
+    }
+    operands.sort_by(|a, b| a.0.cmp(&b.0));
+    if reduce {
+        operands.dedup_by(|a, b| a.0 == b.0);
+        if operands.is_empty() {
+            return Some(identity);
+        }
+    }
+    None
+}
+
+/// The canonical label of `left` and `right` joined by the logical operator `tag`, nested
+/// chains of the same operator flattened into one.
+pub(crate) fn logical_label(tag: char, left: Lbl, right: Lbl) -> Lbl {
+    fn collect(tag: char, label: Lbl, out: &mut Vec<(Lbl, ())>) {
+        match label {
+            Lbl::Op(inner, left, right, _) if inner == tag => {
+                collect(tag, *left, out);
+                collect(tag, *right, out);
+            }
+            other => out.push((other, ())),
+        }
+    }
+    let mut operands = Vec::new();
+    collect(tag, left, &mut operands);
+    collect(tag, right, &mut operands);
+    if let Some(value) = canonical_operands(tag, &mut operands, true) {
+        return Lbl::Bool(value);
+    }
+    balanced(
+        operands.into_iter().map(|(label, ())| label).collect(),
+        &mut |left, right| Lbl::Op(tag, Box::new(left), Box::new(right), PrimTy::Bool),
+    )
+}
+
+/// Join `items` in order into a balanced binary tree, so a chain of `n` operands nests
+/// `log2(n)` deep.
+pub(crate) fn balanced<T>(mut items: Vec<T>, join: &mut impl FnMut(T, T) -> T) -> T {
+    if items.len() == 1 {
+        return items.pop().expect("one item");
+    }
+    let right = items.split_off(items.len() / 2);
+    let left = balanced(items, join);
+    let right = balanced(right, join);
+    join(left, right)
 }
 
 /// How an equality over total scalar operands reduces.
@@ -1187,8 +1258,15 @@ fn label_binary(
     } else {
         match total_binary(bin.op, &left, &right) {
             Some(TotalBinary::Ordered {
-                tag: '∧' | '∨', ..
-            }) if !bin.attrs.is_empty() => Lbl::Other(op_text(bin.op), vec![left, right]),
+                tag: tag @ ('∧' | '∨'),
+                ..
+            }) => {
+                if bin.attrs.is_empty() {
+                    logical_label(tag, left, right)
+                } else {
+                    Lbl::Other(op_text(bin.op), vec![left, right])
+                }
+            }
             Some(TotalBinary::Ordered { tag, reverse, prim }) => {
                 let (lo, hi) = if reverse.is_some() {
                     (right, left)
@@ -1459,16 +1537,40 @@ pub(crate) fn branch_value(cond: &Lbl, then: &Lbl, otherwise: &Lbl) -> Option<Lb
         return None;
     }
     match (then, otherwise) {
-        (Lbl::Bool(true), Lbl::Bool(false)) => Some(cond.clone()),
-        (Lbl::Bool(false), Lbl::Bool(true)) => Some(not_label(cond.clone())),
-        _ => {
-            let prim = then.prim().filter(|prim| otherwise.prim() == Some(*prim))?;
-            let children = match positive_condition(cond) {
-                Some(positive) => alloc::vec![positive, otherwise.clone(), then.clone()],
-                None => alloc::vec![cond.clone(), then.clone(), otherwise.clone()],
-            };
-            Some(Lbl::Select(children, prim))
-        }
+        (Lbl::Bool(true), Lbl::Bool(false)) => return Some(cond.clone()),
+        (Lbl::Bool(false), Lbl::Bool(true)) => return Some(not_label(cond.clone())),
+        _ => {}
+    }
+    if let Some((tag, negated, keep_then)) = literal_branch(then, otherwise) {
+        let cond = if negated {
+            not_label(cond.clone())
+        } else {
+            cond.clone()
+        };
+        let operand = if keep_then { then } else { otherwise };
+        return Some(logical_label(tag, cond, operand.clone()));
+    }
+    let prim = then.prim().filter(|prim| otherwise.prim() == Some(*prim))?;
+    let children = match positive_condition(cond) {
+        Some(positive) => alloc::vec![positive, otherwise.clone(), then.clone()],
+        None => alloc::vec![cond.clone(), then.clone(), otherwise.clone()],
+    };
+    Some(Lbl::Select(children, prim))
+}
+
+/// The logical operator an `if` over `bool` branches with one literal branch reads as: its
+/// tag, whether the condition enters negated, and whether the `then` branch is the other
+/// operand.
+pub(crate) fn literal_branch(then: &Lbl, otherwise: &Lbl) -> Option<(char, bool, bool)> {
+    if then.prim() != Some(PrimTy::Bool) || otherwise.prim() != Some(PrimTy::Bool) {
+        return None;
+    }
+    match (then, otherwise) {
+        (_, Lbl::Bool(false)) => Some(('∧', false, true)),
+        (Lbl::Bool(true), _) => Some(('∨', false, false)),
+        (Lbl::Bool(false), _) => Some(('∧', true, false)),
+        (_, Lbl::Bool(true)) => Some(('∨', true, true)),
+        _ => None,
     }
 }
 

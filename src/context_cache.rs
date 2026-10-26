@@ -154,6 +154,9 @@ pub mod alpha {
     pub fn unset(flag: bool) -> bool {
         flag == false
     }
+    pub fn both(flag: bool, other: bool) -> bool {
+        if other { flag } else { false }
+    }
 }
 mod custom {
     macro_rules! vec {

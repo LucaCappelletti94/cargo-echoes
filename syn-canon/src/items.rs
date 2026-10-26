@@ -1508,6 +1508,10 @@ impl<'a> Observations<'a> {
             reduced
         } else {
             match crate::schedule::total_binary(binary.op, &left, &right)? {
+                crate::schedule::TotalBinary::Ordered {
+                    tag: tag @ ('∧' | '∨'),
+                    ..
+                } => crate::schedule::logical_label(tag, left, right),
                 crate::schedule::TotalBinary::Ordered { tag, reverse, prim } => {
                     let (left, right) = if reverse.is_some() {
                         (right, left)

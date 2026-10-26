@@ -141,10 +141,6 @@ fn demorgan_pushes_into_ordered_operands_of_both_kinds() {
 #[test]
 fn demorgan_guards_keep_order_structure_and_operand_proof() {
     separate(
-        "fn f(a: bool, b: bool) -> bool { !(a && b) }",
-        "fn f(a: bool, b: bool) -> bool { !(b && a) }",
-    );
-    separate(
         "fn f(a: bool, b: bool, c: bool) -> bool { !(a || (b && c)) }",
         "fn f(a: bool, b: bool, c: bool) -> bool { !a || (!b || !c) }",
     );
