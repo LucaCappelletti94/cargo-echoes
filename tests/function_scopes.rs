@@ -133,3 +133,65 @@ fn a_super_glob_reads_the_formatting_macros_of_the_parent_module() {
     };
     assert_ne!(past_root("x"), past_root("y"));
 }
+
+#[test]
+fn reflexive_module_views_respect_primitive_shadowing() {
+    let body = |expression: &str| format!("fn f(x: u32) -> bool {{ {expression} }}");
+    assert_eq!(
+        module_view("", &body("x == x")),
+        module_view("", &body("true")),
+    );
+    let root = "#[derive(PartialEq)] pub struct Token;";
+    let shadowed = |expression: &str| format!("use super::Token as u32; {}", body(expression));
+    assert_ne!(
+        module_view(root, &shadowed("x == x")),
+        module_view(root, &shadowed("true")),
+    );
+}
+
+/// The canonical form of the whole file under the compilation-failure mode.
+fn failing_form(source: &str) -> CanonicalForm {
+    syn_canon::canonicalize_failing(
+        syn::parse_str(source).unwrap_or_else(|error| panic!("{source}: {error}")),
+    )
+}
+
+#[test]
+fn proven_reflexive_equalities_fold_in_the_borrowed_view() {
+    assert_eq!(
+        view("fn f(x: u32) -> bool { x == x }"),
+        view("fn f(x: u32) -> bool { true }")
+    );
+    assert_eq!(
+        view("fn f(flag: bool) -> bool { flag == flag }"),
+        view("fn f(flag: bool) -> bool { true }")
+    );
+    assert_eq!(
+        view("fn f(x: u32) -> bool { (x & 7u32) == (x & 7u32) }"),
+        view("fn f(x: u32) -> bool { true }")
+    );
+    assert_eq!(
+        view("fn h(x: u32) -> u32 { x & 7u32 }\nfn f(x: u32) -> bool { h(x) == h(x) }"),
+        view("fn h(x: u32) -> u32 { x & 7u32 }\nfn f(x: u32) -> bool { true }")
+    );
+    assert_eq!(
+        view("fn f(x: u32) -> bool { read(); x == x }"),
+        view("fn f(x: u32) -> bool { read(); true }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_reflexive_source_distinction() {
+    assert_ne!(
+        failing_form("fn f(x: u32) -> bool { x == x }"),
+        failing_form("fn f(x: u32) -> bool { true }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_reflexive_comparison() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f(x: u32) -> bool {{ {body} }}\n}}")
+    };
+    assert_ne!(view(&source("x == x")), view(&source("true")));
+}

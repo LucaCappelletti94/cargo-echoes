@@ -627,6 +627,50 @@ fn destructor_sensitive_tail_returns_do_not_group_in_functions() {
     assert_eq!(group.remedy, Some(Remedy::Delete));
 }
 
+const REFLEXIVE_FIXTURE: &str = "tests/fixtures/reflexivews";
+
+#[test]
+fn reflexive_doctests_group_only_proven_primitive_comparisons() {
+    let report = Echoes::default().run(REFLEXIVE_FIXTURE).unwrap();
+    let mut groups: Vec<Vec<&str>> = report
+        .groups
+        .iter()
+        .map(|group| {
+            assert_eq!(group.kind, echoes::Kind::Doctest);
+            group.sites.iter().map(|site| site.item.as_str()).collect()
+        })
+        .collect();
+    for group in &mut groups {
+        group.sort_unstable();
+    }
+    assert_eq!(
+        groups,
+        [vec!["reflexivews::Folded", "reflexivews::Written"]]
+    );
+}
+
+#[test]
+fn reflexive_functions_keep_float_partial_and_custom_equality_separate() {
+    let report = Echoes::default()
+        .functions()
+        .fn_min_tokens(0)
+        .run(REFLEXIVE_FIXTURE)
+        .unwrap();
+    let mut groups: Vec<Vec<&str>> = report
+        .groups
+        .iter()
+        .filter(|group| group.kind == echoes::Kind::Function)
+        .map(|group| group.sites.iter().map(|site| site.item.as_str()).collect())
+        .collect();
+    for group in &mut groups {
+        group.sort_unstable();
+    }
+    assert_eq!(
+        groups,
+        [vec!["reflexivews::folded", "reflexivews::written"]]
+    );
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

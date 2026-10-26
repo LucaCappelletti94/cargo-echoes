@@ -1,0 +1,969 @@
+[
+  {
+    "id": "r_bool",
+    "family": "reflexive",
+    "a": "fn f(x:bool)->bool{x==x} fn main(){for x in [false,true]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:bool)->bool{true} fn main(){for x in [false,true]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_u8",
+    "family": "reflexive",
+    "a": "fn f(x:u8)->bool{x==x} fn main(){for x in [u8::MIN,0u8,u8::MAX]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:u8)->bool{true} fn main(){for x in [u8::MIN,0u8,u8::MAX]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_u16",
+    "family": "reflexive",
+    "a": "fn f(x:u16)->bool{x==x} fn main(){for x in [u16::MIN,0u16,u16::MAX]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:u16)->bool{true} fn main(){for x in [u16::MIN,0u16,u16::MAX]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_u32",
+    "family": "reflexive",
+    "a": "fn f(x:u32)->bool{x==x} fn main(){for x in [u32::MIN,0u32,u32::MAX]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:u32)->bool{true} fn main(){for x in [u32::MIN,0u32,u32::MAX]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_u64",
+    "family": "reflexive",
+    "a": "fn f(x:u64)->bool{x==x} fn main(){for x in [u64::MIN,0u64,u64::MAX]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:u64)->bool{true} fn main(){for x in [u64::MIN,0u64,u64::MAX]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_u128",
+    "family": "reflexive",
+    "a": "fn f(x:u128)->bool{x==x} fn main(){for x in [u128::MIN,0u128,u128::MAX]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:u128)->bool{true} fn main(){for x in [u128::MIN,0u128,u128::MAX]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_i8",
+    "family": "reflexive",
+    "a": "fn f(x:i8)->bool{x==x} fn main(){for x in [i8::MIN,0i8,i8::MAX]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:i8)->bool{true} fn main(){for x in [i8::MIN,0i8,i8::MAX]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_i16",
+    "family": "reflexive",
+    "a": "fn f(x:i16)->bool{x==x} fn main(){for x in [i16::MIN,0i16,i16::MAX]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:i16)->bool{true} fn main(){for x in [i16::MIN,0i16,i16::MAX]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_i32",
+    "family": "reflexive",
+    "a": "fn f(x:i32)->bool{x==x} fn main(){for x in [i32::MIN,0i32,i32::MAX]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:i32)->bool{true} fn main(){for x in [i32::MIN,0i32,i32::MAX]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_i64",
+    "family": "reflexive",
+    "a": "fn f(x:i64)->bool{x==x} fn main(){for x in [i64::MIN,0i64,i64::MAX]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:i64)->bool{true} fn main(){for x in [i64::MIN,0i64,i64::MAX]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_i128",
+    "family": "reflexive",
+    "a": "fn f(x:i128)->bool{x==x} fn main(){for x in [i128::MIN,0i128,i128::MAX]{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:i128)->bool{true} fn main(){for x in [i128::MIN,0i128,i128::MAX]{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_total_expression",
+    "family": "reflexive",
+    "a": "fn f(x:u32)->bool{(x&7u32)==(x&7u32)} fn main(){println!(\"{}\",f(9u32));}",
+    "b": "fn f(x:u32)->bool{true} fn main(){println!(\"{}\",f(9u32));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_total_helper",
+    "family": "reflexive",
+    "a": "fn helper(x:u32)->u32{x&7u32} fn f(x:u32)->bool{helper(x)==helper(x)} fn main(){println!(\"{}\",f(9u32));}",
+    "b": "fn helper(x:u32)->u32{x&7u32} fn f(x:u32)->bool{true} fn main(){println!(\"{}\",f(9u32));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_helper_summary",
+    "family": "reflexive",
+    "a": "fn helper(x:u32)->bool{x==x} fn f(x:u32)->bool{helper(x)==helper(x)} fn main(){println!(\"{}\",f(9u32));}",
+    "b": "fn helper(x:u32)->bool{true} fn f(x:u32)->bool{true} fn main(){println!(\"{}\",f(9u32));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_preserved_effect",
+    "family": "reflexive",
+    "a": "fn read(){println!(\"effect\");} fn f(x:u32)->bool{read();x==x} fn main(){println!(\"{}\",f(9u32));}",
+    "b": "fn read(){println!(\"effect\");} fn f(x:u32)->bool{read();true} fn main(){println!(\"{}\",f(9u32));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "effect\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "effect\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "effect\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "effect\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_origins",
+    "family": "reflexive",
+    "a": "fn f(x:u32,y:u32)->bool{x==y} fn main(){println!(\"{}\",f(1,2));}",
+    "b": "fn f(x:u32,y:u32)->bool{true} fn main(){println!(\"{}\",f(1,2));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_nan_f32",
+    "family": "reflexive",
+    "a": "fn f(x:f32)->bool{x==x} fn main(){println!(\"{}\",f(f32::NAN));}",
+    "b": "fn f(x:f32)->bool{true} fn main(){println!(\"{}\",f(f32::NAN));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_nan_f64",
+    "family": "reflexive",
+    "a": "fn f(x:f64)->bool{x==x} fn main(){println!(\"{}\",f(f64::NAN));}",
+    "b": "fn f(x:f64)->bool{true} fn main(){println!(\"{}\",f(f64::NAN));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_custom",
+    "family": "reflexive",
+    "a": "struct Token; impl PartialEq for Token{fn eq(&self,_:&Self)->bool{println!(\"eq\");false}} fn f(x:Token)->bool{x==x} fn main(){println!(\"{}\",f(Token));}",
+    "b": "struct Token; impl PartialEq for Token{fn eq(&self,_:&Self)->bool{println!(\"eq\");false}} fn f(x:Token)->bool{true} fn main(){println!(\"{}\",f(Token));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "eq\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "eq\nfalse\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_effectful_calls",
+    "family": "reflexive",
+    "a": "use std::sync::atomic::{AtomicU32,Ordering}; static N:AtomicU32=AtomicU32::new(0); fn read()->u32{N.fetch_add(1,Ordering::SeqCst)} fn f()->bool{read()==read()} fn main(){println!(\"{} {}\",f(),N.load(Ordering::SeqCst));}",
+    "b": "use std::sync::atomic::{AtomicU32,Ordering}; static N:AtomicU32=AtomicU32::new(0); fn read()->u32{N.fetch_add(1,Ordering::SeqCst)} fn f()->bool{true} fn main(){println!(\"{} {}\",f(),N.load(Ordering::SeqCst));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_partial_division",
+    "family": "reflexive",
+    "a": "fn f(x:u32)->bool{(1u32/x)==(1u32/x)} fn main(){std::panic::set_hook(Box::new(|_|{}));println!(\"{}\",f(0));}",
+    "b": "fn f(x:u32)->bool{true} fn main(){std::panic::set_hook(Box::new(|_|{}));println!(\"{}\",f(0));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        },
+        "on": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_partial_overflow",
+    "family": "reflexive",
+    "a": "fn f(x:u8)->bool{(x+1u8)==(x+1u8)} fn main(){std::panic::set_hook(Box::new(|_|{}));println!(\"{}\",f(255));}",
+    "b": "fn f(x:u8)->bool{true} fn main(){std::panic::set_hook(Box::new(|_|{}));println!(\"{}\",f(255));}",
+    "expected": "profile-dependent",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_generic_constraint",
+    "family": "reflexive",
+    "a": "fn f<T>(x:T)->bool{x==x} fn main(){println!(\"{}\",f(1u32));}",
+    "b": "fn f<T>(x:T)->bool{true} fn main(){println!(\"{}\",f(1u32));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": [
+            "E0369"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0369"
+          ],
+          "run": "absent"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "r_borrowed_storage",
+    "family": "reflexive",
+    "a": "fn f(x:u32)->&'static bool{&(x==x)} fn main(){println!(\"{}\",f(1));}",
+    "b": "fn f(x:u32)->&'static bool{&true} fn main(){println!(\"{}\",f(1));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": [
+            "E0515"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0515"
+          ],
+          "run": "absent"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "reflexive_bool_local",
+    "family": "reflexive",
+    "a": "fn main(){let x = true; let a = x == x; println!(\"{x} {a}\");}",
+    "b": "fn main(){let x = true; let a = true; println!(\"{x} {a}\");}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "reflexive_u8_local",
+    "family": "reflexive",
+    "a": "fn main(){let x = 200u8; let a = x == x; println!(\"{x} {a}\");}",
+    "b": "fn main(){let x = 200u8; let a = true; println!(\"{x} {a}\");}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "200 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "200 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "200 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "200 true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "reflexive_total_u8_local",
+    "family": "reflexive",
+    "a": "fn main(){let x = 5u8; let a = (x & 7u8) == (x & 7u8); println!(\"{x} {a}\");}",
+    "b": "fn main(){let x = 5u8; let a = true; println!(\"{x} {a}\");}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5 true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "reflexive_total_helper_u8",
+    "family": "reflexive",
+    "a": "fn h(x: u8) -> bool { x == x }\nfn main(){let a = h(5u8) == h(5u8); println!(\"{a}\");}",
+    "b": "fn h(x: u8) -> bool { x == x }\nfn main(){let a = true; println!(\"{a}\");}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "reflexive_observed_helper",
+    "family": "reflexive",
+    "a": "use obs::obs;\n\nfn h(x: u8) -> u8 {\n    #[obs]\n    fn inner(y: u8) -> u8 { y }\n    inner(x)\n}\n\nfn main() {\n    let a = h(5u8) == h(5u8);\n    println!(\"{a}\");\n}\n",
+    "b": "use obs::obs;\n\nfn h(x: u8) -> u8 {\n    #[obs]\n    fn inner(y: u8) -> u8 { y }\n    inner(x)\n}\n\nfn main() {\n    let a = true;\n    println!(\"{a}\");\n}\n",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "{ y }\n{ y }\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "{ y }\n{ y }\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\n"
+        }
+      }
+    },
+    "externs": [
+      "obs"
+    ]
+  }
+]

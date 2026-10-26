@@ -130,6 +130,9 @@ pub mod alpha {
         let zeta: u8 = 0;
         if value > 1u32 { value - 1u32 } else { u32::from(zeta) }
     }
+    pub fn reflexive(value: u32) -> bool {
+        value == value
+    }
 }
 mod custom {
     macro_rules! vec {

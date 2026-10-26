@@ -696,10 +696,13 @@ pub(crate) fn positive_condition(cond: &Lbl) -> Option<Lbl> {
     matches!(cond, Lbl::Op('≤' | '!', ..)).then(|| not_label(cond.clone()))
 }
 
-/// The total boolean operand compared with literal `true`.
-pub(crate) fn true_comparison(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<Lbl> {
+/// A reduced equality over total scalar operands.
+pub(crate) fn equality_label(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<Lbl> {
     if !matches!(bin_op, syn::BinOp::Eq(_)) {
         return None;
+    }
+    if left.prim().is_some() && left == right {
+        return Some(Lbl::Bool(true));
     }
     match (left, right) {
         (other, Lbl::Bool(true)) | (Lbl::Bool(true), other)
@@ -1116,7 +1119,7 @@ fn label_binary(
     let (right, r_sites) = label_expr(renamer, env, &bin.right, consumer, locals, orders);
     sites.extend(r_sites);
     let label = if bin.attrs.is_empty()
-        && let Some(reduced) = true_comparison(bin.op, &left, &right)
+        && let Some(reduced) = equality_label(bin.op, &left, &right)
     {
         reduced
     } else {
@@ -1238,9 +1241,6 @@ fn total_helper(
     call: &syn::ExprCall,
 ) -> Option<PrimTy> {
     let facts = renamer.helper_table.get(helper)?;
-    if !call.attrs.is_empty() || !crate::drift::expr_attrs(&call.func).is_empty() {
-        return None;
-    }
     if call.args.len() != facts.params.len() {
         return None;
     }
@@ -1249,7 +1249,9 @@ fn total_helper(
             return None;
         }
     }
-    Some(facts.result)
+    let mut scan = BranchScan::new();
+    scan.visit_expr_call(call);
+    (scan.valid && !scan.attributed).then_some(facts.result)
 }
 
 /// The label of a method call, the receiver's sites marked on its storage,
