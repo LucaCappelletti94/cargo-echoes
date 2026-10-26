@@ -511,3 +511,49 @@ fn an_observing_impl_retains_the_compound_assignment() {
     };
     assert_ne!(view(&source("x += y;")), view(&source("x = x + y;")));
 }
+
+#[test]
+fn stated_let_annotations_drop_in_the_borrowed_view() {
+    let body = |statements: &str| format!("fn f(x: u32) -> u32 {{ {statements} }}");
+    for (annotated, suffixed) in [
+        ("let v: u32 = 5; v ^ x", "let v = 5u32; v ^ x"),
+        (
+            "let mut v: u32 = 0x10; v += x; v",
+            "let mut v = 16u32; v += x; v",
+        ),
+        ("read(); let v: u32 = 1; v", "read(); let v = 1u32; v"),
+    ] {
+        assert_eq!(view(&body(annotated)), view(&body(suffixed)), "{annotated}");
+    }
+}
+
+#[test]
+fn unproven_let_annotations_stay_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f() -> usize { let v: usize = 5; v }"),
+        view("fn f() -> usize { let v = 5usize; v }")
+    );
+    assert_ne!(
+        view("fn f(x: u32) -> u32 { let v: u32 = x; v }"),
+        view("fn f(x: u32) -> u32 { let v = x; v }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_let_annotation() {
+    assert_ne!(
+        failing_form("fn f() -> u32 { let v: u32 = 5; v }"),
+        failing_form("fn f() -> u32 { let v = 5u32; v }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_let_annotation() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f() -> u32 {{ {body} }}\n}}")
+    };
+    assert_ne!(
+        view(&source("let v: u32 = 5; v")),
+        view(&source("let v = 5u32; v"))
+    );
+}

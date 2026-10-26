@@ -161,6 +161,10 @@ pub mod alpha {
         total += step;
         total
     }
+    pub fn counted() -> u32 {
+        let start: u32 = 1;
+        start
+    }
 }
 mod custom {
     macro_rules! vec {
