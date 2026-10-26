@@ -157,6 +157,10 @@ pub mod alpha {
     pub fn both(flag: bool, other: bool) -> bool {
         if other { flag } else { false }
     }
+    pub fn accumulated(mut total: u32, step: u32) -> u32 {
+        total += step;
+        total
+    }
 }
 mod custom {
     macro_rules! vec {

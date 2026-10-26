@@ -101,10 +101,12 @@ fn opaque_macro_punctuation_spacing_remains_observable() {
 
 #[test]
 fn three_char_operators_count_as_one_body_unit() {
-    let shift = syn_canon::canonicalize(syn::parse_str("fn f(mut x: i32) { x <<= 1; }").unwrap());
-    let assign = syn_canon::canonicalize(syn::parse_str("fn f(mut x: i32) { x = 1; }").unwrap());
+    let shift =
+        syn_canon::canonicalize(syn::parse_str("fn f(mut x: Unknown) { x <<= 1; }").unwrap());
+    let assign =
+        syn_canon::canonicalize(syn::parse_str("fn f(mut x: Unknown) { x = 1; }").unwrap());
     let range = syn_canon::canonicalize(syn::parse_str("fn f() { let _ = 0..=3; }").unwrap());
-    assert_eq!(shift.body_units(), 3);
+    assert_eq!(shift.body_units(), 4);
     assert_eq!(shift.body_units(), assign.body_units());
     assert_eq!(range.body_units(), 7);
 }

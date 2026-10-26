@@ -513,6 +513,35 @@ pub(crate) fn is_assign_op(op: syn::BinOp) -> bool {
     )
 }
 
+/// The plain operator a compound assignment applies to a target of the proven fixed-width
+/// integer or `bool` type `prim`, when the operand is a proven value the native operator
+/// accepts: any proven integer as a shift amount, a value of `prim` otherwise.
+pub(crate) fn compound_operator(op: syn::BinOp, prim: PrimTy, operand: &Lbl) -> Option<syn::BinOp> {
+    let plain = match op {
+        syn::BinOp::AddAssign(_) => syn::BinOp::Add(syn::token::Plus::default()),
+        syn::BinOp::SubAssign(_) => syn::BinOp::Sub(syn::token::Minus::default()),
+        syn::BinOp::MulAssign(_) => syn::BinOp::Mul(syn::token::Star::default()),
+        syn::BinOp::DivAssign(_) => syn::BinOp::Div(syn::token::Slash::default()),
+        syn::BinOp::RemAssign(_) => syn::BinOp::Rem(syn::token::Percent::default()),
+        syn::BinOp::BitAndAssign(_) => syn::BinOp::BitAnd(syn::token::And::default()),
+        syn::BinOp::BitOrAssign(_) => syn::BinOp::BitOr(syn::token::Or::default()),
+        syn::BinOp::BitXorAssign(_) => syn::BinOp::BitXor(syn::token::Caret::default()),
+        syn::BinOp::ShlAssign(_) => syn::BinOp::Shl(syn::token::Shl::default()),
+        syn::BinOp::ShrAssign(_) => syn::BinOp::Shr(syn::token::Shr::default()),
+        _ => return None,
+    };
+    if prim == PrimTy::Bool && BitwiseOp::from_bin_op(plain).is_none() {
+        return None;
+    }
+    let accepted = if matches!(plain, syn::BinOp::Shl(_) | syn::BinOp::Shr(_)) {
+        matches!(operand, Lbl::Int(_, None)) || matches!(operand.prim(), Some(PrimTy::Int { .. }))
+    } else {
+        operand.prim() == Some(prim)
+            || matches!(prim, PrimTy::Int { .. }) && matches!(operand, Lbl::Int(_, None))
+    };
+    accepted.then_some(plain)
+}
+
 /// The kind tag of a binary operator the labels keep distinct.
 fn op_text(op: syn::BinOp) -> String {
     match op {
