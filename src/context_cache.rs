@@ -133,6 +133,12 @@ pub mod alpha {
     pub fn reflexive(value: u32) -> bool {
         value == value
     }
+    pub fn xor(value: u32) -> u32 {
+        value ^ value
+    }
+    pub fn xor_literal(value: u32) -> u32 {
+        value ^ 7 ^ value
+    }
 }
 mod custom {
     macro_rules! vec {

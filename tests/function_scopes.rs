@@ -195,3 +195,72 @@ fn an_observing_impl_retains_the_reflexive_comparison() {
     };
     assert_ne!(view(&source("x == x")), view(&source("true")));
 }
+
+#[test]
+fn proven_xor_cancellations_fold_in_the_borrowed_view() {
+    assert_eq!(
+        view("fn f(x: u32) -> u32 { x ^ x }"),
+        view("fn f(x: u32) -> u32 { 0u32 }")
+    );
+    assert_eq!(
+        view("fn f(p: bool) -> bool { p ^ p }"),
+        view("fn f(p: bool) -> bool { false }")
+    );
+    assert_eq!(
+        view("fn f(x: u32, y: u32) -> u32 { x ^ y ^ x }"),
+        view("fn f(x: u32, y: u32) -> u32 { y }")
+    );
+    assert_eq!(
+        view("fn f(x: u32) -> u32 { x ^ x ^ x }"),
+        view("fn f(x: u32) -> u32 { x }")
+    );
+    assert_eq!(
+        view("fn f(x: u32) -> u32 { x ^ 0u32 }"),
+        view("fn f(x: u32) -> u32 { x }")
+    );
+    assert_eq!(
+        view("fn f(x: u32) -> u32 { read(); x ^ x }"),
+        view("fn f(x: u32) -> u32 { read(); 0u32 }")
+    );
+    assert_eq!(
+        view("fn h(x: u32) -> u32 { x ^ 7u32 }\nfn f(x: u32) -> u32 { h(x) ^ h(x) }"),
+        view("fn h(x: u32) -> u32 { x ^ 7u32 }\nfn f(x: u32) -> u32 { 0u32 }")
+    );
+}
+
+#[test]
+fn unproven_xor_operands_do_not_cancel_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f() -> u32 { read() ^ read() }"),
+        view("fn f() -> u32 { 0u32 }")
+    );
+    assert_ne!(
+        view("fn f(x: u32) -> u32 { (1u32 / x) ^ (1u32 / x) }"),
+        view("fn f(x: u32) -> u32 { 0u32 }")
+    );
+    assert_ne!(
+        view("fn f(x: u32, y: u32) -> u32 { x ^ y ^ x }"),
+        view("fn f(x: u32, y: u32) -> u32 { 0u32 }")
+    );
+    let custom = "#[derive(Clone, Copy)] struct T;\nimpl core::ops::BitXor for T {\n    type Output = T;\n    fn bitxor(self, _other: T) -> T { T }\n}\n";
+    assert_ne!(
+        view(&format!("{custom}fn f(x: T) -> T {{ x ^ x }}")),
+        view(&format!("{custom}fn f(x: T) -> T {{ T }}"))
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_xor_source_distinction() {
+    assert_ne!(
+        failing_form("fn f(x: u32) -> u32 { x ^ x }"),
+        failing_form("fn f(x: u32) -> u32 { 0u32 }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_xor_cancellation() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f(x: u32) -> u32 {{ {body} }}\n}}")
+    };
+    assert_ne!(view(&source("x ^ x")), view(&source("0u32")));
+}

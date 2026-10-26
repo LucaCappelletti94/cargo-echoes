@@ -94,7 +94,7 @@ fn composed_schedule_constants_and_algebra_laws() {
         "fn f(a: u32, b: u32) -> u32 { (a | a) & (b & 1u32 & 2u32) }",
         "fn g(x: u32, y: u32) -> u32 { x & (y & 0u32) }",
     );
-    separate(
+    same(
         "fn f(a: u32, b: u32) -> u32 { a & (b ^ 0u32) }",
         "fn g(x: u32, y: u32) -> u32 { x & y }",
     );

@@ -725,17 +725,51 @@ pub(crate) fn collect_leaves(op: BitwiseOp, prim: PrimTy, lbl: Lbl, out: &mut Ve
     }
 }
 
-/// A flat chain's canonical label, sorted leaves with the literal
-/// subset folded, a lone literal standing for the whole chain.
+/// The canonical value of a primitive flat chain.
 pub(crate) fn flat_label(op: BitwiseOp, prim: PrimTy, mut leaves: Vec<Lbl>) -> Lbl {
     leaves.sort();
-    if op != BitwiseOp::Xor {
+    if op == BitwiseOp::Xor {
+        retain_odd(&mut leaves, PartialEq::eq);
+    } else {
         leaves.dedup();
     }
     fold_literal_leaves(op, prim, &mut leaves);
-    match leaves.as_slice() {
-        [only] => only.clone(),
-        _ => Lbl::Flat(op.tag(), leaves, prim),
+    if op == BitwiseOp::Xor {
+        leaves.retain(|leaf| leaf.literal_bits() != Some(0));
+        if leaves.is_empty() {
+            return literal_label(prim, 0);
+        }
+    }
+    if leaves.len() == 1 {
+        match leaves.pop().expect("a single operand") {
+            Lbl::Int(bits, None) => literal_label(prim, bits),
+            leaf => leaf,
+        }
+    } else {
+        Lbl::Flat(op.tag(), leaves, prim)
+    }
+}
+
+/// Retain odd multiplicities in a sorted chain without cloning its operands.
+pub(crate) fn retain_odd<T>(operands: &mut Vec<T>, mut same: impl FnMut(&T, &T) -> bool) {
+    let mut pending = None;
+    *operands = core::mem::take(operands)
+        .into_iter()
+        .filter_map(|operand| {
+            let Some(previous) = pending.take() else {
+                pending = Some(operand);
+                return None;
+            };
+            if same(&previous, &operand) {
+                None
+            } else {
+                pending = Some(operand);
+                Some(previous)
+            }
+        })
+        .collect();
+    if let Some(last) = pending {
+        operands.push(last);
     }
 }
 
