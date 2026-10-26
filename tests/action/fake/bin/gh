@@ -129,6 +129,14 @@ case "${1:-}" in
                 fi
                 resp='{"state": "DISMISSED"}'
                 ;;
+              */reviews/*)
+                if [ "${SCEN_GH_REVIEW_EDIT_403:-0}" = "1" ]; then
+                  echo '{"message":"Resource not accessible by integration","status":"403"}'
+                  echo "gh: Resource not accessible by integration (HTTP 403)" >&2
+                  exit 1
+                fi
+                resp='{"state": "COMMENTED"}'
+                ;;
               */reviews)
                 resp='[]'
                 [ -n "${SCEN_REVIEWS:-}" ] && [ -f "$SCEN_REVIEWS" ] && resp="$(cat "$SCEN_REVIEWS")"

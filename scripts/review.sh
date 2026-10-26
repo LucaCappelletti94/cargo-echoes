@@ -286,7 +286,8 @@ support_link='[❤️ Support echoes](https://github.com/sponsors/LucaCappellett
 thread_mark() { printf '<!-- echoes:v1 scope=%s key=%s -->' "$scope_uri" "$1"; }
 review_mark() { printf '<!-- echoes:v1 scope=%s review -->' "$scope_uri"; }
 # This workspace's earlier threads and reviews, cleaned up once the run knows its findings.
-# $1 is the review this run posted, which stays.
+# $1 is the review this run posted, which stays. A request for changes is dismissed, a
+# comment-only summary, which GitHub cannot dismiss, is rewritten to one current sentence.
 cleanup() {
   local keep="${1:-}" id err refused=0 n=0 message reviews
   if [ -z "$scope" ]; then
@@ -315,25 +316,50 @@ cleanup() {
     echo "echoes: the reviews cannot be listed, earlier requests for changes stay"
     return 0
   fi
-  message="No echoes finding of this workspace remains at $head_sha."
-  [ -n "$keep" ] && message="Superseded by the echoes review of $head_sha."
+  local commit="\`$head_sha\`" rewrite rewritten=0 refused_edit=0 state
+  if [ -n "$keep" ]; then
+    message="Superseded by the echoes review of $head_sha."
+    rewrite="Superseded by the $echoes_link review of $commit."
+  elif [ "${found_n:-0}" -gt 0 ] || [ "$local_found" = "1" ]; then
+    message="No echoes finding of this workspace requests changes at $head_sha."
+    rewrite="The open $echoes_link threads carry the findings that remain at $commit."
+  else
+    message="No echoes finding of this workspace remains at $head_sha."
+    rewrite="No $echoes_link finding of this workspace remains at $commit."
+  fi
   n=0
   refused=0
-  while IFS= read -r id; do
+  while IFS=$'\t' read -r id state; do
     [ -n "$id" ] || continue
+    if [ "$state" = "COMMENTED" ]; then
+      [ "$refused_edit" = "1" ] && continue
+      if ! err="$(gh api -X PUT "repos/$repo/pulls/$pr/reviews/$id" -f "body=$rewrite"$'\n\n'"$(review_mark)" 2>&1)"; then
+        if is_forbidden "$err"; then
+          refused_edit=1
+          continue
+        fi
+        printf 'echoes: rewriting review %s failed\n' "$id"
+        printf '%s\n' "$err" | sed 's/^/echoes: /'
+        continue
+      fi
+      rewritten=$((rewritten + 1))
+      continue
+    fi
+    [ "$refused" = "1" ] && continue
     if ! err="$(gh api -X PUT "repos/$repo/pulls/$pr/reviews/$id/dismissals" -f "message=$message" -f event=DISMISS 2>&1)"; then
       if is_forbidden "$err"; then
         refused=1
-        break
+        continue
       fi
       printf 'echoes: dismissing review %s failed\n' "$id"
       printf '%s\n' "$err" | sed 's/^/echoes: /'
       continue
     fi
     n=$((n + 1))
-  done < <(printf '%s\n' "$reviews" | ejq -r --slurpfile dirs "$dirs_file" --arg mark "$(review_mark)" --arg keep "$keep" 'include "echoes";
-    select(type == "object" and .user.login == "github-actions[bot]" and .state == "CHANGES_REQUESTED" and (.id | tostring) != $keep)
+  done < <(printf '%s\n' "$reviews" | ejq -r --slurpfile dirs "$dirs_file" --arg mark "$(review_mark)" --arg keep "$keep" --arg rewrite "$rewrite" 'include "echoes";
+    select(type == "object" and .user.login == "github-actions[bot]" and (.id | tostring) != $keep)
     | (.body // "") as $b
+    | select(.state == "CHANGES_REQUESTED" or (.state == "COMMENTED" and $b != "" and ($b | startswith($rewrite) | not)))
     | select(($b | contains($mark))
         or (($b | contains("<!-- echoes:v1") | not)
             and ($b == "" or ($b | startswith("These duplicates are not on lines"))
@@ -341,9 +367,12 @@ cleanup() {
                  or ($b | test("^[0-9]+ inline copies were not posted")))
             and (([$b | match("`([^`]+):[0-9]+(-[0-9]+)?`").captures[0].string] | .[0]) as $path
                  | ($path == null or ($path | owned($dirs[0]))))))
-    | .id | tostring | select(test("^[0-9]{1,20}$"))')
+    | select(.id | tostring | test("^[0-9]{1,20}$"))
+    | "\(.id)\t\(.state)"')
   [ "$n" -gt 0 ] && echo "echoes: dismissed $n earlier echoes reviews of this workspace"
+  [ "$rewritten" -gt 0 ] && echo "echoes: rewrote $rewritten earlier echoes summaries of this workspace"
   [ "$refused" = "1" ] && echo "echoes: dismissing a review needs pull-requests: write on this job, earlier requests for changes stay"
+  [ "$refused_edit" = "1" ] && echo "echoes: rewriting a review needs pull-requests: write on this job, earlier summaries stay"
   return 0
 }
 rendered=''
@@ -453,13 +482,15 @@ local_comment() {
 # matches stay advice, so it carries no removal suggestion.
 advice_comment() {
   if [ "$kind" = "context" ]; then
-    note="This context is repeated in this scan. A shared helper can carry it once. The other copies are at"
+    note="$echoes_link found this code at the places below too. A shared helper could hold it once."
     [ -n "$others" ] && note="$note"$'\n'"$others"
+    closing='Check that the copies agree in types and behaviour before sharing them.'
   else
-    note="This context matches an upstream dependency context. The accessible APIs are listed first"
+    note="$echoes_link found this code in a dependency. These items match it, the public ones first."
     note="$note"$'\n'"$candidates_md"
+    closing='Check that they agree in types and behaviour before reusing them.'
   fi
-  note="$note"$'\n\n'"Type compatibility and behavior equivalence need human review."
+  note="$note"$'\n\n'"$closing"
   stop="$end"
   url="$(blob_url "$head_sha" "$p" "$line" "$end")"
   comment="$note"
@@ -672,6 +703,8 @@ readonly=0
 rate_limited=0
 posted_local=0
 posted_reuse=0
+# The rows GitHub refused one by one, listed in the body instead of inline.
+refused_n=0
 planned_n="$(cat "$comments" "$reuse_tmp" | wc -l)"
 post_one() {
   local row="$1" p line stop err item g close loc
@@ -691,6 +724,7 @@ post_one() {
     printf 'echoes: %s:%s %s\n' "$(escape_data "$p")" "$line" "$(escape_data "$item")"
     printf '%s\n' "$err" | sed 's/^/echoes: /'
     loc="$(blob_link "$head_sha" "$p" "$line" "$close")"
+    refused_n=$((refused_n + 1))
     if printf '%s' "$err" | grep -qE 'HTTP 422|"status": "422"'; then
       out_of_range="$out_of_range- group $g  $loc  $(md_code "$item")"$'\n'
     else
@@ -731,8 +765,8 @@ if [ "$rate_omitted" -gt 0 ]; then
   rate_block="$rate_block$rate_unposted"$'\n'
   sum_append "$rate_block"
 fi
-# A review with no comment of its own needs a body. Sites GitHub could not
-# anchor inline are listed with permalinks to the head commit.
+# The summary review carries what no inline comment can, the request for changes on
+# removable copies and the sites GitHub could not anchor inline, linked at the head commit.
 review_event='REQUEST_CHANGES'
 [ "$local_found" = "1" ] || review_event='COMMENT'
 review=(-f "event=$review_event")
@@ -747,32 +781,40 @@ body_section() {
   [ "$more" -gt 0 ] && printf '\n%s' "and $more more, they are in the run summary $run_url"
   return 0
 }
-# The review body, each list within $1 bytes.
+# The lists of the review body, each within $1 bytes.
 review_text() {
   local text
-  text="$(body_section 'These duplicates are not on lines GitHub shows in this pull request diff, the inline comment cannot attach there. The links point at the copies on the head commit.' "$out_of_range" "$1")"
+  text="$(body_section 'These duplicates are on lines this diff does not show, so they have no inline comment. The links point at the head commit.' "$out_of_range" "$1")"
   [ -n "$failed_sites" ] && text="$text"$'\n\n'"$(body_section 'Duplicates echoes could not comment inline' "$failed_sites" "$1")"
   [ "$omitted" -gt 0 ] && text="$text"$'\n\n'"$omitted inline copies were not posted, they are listed in the run summary $run_url"
   [ "$rate_omitted" -gt 0 ] && text="$text"$'\n\n'"$rate_omitted inline copies were not posted because the api rate limit was reached, they are listed in the run summary $run_url"
-  printf '%s' "$text"
+  printf '%s' "${text#$'\n\n'}"
 }
+review_lists="$(review_text 1000000000)"
+posted_n=$((posted_local + posted_reuse - refused_n))
+# Advice alone requests nothing and its inline comments say it all.
+if [ "$local_found" != "1" ] && [ -z "$review_lists" ]; then
+  echo "echoes: posted $posted_n inline comments, the advice needs no summary review"
+  echo "posted" > "$status"
+  [ "$rate_limited" = "1" ] || cleanup
+  exit 0
+fi
+if [ "$local_found" = "1" ] && [ "$posted_n" -eq 0 ] && [ -z "$review_lists" ]; then
+  review_lead="$echoes_link still finds the duplicates it reported on earlier commits, their review threads stay open."
+else
+  review_lead="$echoes_link found repeated code in this pull request."
+  [ "$local_found" = "1" ] && review_lead="$echoes_link found duplicates in this pull request."
+  [ "$posted_n" -gt 0 ] && review_lead="$review_lead The inline comments name them."
+fi
 review_sites="$(ejq -r 'include "echoes"; [report_sites | .s | site_line] | capped | .[:1500]' "$report")"
-review_footer="$echoes_link · $(report_link 'review' "$review_sites") · $support_link"
-review_body="$(review_text 1000000000)"
+review_footer="$(report_link 'review' "$review_sites") · $support_link"
 # The api rejects a review body over 65,536 characters, so the lists
 # are truncated with a pointer to the run summary.
-if [ "$((${#review_body} + ${#review_footer}))" -gt 65000 ]; then
-  review_body="$(review_text $(((65000 - ${#review_footer}) / 2 - 400)))"
+if [ "$((${#review_lead} + ${#review_lists} + ${#review_footer}))" -gt 65000 ]; then
+  review_lists="$(review_text $(((65000 - ${#review_lead} - ${#review_footer}) / 2 - 400)))"
 fi
-if [ -z "$review_body" ]; then
-  if [ "$posted_local" -eq 0 ] && [ "$posted_reuse" -eq 0 ]; then
-    review_body='The duplicates echoes reported on earlier commits are still in this pull request, their review threads stay open.'
-  elif [ "$review_event" = "COMMENT" ]; then
-    review_body='echoes found repeated code in this pull request, the inline comments name it.'
-  else
-    review_body='echoes found duplicates in this pull request, the inline comments name them.'
-  fi
-fi
+review_body="$review_lead"
+[ -n "$review_lists" ] && review_body="$review_body"$'\n\n'"$review_lists"
 review_body="$review_body"$'\n\n'"$review_footer"
 [ -n "$scope" ] && review_body="$review_body"$'\n\n'"$(review_mark)"
 review+=(-f "body=$review_body")

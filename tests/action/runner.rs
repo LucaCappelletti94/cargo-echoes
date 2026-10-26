@@ -223,6 +223,42 @@ impl Runner {
             .collect()
     }
 
+    /// The dismissal messages of the run, in call order.
+    pub fn dismissal_messages(&self) -> Vec<String> {
+        self.gh_calls()
+            .into_iter()
+            .filter(|c| {
+                c.get("p")
+                    .and_then(Value::as_str)
+                    .is_some_and(|p| p.ends_with("/dismissals"))
+            })
+            .filter_map(|c| {
+                c.pointer("/params/message")
+                    .and_then(Value::as_str)
+                    .map(String::from)
+            })
+            .collect()
+    }
+
+    /// The review ids the run rewrote with their new bodies, in call order.
+    pub fn rewritten_reviews(&self) -> Vec<(String, String)> {
+        self.gh_calls()
+            .into_iter()
+            .filter(|c| c.get("m").and_then(Value::as_str) == Some("PUT"))
+            .filter_map(|c| {
+                let path = c.get("p").and_then(Value::as_str)?;
+                let (rest, id) = path.rsplit_once('/')?;
+                rest.ends_with("/reviews").then(|| {
+                    let body = c
+                        .pointer("/params/body")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    (id.to_string(), body.to_string())
+                })
+            })
+            .collect()
+    }
+
     pub fn scan_calls(&self) -> Vec<Value> {
         self.cargo_calls()
             .into_iter()
