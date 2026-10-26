@@ -71,10 +71,7 @@ fn bitwise_operators_match_on_booleans() {
             &function("bool", &format!("x = x {plain} y")),
         );
     }
-    separate(
-        &function("bool", "x += y"),
-        &function("bool", "x = x + y"),
-    );
+    separate(&function("bool", "x += y"), &function("bool", "x = x + y"));
 }
 
 #[test]
