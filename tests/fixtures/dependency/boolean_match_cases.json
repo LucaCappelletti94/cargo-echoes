@@ -1,0 +1,798 @@
+[
+  {
+    "id": "b_bool_pair",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:bool,y:bool)->bool{match p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,true,false));}}",
+    "b": "fn f(p:bool,x:bool,y:bool)->bool{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,true,false));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_u8_pair",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:u8,y:u8)->u8{match p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,255u8,0u8));}}",
+    "b": "fn f(p:bool,x:u8,y:u8)->u8{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,255u8,0u8));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_u16_pair",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:u16,y:u16)->u16{match p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,65535u16,0u16));}}",
+    "b": "fn f(p:bool,x:u16,y:u16)->u16{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,65535u16,0u16));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n65535\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n65535\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n65535\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n65535\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_u32_pair",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:u32,y:u32)->u32{match p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,4294967295u32,0u32));}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->u32{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,4294967295u32,0u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_u64_pair",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:u64,y:u64)->u64{match p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,18446744073709551615u64,0u64));}}",
+    "b": "fn f(p:bool,x:u64,y:u64)->u64{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,18446744073709551615u64,0u64));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n18446744073709551615\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n18446744073709551615\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n18446744073709551615\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n18446744073709551615\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_u128_pair",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:u128,y:u128)->u128{match p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,340282366920938463463374607431768211455u128,0u128));}}",
+    "b": "fn f(p:bool,x:u128,y:u128)->u128{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,340282366920938463463374607431768211455u128,0u128));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_i8_pair",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:i8,y:i8)->i8{match p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,127i8,-128i8));}}",
+    "b": "fn f(p:bool,x:i8,y:i8)->i8{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,127i8,-128i8));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_i16_pair",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:i16,y:i16)->i16{match p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,32767i16,-32768i16));}}",
+    "b": "fn f(p:bool,x:i16,y:i16)->i16{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,32767i16,-32768i16));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n32767\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n32767\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n32767\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n32767\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_i32_pair",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:i32,y:i32)->i32{match p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,2147483647i32,-2147483648i32));}}",
+    "b": "fn f(p:bool,x:i32,y:i32)->i32{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,2147483647i32,-2147483648i32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n2147483647\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n2147483647\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n2147483647\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n2147483647\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_i64_pair",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:i64,y:i64)->i64{match p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,9223372036854775807i64,-9223372036854775808i64));}}",
+    "b": "fn f(p:bool,x:i64,y:i64)->i64{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,9223372036854775807i64,-9223372036854775808i64));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_i128_pair",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:i128,y:i128)->i128{match p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,170141183460469231731687303715884105727i128,-170141183460469231731687303715884105728i128));}}",
+    "b": "fn f(p:bool,x:i128,y:i128)->i128{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,170141183460469231731687303715884105727i128,-170141183460469231731687303715884105728i128));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n170141183460469231731687303715884105727\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n170141183460469231731687303715884105727\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n170141183460469231731687303715884105727\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n170141183460469231731687303715884105727\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_reversed_arms_u32",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:u32,y:u32)->u32{match p{false=>y,true=>x}} fn main(){for p in [false,true]{println!(\"{}\",f(p,7u32,9u32));}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->u32{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,7u32,9u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n7\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n7\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_block_arms_i64",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:i64,y:i64)->i64{match p{true=>{x},false=>{y}}} fn main(){for p in [false,true]{println!(\"{}\",f(p,-5i64,i64::MAX));}}",
+    "b": "fn f(p:bool,x:i64,y:i64)->i64{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,-5i64,i64::MAX));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9223372036854775807\n-5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9223372036854775807\n-5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9223372036854775807\n-5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9223372036854775807\n-5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_comparison_scrutinee_u16",
+    "family": "boolean_match",
+    "a": "fn f(x:u16,y:u16)->u16{match x<y{true=>x,false=>y}} fn main(){for (x,y) in [(1u16,2u16),(65535u16,0u16),(5u16,5u16)]{println!(\"{}\",f(x,y));}}",
+    "b": "fn f(x:u16,y:u16)->u16{if x<y{x}else{y}} fn main(){for (x,y) in [(1u16,2u16),(65535u16,0u16),(5u16,5u16)]{println!(\"{}\",f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n0\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n0\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n0\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n0\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_negated_scrutinee_i8",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:i8,y:i8)->i8{match !p{true=>x,false=>y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,-128i8,127i8));}}",
+    "b": "fn f(p:bool,x:i8,y:i8)->i8{if p{y}else{x}} fn main(){for p in [false,true]{println!(\"{}\",f(p,-128i8,127i8));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_bool_identity",
+    "family": "boolean_match",
+    "a": "fn f(p:bool)->bool{match p{true=>true,false=>false}} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "b": "fn f(p:bool)->bool{p} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_bool_negation",
+    "family": "boolean_match",
+    "a": "fn f(p:bool)->bool{match p{true=>false,false=>true}} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "b": "fn f(p:bool)->bool{!p} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\nfalse\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\nfalse\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_nested_u32",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{match p{true=>match q{false=>y,true=>x},false=>y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "b": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{if p{if q{x}else{y}}else{y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_let_bound_u64",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:u64,y:u64)->u64{let v=match p{false=>y,true=>x};v} fn main(){for p in [false,true]{println!(\"{}\",f(p,18446744073709551615u64,3u64));}}",
+    "b": "fn f(p:bool,x:u64,y:u64)->u64{let v=if p{x}else{y};v} fn main(){for p in [false,true]{println!(\"{}\",f(p,18446744073709551615u64,3u64));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n18446744073709551615\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n18446744073709551615\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n18446744073709551615\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n18446744073709551615\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_total_helper_u32",
+    "family": "boolean_match",
+    "a": "fn h(x:u32)->u32{x&7u32} fn f(p:bool,x:u32)->u32{match p{false=>x,true=>h(x)}} fn main(){for p in [false,true]{println!(\"{}\",f(p,15u32));}}",
+    "b": "fn h(x:u32)->u32{x&7u32} fn f(p:bool,x:u32)->u32{if p{h(x)}else{x}} fn main(){for p in [false,true]{println!(\"{}\",f(p,15u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "15\n7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "15\n7\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "15\n7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "15\n7\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_preserved_effect_u32",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:u32,y:u32)->u32{println!(\"e\");match p{false=>y,true=>x}} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->u32{println!(\"e\");if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "e\n2\ne\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "e\n2\ne\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "e\n2\ne\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "e\n2\ne\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_pattern_not_position",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:u32,y:u32)->u32{match p{false=>y,true=>x}} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->u32{if p{y}else{x}} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_scrutinee_temporary",
+    "family": "boolean_match",
+    "a": "fn f(c:&std::cell::RefCell<bool>)->u32{match *c.borrow(){true=>{*c.borrow_mut()=false;1},false=>2}} fn main(){std::panic::set_hook(Box::new(|_|{}));let c=std::cell::RefCell::new(true);println!(\"{}\",f(&c));}",
+    "b": "fn f(c:&std::cell::RefCell<bool>)->u32{if *c.borrow(){*c.borrow_mut()=false;1}else{2}} fn main(){std::panic::set_hook(Box::new(|_|{}));let c=std::cell::RefCell::new(true);println!(\"{}\",f(&c));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        },
+        "on": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "b_non_exhaustive",
+    "family": "boolean_match",
+    "a": "fn f(p:bool,x:u32,y:u32)->u32{match p{true=>x}} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->u32{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": [
+            "E0004"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0004"
+          ],
+          "run": "absent"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        }
+      }
+    }
+  }
+]

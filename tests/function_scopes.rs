@@ -337,3 +337,52 @@ fn an_observing_impl_retains_the_wrapping_add_operand_order() {
         view(&source("y.wrapping_add(x)"))
     );
 }
+
+#[test]
+fn proven_boolean_matches_fold_into_the_conditional_in_the_borrowed_view() {
+    let body =
+        |expression: &str| format!("fn f(p: bool, x: u32, y: u32) -> u32 {{ {expression} }}");
+    for (matched, conditional) in [
+        ("match p { true => x, false => y }", "if p { x } else { y }"),
+        ("match p { false => y, true => x }", "if p { x } else { y }"),
+        (
+            "read(); match p { false => y, true => x }",
+            "read(); if p { x } else { y }",
+        ),
+    ] {
+        assert_eq!(view(&body(matched)), view(&body(conditional)), "{matched}");
+    }
+}
+
+#[test]
+fn unproven_boolean_matches_stay_matches_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f(x: u32, y: u32) -> u32 { match read() { true => x, false => y } }"),
+        view("fn f(x: u32, y: u32) -> u32 { if read() { x } else { y } }")
+    );
+    assert_ne!(
+        view("fn f(p: bool, y: u32) -> u32 { match p { true => read(), false => y } }"),
+        view("fn f(p: bool, y: u32) -> u32 { if p { read() } else { y } }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_boolean_match() {
+    assert_ne!(
+        failing_form("fn f(p: bool, x: u32, y: u32) -> u32 { match p { true => x, false => y } }"),
+        failing_form("fn f(p: bool, x: u32, y: u32) -> u32 { if p { x } else { y } }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_boolean_match() {
+    let source = |body: &str| {
+        format!(
+            "struct S;\n#[observe]\nimpl S {{\n    fn f(p: bool, x: u32, y: u32) -> u32 {{ {body} }}\n}}"
+        )
+    };
+    assert_ne!(
+        view(&source("match p { true => x, false => y }")),
+        view(&source("if p { x } else { y }"))
+    );
+}
