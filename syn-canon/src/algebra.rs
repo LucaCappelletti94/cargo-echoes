@@ -7,7 +7,7 @@ use syn::visit::{self, Visit};
 use syn::visit_mut::{self, VisitMut};
 
 use crate::alpha::{Env, Renamer};
-use crate::schedule::{self, BitwiseOp, BlockFacts, Lbl, Port, TotalBinary, Value};
+use crate::schedule::{self, BitwiseOp, BlockFacts, Equality, Lbl, Port, TotalBinary, Value};
 use crate::scope::PrimTy;
 
 struct Bound {
@@ -153,21 +153,32 @@ impl Walker<'_, '_> {
         match expr {
             syn::Expr::Binary(mut binary) => {
                 let total_calls = total_calls
-                    || self.dedup && matches!(binary.op, syn::BinOp::Eq(_) | syn::BinOp::BitXor(_));
+                    || self.dedup
+                        && matches!(
+                            binary.op,
+                            syn::BinOp::Eq(_) | syn::BinOp::Ne(_) | syn::BinOp::BitXor(_)
+                        );
                 let left = self.scalar_in_place(&mut binary.left, total_calls);
                 let right = self.scalar_in_place(&mut binary.right, total_calls);
                 let (Some(left), Some(right)) = (left, right) else {
                     return (syn::Expr::Binary(binary), None);
                 };
                 if self.dedup
-                    && let Some(label) = schedule::equality_label(binary.op, &left, &right)
+                    && let Some(equality) = schedule::equality(binary.op, &left, &right)
                 {
-                    let expr = if label == Lbl::Bool(true) {
-                        crate::constants::literal_expr(PrimTy::Bool, 1, binary.span())
-                    } else if left == Lbl::Bool(true) {
-                        *binary.right
-                    } else {
-                        *binary.left
+                    let (expr, label) = match equality {
+                        Equality::Reflexive => (
+                            crate::constants::literal_expr(PrimTy::Bool, 1, binary.span()),
+                            Lbl::Bool(true),
+                        ),
+                        Equality::Operand {
+                            left: true,
+                            negated,
+                        } => reduced_operand(*binary.left, left, negated),
+                        Equality::Operand {
+                            left: false,
+                            negated,
+                        } => reduced_operand(*binary.right, right, negated),
                     };
                     return (expr, Some(label));
                 }
@@ -305,10 +316,14 @@ impl Walker<'_, '_> {
             syn::Expr::Group(group) if group.attrs.is_empty() => {
                 self.condition(*group.expr, total_calls)
             }
-            expr => {
-                let (expr, label) = self.scalar(expr, total_calls);
-                (expr, label, false)
-            }
+            expr => match self.scalar(expr, total_calls) {
+                (syn::Expr::Unary(unary), Some(Lbl::Not(inner)))
+                    if unary.attrs.is_empty() && matches!(unary.op, syn::UnOp::Not(_)) =>
+                {
+                    (*unary.expr, Some(*inner), true)
+                }
+                (expr, label) => (expr, label, false),
+            },
         }
     }
 
@@ -518,6 +533,15 @@ impl VisitMut for Walker<'_, '_> {
             | syn::Expr::Verbatim(_) => {}
             _ => visit_mut::visit_expr_mut(self, expr),
         }
+    }
+}
+
+/// The operand a literal boolean comparison reduces to, negated when the comparison negates it.
+fn reduced_operand(expr: syn::Expr, label: Lbl, negated: bool) -> (syn::Expr, Lbl) {
+    if negated {
+        negate(expr, label)
+    } else {
+        (expr, label)
     }
 }
 
