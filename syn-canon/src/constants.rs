@@ -524,18 +524,14 @@ impl VisitMut for Normalizer<'_, '_> {
         if !local.attrs.is_empty() {
             return;
         }
+        let mut annotation = None;
         if let Some(init) = &mut local.init {
             let expected = self.expected;
-            self.expected = if self.contextual {
-                match &local.pat {
-                    syn::Pat::Type(typed) => {
-                        self.renamer.param_prim(&typed.ty).and_then(integer_type)
-                    }
-                    _ => None,
-                }
-            } else {
-                None
+            annotation = match &local.pat {
+                syn::Pat::Type(typed) if self.contextual => self.renamer.param_prim(&typed.ty),
+                _ => None,
             };
+            self.expected = annotation.and_then(integer_type);
             if !matches!(local.pat, syn::Pat::Type(_))
                 || self.expected.is_some()
                 || !closed(&init.expr, 0)
@@ -547,6 +543,7 @@ impl VisitMut for Normalizer<'_, '_> {
                 self.visit_expr_mut(diverge);
             }
         }
+        drop_stated_annotation(local, annotation);
         self.visit_pat_mut(&mut local.pat);
     }
 
@@ -566,4 +563,36 @@ impl VisitMut for Normalizer<'_, '_> {
     fn visit_item_mut(&mut self, _: &mut syn::Item) {}
     fn visit_macro_mut(&mut self, _: &mut syn::Macro) {}
     fn visit_attribute_mut(&mut self, _: &mut syn::Attribute) {}
+}
+
+/// Drop the annotation of a `let` binding one identifier whose initializer is an integer
+/// literal of the annotated fixed-width type, so the binding reads like `let v = 5u32;`.
+fn drop_stated_annotation(local: &mut syn::Local, annotation: Option<PrimTy>) {
+    let (Some(annotation @ PrimTy::Int { .. }), Some(init)) = (annotation, &local.init) else {
+        return;
+    };
+    let stated = match &*init.expr {
+        syn::Expr::Lit(_) => literal(&init.expr)
+            .filter(|literal| !literal.suffix().is_empty())
+            .and_then(|_| proven_type(&init.expr, None, 0)?.fixed())
+            .map(|ty| PrimTy::Int {
+                width: ty.width,
+                signed: ty.signed,
+            }),
+        _ => signed_literal(&init.expr).map(|(prim, _)| prim),
+    };
+    if init.diverge.is_some() || stated != Some(annotation) {
+        return;
+    }
+    if let syn::Pat::Type(typed) = &mut local.pat
+        && typed.attrs.is_empty()
+        && matches!(typed.pat.as_ref(), syn::Pat::Ident(ident)
+            if ident.attrs.is_empty() && ident.by_ref.is_none() && ident.subpat.is_none())
+    {
+        let binding = core::mem::replace(
+            &mut *typed.pat,
+            syn::Pat::Verbatim(proc_macro2::TokenStream::new()),
+        );
+        local.pat = binding;
+    }
 }

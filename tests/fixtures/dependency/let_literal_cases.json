@@ -1,0 +1,893 @@
+[
+  {
+    "id": "ll_max_u8",
+    "family": "let_literal",
+    "a": "fn f(x:u8)->u8{let v:u8=255;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u8)->u8{let v=255u8;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_overflow_u8",
+    "family": "let_literal",
+    "a": "fn f(x:u8)->u8{let v:u8=255;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u8)->u8{let v=255u8;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_max_u16",
+    "family": "let_literal",
+    "a": "fn f(x:u16)->u16{let v:u16=65535;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u16)->u16{let v=65535u16;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_overflow_u16",
+    "family": "let_literal",
+    "a": "fn f(x:u16)->u16{let v:u16=65535;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u16)->u16{let v=65535u16;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_max_u32",
+    "family": "let_literal",
+    "a": "fn f(x:u32)->u32{let v:u32=4294967295;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u32)->u32{let v=4294967295u32;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_overflow_u32",
+    "family": "let_literal",
+    "a": "fn f(x:u32)->u32{let v:u32=4294967295;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u32)->u32{let v=4294967295u32;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_max_u64",
+    "family": "let_literal",
+    "a": "fn f(x:u64)->u64{let v:u64=18446744073709551615;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u64)->u64{let v=18446744073709551615u64;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_overflow_u64",
+    "family": "let_literal",
+    "a": "fn f(x:u64)->u64{let v:u64=18446744073709551615;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u64)->u64{let v=18446744073709551615u64;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_max_u128",
+    "family": "let_literal",
+    "a": "fn f(x:u128)->u128{let v:u128=340282366920938463463374607431768211455;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u128)->u128{let v=340282366920938463463374607431768211455u128;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_overflow_u128",
+    "family": "let_literal",
+    "a": "fn f(x:u128)->u128{let v:u128=340282366920938463463374607431768211455;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u128)->u128{let v=340282366920938463463374607431768211455u128;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_max_i8",
+    "family": "let_literal",
+    "a": "fn f(x:i8)->i8{let v:i8=127;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:i8)->i8{let v=127i8;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_overflow_i8",
+    "family": "let_literal",
+    "a": "fn f(x:i8)->i8{let v:i8=127;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:i8)->i8{let v=127i8;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_max_i16",
+    "family": "let_literal",
+    "a": "fn f(x:i16)->i16{let v:i16=32767;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:i16)->i16{let v=32767i16;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_overflow_i16",
+    "family": "let_literal",
+    "a": "fn f(x:i16)->i16{let v:i16=32767;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:i16)->i16{let v=32767i16;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_max_i32",
+    "family": "let_literal",
+    "a": "fn f(x:i32)->i32{let v:i32=2147483647;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:i32)->i32{let v=2147483647i32;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_overflow_i32",
+    "family": "let_literal",
+    "a": "fn f(x:i32)->i32{let v:i32=2147483647;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:i32)->i32{let v=2147483647i32;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_max_i64",
+    "family": "let_literal",
+    "a": "fn f(x:i64)->i64{let v:i64=9223372036854775807;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:i64)->i64{let v=9223372036854775807i64;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_overflow_i64",
+    "family": "let_literal",
+    "a": "fn f(x:i64)->i64{let v:i64=9223372036854775807;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:i64)->i64{let v=9223372036854775807i64;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_max_i128",
+    "family": "let_literal",
+    "a": "fn f(x:i128)->i128{let v:i128=170141183460469231731687303715884105727;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:i128)->i128{let v=170141183460469231731687303715884105727i128;v.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_overflow_i128",
+    "family": "let_literal",
+    "a": "fn f(x:i128)->i128{let v:i128=170141183460469231731687303715884105727;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:i128)->i128{let v=170141183460469231731687303715884105727i128;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_negative_i8",
+    "family": "let_literal",
+    "a": "fn f(x:i8)->i8{let v:i8=-128;v-x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:i8)->i8{let v=-128i8;v-x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "127\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to subtract with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "127\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to subtract with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_hex_u32",
+    "family": "let_literal",
+    "a": "fn f(x:u32)->u32{let v:u32=0x10;v^x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u32)->u32{let v=16u32;v^x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "17\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "17\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "17\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "17\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_closed_u16",
+    "family": "let_literal",
+    "a": "fn f(x:u16)->u16{let v:u16=2+3;v*x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u16)->u16{let v=5u16;v*x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_mutable_u64",
+    "family": "let_literal",
+    "a": "fn f(x:u64)->u64{let mut v:u64=18446744073709551614;v+=x;v} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u64)->u64{let mut v=18446744073709551614u64;v+=x;v} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_alias_u32",
+    "family": "let_literal",
+    "a": "type Count=u32; fn f(x:u32)->u32{let v:Count=7;v<<x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "type Count=u32; fn f(x:u32)->u32{let v=7u32;v<<x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "14\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "14\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "14\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "14\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_wider_type",
+    "family": "let_literal",
+    "a": "fn f(x:u16)->u16{let v:u16=255;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u16)->u16{let v=255u8;u16::from(v+(x as u8))} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "256\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "256\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ll_other_value_u32",
+    "family": "let_literal",
+    "a": "fn f(x:u32)->u32{let v:u32=5;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "b": "fn f(x:u32)->u32{let v=6u32;v+x} fn main(){std::panic::set_hook(Box::new(|_|{}));match std::panic::catch_unwind(||f(1)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n"
+        }
+      }
+    }
+  }
+]

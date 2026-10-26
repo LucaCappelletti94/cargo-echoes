@@ -1154,6 +1154,51 @@ fn compound_functions_keep_field_targets_separate() {
     assert_eq!(function_groups(&scan(14)).len(), 0);
 }
 
+const LET_LITERAL_FIXTURE: &str = "tests/fixtures/letlitws";
+
+#[test]
+fn let_literal_doctests_group_only_the_fixed_width_annotations() {
+    let report = Echoes::default().run(LET_LITERAL_FIXTURE).unwrap();
+    assert_eq!(report.total, 5);
+    assert_eq!(report.unique, 3);
+    let expected = [vec![
+        "letlitws::Annotated",
+        "letlitws::Hexadecimal",
+        "letlitws::Suffixed",
+    ]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(22)
+        .run(LET_LITERAL_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(23)
+        .run(LET_LITERAL_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn let_literal_functions_keep_pointer_sized_annotations_separate() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(LET_LITERAL_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec![
+        "letlitws::annotated",
+        "letlitws::hexadecimal",
+        "letlitws::suffixed",
+    ]];
+    for tokens in [0, 12] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(13)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {
