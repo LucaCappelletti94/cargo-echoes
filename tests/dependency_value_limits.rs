@@ -18,10 +18,13 @@ fn form(source: &str) -> syn_canon::CanonicalForm {
 #[test]
 fn expanded_node_limit_admits_the_exact_complete_region() {
     let original = format!(
-        "fn f(x:u8)->bool{{let t=x&1u8;{}}}",
+        "fn f(x:bool)->bool{{let t=x^true;{}}}",
         binary_tree("!=", "t", 4096)
     );
-    let inline = format!("fn f(x:u8)->bool{{{}}}", binary_tree("!=", "(x&1u8)", 4096));
+    let inline = format!(
+        "fn f(x:bool)->bool{{{}}}",
+        binary_tree("!=", "(x^true)", 4096)
+    );
     let left = form(&original);
     let right = form(&inline);
     assert_eq!(left, right);
@@ -36,10 +39,13 @@ fn expanded_node_limit_admits_the_exact_complete_region() {
 #[test]
 fn expanded_node_exhaustion_retains_the_complete_region() {
     let original = format!(
-        "fn f(x:u8)->bool{{let t=x&1u8;{}}}",
+        "fn f(x:bool)->bool{{let t=x^true;{}}}",
         binary_tree("!=", "t", 4097)
     );
-    let inline = format!("fn f(x:u8)->bool{{{}}}", binary_tree("!=", "(x&1u8)", 4097));
+    let inline = format!(
+        "fn f(x:bool)->bool{{{}}}",
+        binary_tree("!=", "(x^true)", 4097)
+    );
     let retained = form(&original);
     assert_ne!(retained, form(&inline));
     assert_eq!(retained.body_units(), 8_200);
