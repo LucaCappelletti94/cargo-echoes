@@ -964,6 +964,7 @@ fn join_alternative(into: &mut syn::Pat, pat: syn::Pat) {
 }
 
 /// Whether an unattributed pattern binds no name and names no identifier that could be one.
+/// Drift has already removed unattributed parentheses.
 fn binding_free(pat: &syn::Pat) -> bool {
     match pat {
         syn::Pat::Lit(lit) => lit.attrs.is_empty(),
@@ -971,7 +972,6 @@ fn binding_free(pat: &syn::Pat) -> bool {
         syn::Pat::Wild(wild) => wild.attrs.is_empty(),
         syn::Pat::Rest(rest) => rest.attrs.is_empty(),
         syn::Pat::Path(path) => path.attrs.is_empty(),
-        syn::Pat::Paren(paren) => paren.attrs.is_empty() && binding_free(&paren.pat),
         syn::Pat::Reference(reference) => {
             reference.attrs.is_empty() && binding_free(&reference.pat)
         }
