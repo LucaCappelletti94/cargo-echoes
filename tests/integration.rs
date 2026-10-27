@@ -1470,6 +1470,43 @@ fn widening_cast_functions_group_with_their_conversions() {
     assert_eq!(function_groups(&scan(8)).len(), 0);
 }
 
+const ELISION_FIXTURE: &str = "tests/fixtures/elisionws";
+
+#[test]
+fn named_lifetime_doctests_group_with_their_elided_form() {
+    let report = Echoes::default().run(ELISION_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["elisionws::Elided", "elisionws::Named"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(25)
+        .run(ELISION_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(26)
+        .run(ELISION_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn reordered_bound_functions_group() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(ELISION_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["elisionws::biggest", "elisionws::largest"]];
+    for tokens in [0, 7] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(8)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

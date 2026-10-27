@@ -1,0 +1,305 @@
+[
+  {
+    "id": "bl_sorted",
+    "family": "bounds_lifetimes",
+    "a": "fn f<T>(t:T)->T where T:Copy+Clone{t.clone()} fn main(){println!(\"{}\",f(3u32));}",
+    "b": "fn f<T>(t:T)->T where T:Clone+Copy{t.clone()} fn main(){println!(\"{}\",f(3u32));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "bl_merged",
+    "family": "bounds_lifetimes",
+    "a": "fn f<T:Copy>(t:T)->(T,T) where T:Clone{(t.clone(),t)} fn main(){println!(\"{:?}\",f(4u8));}",
+    "b": "fn f<T>(t:T)->(T,T) where T:Clone+Copy{(t.clone(),t)} fn main(){println!(\"{:?}\",f(4u8));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(4, 4)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(4, 4)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(4, 4)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(4, 4)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_reference",
+    "family": "bounds_lifetimes",
+    "a": "fn f<'a>(x:&'a u32)->&'a u32{x} fn hr<G:for<'x> Fn(&'x u32)->&'x u32>(g:G)->u32{*g(&5)} fn main(){let p:fn(&u32)->&u32=f;let q:for<'x> fn(&'x u32)->&'x u32=f;println!(\"{} {} {}\",p(&1),q(&2),hr(f));}",
+    "b": "fn f(x:&u32)->&u32{x} fn hr<G:for<'x> Fn(&'x u32)->&'x u32>(g:G)->u32{*g(&5)} fn main(){let p:fn(&u32)->&u32=f;let q:for<'x> fn(&'x u32)->&'x u32=f;println!(\"{} {} {}\",p(&1),q(&2),hr(f));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 2 5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 2 5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 2 5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 2 5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_input_only",
+    "family": "bounds_lifetimes",
+    "a": "fn f<'a>(x:&'a str)->usize{x.len()} fn main(){let p:fn(&str)->usize=f;println!(\"{}\",p(\"abc\"));}",
+    "b": "fn f(x:&str)->usize{x.len()} fn main(){let p:fn(&str)->usize=f;println!(\"{}\",p(\"abc\"));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_indexed",
+    "family": "bounds_lifetimes",
+    "a": "fn f<'a>(x:&'a [u8],i:usize)->&'a u8{&x[i]} fn main(){let v=[1u8,2];println!(\"{}\",f(&v,1));}",
+    "b": "fn f(x:&[u8],i:usize)->&u8{&x[i]} fn main(){let v=[1u8,2];println!(\"{}\",f(&v,1));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_receiver",
+    "family": "bounds_lifetimes",
+    "a": "struct S(u8); impl S{fn get<'a>(&'a self,x:&u8)->&'a u8{let _=x;&self.0}} fn main(){let s=S(7);println!(\"{}\",s.get(&1));}",
+    "b": "struct S(u8); impl S{fn get(&self,x:&u8)->&u8{let _=x;&self.0}} fn main(){let s=S(7);println!(\"{}\",s.get(&1));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_two_inputs",
+    "family": "bounds_lifetimes",
+    "a": "fn f<'a>(x:&'a u8,y:&'a u8)->&'a u8{let _=y;x} fn main(){println!(\"{}\",f(&1,&2));}",
+    "b": "fn f(x:&u8,y:&u8)->&u8{let _=y;x} fn main(){println!(\"{}\",f(&1,&2));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": [
+            "E0106"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0106"
+          ],
+          "run": "absent"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_early_bound",
+    "family": "bounds_lifetimes",
+    "a": "fn f<'a>(x:&'a u8)->&'a u8 where 'a:'a{x} fn main(){println!(\"{}\",f::<'static>(&1));}",
+    "b": "fn f(x:&u8)->&u8{x} fn main(){println!(\"{}\",f::<'static>(&1));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": [
+            "E0794"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0794"
+          ],
+          "run": "absent"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_receiver_other",
+    "family": "bounds_lifetimes",
+    "a": "struct S(u8); impl S{fn get<'a>(&self,x:&'a u8)->&'a u8{let _=x;&0}} static V:u8=1; fn main(){let r;{let s=S(7);r=s.get(&V);}println!(\"{}\",r);}",
+    "b": "struct S(u8); impl S{fn get(&self,x:&u8)->&u8{let _=x;&0}} static V:u8=1; fn main(){let r;{let s=S(7);r=s.get(&V);}println!(\"{}\",r);}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": [
+            "E0597"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0597"
+          ],
+          "run": "absent"
+        }
+      }
+    }
+  }
+]

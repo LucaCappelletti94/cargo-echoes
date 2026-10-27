@@ -2504,7 +2504,6 @@ mod tests {
                 "trait Tr {}\nimpl Tr for Wrap<'_> {}",
                 "trait Tr {}\nimpl Tr for Wrap {}",
             ),
-            ("fn f<'a>(x: &'a str) {}", "fn f(x: &str) {}"),
         ];
         for (written, other) in pairs {
             assert_ne!(

@@ -472,6 +472,9 @@ impl VisitMut for Drift<'_> {
                 }
             }
         }
+        if self.compiles {
+            sort_bounds(generics);
+        }
     }
 
     fn visit_item_trait_mut(&mut self, node: &mut syn::ItemTrait) {
@@ -559,6 +562,27 @@ impl VisitMut for Drift<'_> {
     fn visit_signature_mut(&mut self, sig: &mut syn::Signature) {
         syn::visit_mut::visit_signature_mut(self, sig);
         fold_unit_return(&mut sig.output);
+    }
+
+    fn visit_item_fn_mut(&mut self, node: &mut syn::ItemFn) {
+        syn::visit_mut::visit_item_fn_mut(self, node);
+        if self.compiles {
+            elide_lifetimes(&mut node.sig, Some(&node.block));
+        }
+    }
+
+    fn visit_impl_item_fn_mut(&mut self, node: &mut syn::ImplItemFn) {
+        syn::visit_mut::visit_impl_item_fn_mut(self, node);
+        if self.compiles {
+            elide_lifetimes(&mut node.sig, Some(&node.block));
+        }
+    }
+
+    fn visit_trait_item_fn_mut(&mut self, node: &mut syn::TraitItemFn) {
+        syn::visit_mut::visit_trait_item_fn_mut(self, node);
+        if self.compiles {
+            elide_lifetimes(&mut node.sig, node.default.as_ref());
+        }
     }
 
     fn visit_stmt_mut(&mut self, stmt: &mut syn::Stmt) {
@@ -1067,6 +1091,273 @@ fn fold_fn_pointer_lifetime(node: &mut syn::TypeFnPtr) {
     node.lifetimes = None;
 }
 
+/// Drop each lifetime parameter of `sig` that the elision rules assign exactly: one that no
+/// bound, `where` clause or body names, so it is late-bound and private to the signature,
+/// that one input reference or the reference receiver names, and that the output names only in
+/// references elision ties back to that input.
+fn elide_lifetimes(sig: &mut syn::Signature, body: Option<&syn::Block>) {
+    let candidates: Vec<syn::Ident> = sig
+        .generics
+        .params
+        .iter()
+        .filter_map(|param| match param {
+            syn::GenericParam::Lifetime(param)
+                if param.attrs.is_empty() && param.bounds.is_empty() =>
+            {
+                Some(param.lifetime.ident.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    for name in candidates {
+        if elidable(sig, body, &name) {
+            elide(sig, &name);
+        }
+    }
+}
+
+fn elidable(sig: &syn::Signature, body: Option<&syn::Block>, name: &syn::Ident) -> bool {
+    use syn::visit::Visit;
+
+    let mut bounds = LifetimeUses {
+        name,
+        count: 0,
+        opaque: false,
+    };
+    for param in &sig.generics.params {
+        if !matches!(param, syn::GenericParam::Lifetime(param) if param.lifetime.ident == *name) {
+            bounds.visit_generic_param(param);
+        }
+    }
+    if let Some(clause) = &sig.generics.where_clause {
+        bounds.visit_where_clause(clause);
+    }
+    if bounds.opaque || bounds.count != 0 {
+        return false;
+    }
+    let mut mentions = BodyMentions { name, found: false };
+    if let Some(body) = body {
+        mentions.visit_block(body);
+    }
+    if mentions.found {
+        return false;
+    }
+    let mut inputs = SignatureUses::new(name);
+    let mut reference_receiver = false;
+    let mut plain_receiver = true;
+    let mut in_receiver = false;
+    for input in &sig.inputs {
+        match input {
+            syn::FnArg::Receiver(receiver) => {
+                let known = matches!(
+                    receiver.kind,
+                    syn::ReceiverKind::Value
+                        | syn::ReceiverKind::Reference(..)
+                        | syn::ReceiverKind::Typed(..)
+                );
+                if !receiver.attrs.is_empty() || !known {
+                    return false;
+                }
+                if let syn::ReceiverKind::Reference(_, lifetime, _) = &receiver.kind {
+                    reference_receiver = true;
+                    inputs.positions += 1;
+                    if lifetime
+                        .as_ref()
+                        .is_some_and(|lifetime| lifetime.ident == *name)
+                    {
+                        inputs.references += 1;
+                        in_receiver = true;
+                    }
+                }
+                if let syn::ReceiverKind::Typed(_, ty) = &receiver.kind {
+                    plain_receiver &=
+                        matches!(ty.as_ref(), syn::Type::Path(path) if path.path.is_ident("Self"));
+                    inputs.visit_type(ty);
+                }
+            }
+            syn::FnArg::Typed(typed) => {
+                if !typed.attrs.is_empty() {
+                    return false;
+                }
+                inputs.visit_pat(&typed.pat);
+                inputs.visit_type(&typed.ty);
+            }
+        }
+    }
+    let mut outputs = SignatureUses::new(name);
+    outputs.visit_return_type(&sig.output);
+    if inputs.opaque || outputs.opaque || inputs.other || outputs.other || inputs.references != 1 {
+        return false;
+    }
+    outputs.references == 0
+        || if reference_receiver {
+            in_receiver
+        } else {
+            plain_receiver && inputs.positions == 1
+        }
+}
+
+/// Remove the lifetime parameter `name` and its reference occurrences from `sig`.
+fn elide(sig: &mut syn::Signature, name: &syn::Ident) {
+    struct Elide<'a>(&'a syn::Ident);
+    impl VisitMut for Elide<'_> {
+        fn visit_type_reference_mut(&mut self, reference: &mut syn::TypeReference) {
+            if reference
+                .lifetime
+                .as_ref()
+                .is_some_and(|lifetime| lifetime.ident == *self.0)
+            {
+                reference.lifetime = None;
+            }
+            syn::visit_mut::visit_type_reference_mut(self, reference);
+        }
+    }
+    for input in &mut sig.inputs {
+        if let syn::FnArg::Receiver(receiver) = input
+            && let syn::ReceiverKind::Reference(_, lifetime, _) = &mut receiver.kind
+            && lifetime
+                .as_ref()
+                .is_some_and(|lifetime| lifetime.ident == *name)
+        {
+            *lifetime = None;
+        }
+        Elide(name).visit_fn_arg_mut(input);
+    }
+    Elide(name).visit_return_type_mut(&mut sig.output);
+    sig.generics.params = core::mem::take(&mut sig.generics.params)
+        .into_iter()
+        .filter(|param| {
+            !matches!(param, syn::GenericParam::Lifetime(param) if param.lifetime.ident == *name)
+        })
+        .collect();
+    if sig.generics.params.is_empty() {
+        sig.generics.lt_token = None;
+        sig.generics.gt_token = None;
+    }
+}
+
+/// The lifetime positions of a signature part and the uses of one lifetime among them. A use
+/// counts as a reference only as the lifetime of a reference outside function pointers, trait
+/// objects, `impl Trait`, `Fn` sugar and higher-ranked binders, where elision means another
+/// lifetime.
+struct SignatureUses<'a> {
+    name: &'a syn::Ident,
+    /// Reference uses of the lifetime.
+    references: usize,
+    /// Lifetime positions elision counts, written or elided.
+    positions: usize,
+    /// A use other than a reference lifetime.
+    other: bool,
+    opaque: bool,
+    /// Enclosing constructs that give elision another meaning.
+    depth: usize,
+}
+
+impl<'a> SignatureUses<'a> {
+    fn new(name: &'a syn::Ident) -> Self {
+        Self {
+            name,
+            references: 0,
+            positions: 0,
+            other: false,
+            opaque: false,
+            depth: 0,
+        }
+    }
+
+    fn nested(&mut self, visit: impl FnOnce(&mut Self)) {
+        self.depth += 1;
+        visit(self);
+        self.depth -= 1;
+    }
+}
+
+impl<'ast> syn::visit::Visit<'ast> for SignatureUses<'_> {
+    fn visit_type_reference(&mut self, reference: &'ast syn::TypeReference) {
+        let named = reference
+            .lifetime
+            .as_ref()
+            .is_some_and(|lifetime| lifetime.ident == *self.name);
+        if self.depth == 0 {
+            self.positions += 1;
+            self.references += usize::from(named);
+        } else {
+            self.other |= named;
+        }
+        self.visit_type(&reference.elem);
+    }
+
+    fn visit_lifetime(&mut self, lifetime: &'ast syn::Lifetime) {
+        self.other |= lifetime.ident == *self.name;
+        self.positions += usize::from(self.depth == 0);
+    }
+
+    fn visit_type(&mut self, ty: &'ast syn::Type) {
+        match ty {
+            syn::Type::FnPtr(_) | syn::Type::TraitObject(_) | syn::Type::ImplTrait(_) => {
+                self.nested(|uses| syn::visit::visit_type(uses, ty));
+            }
+            syn::Type::Macro(_) | syn::Type::Verbatim(_) => self.opaque = true,
+            _ => syn::visit::visit_type(self, ty),
+        }
+    }
+
+    fn visit_parenthesized_generic_arguments(
+        &mut self,
+        arguments: &'ast syn::ParenthesizedGenericArguments,
+    ) {
+        self.nested(|uses| syn::visit::visit_parenthesized_generic_arguments(uses, arguments));
+    }
+
+    fn visit_trait_bound(&mut self, bound: &'ast syn::TraitBound) {
+        self.nested(|uses| syn::visit::visit_trait_bound(uses, bound));
+    }
+
+    fn visit_macro(&mut self, _: &'ast syn::Macro) {
+        self.opaque = true;
+    }
+}
+
+/// Whether a body names the lifetime `name`, macro input included.
+struct BodyMentions<'a> {
+    name: &'a syn::Ident,
+    found: bool,
+}
+
+impl BodyMentions<'_> {
+    fn scan(&mut self, tokens: &TokenStream) {
+        let mut quote = false;
+        for token in tokens.clone() {
+            match token {
+                proc_macro2::TokenTree::Punct(punct) => quote = punct.as_char() == '\'',
+                proc_macro2::TokenTree::Ident(ident) => {
+                    self.found |= quote && ident == *self.name;
+                    quote = false;
+                }
+                proc_macro2::TokenTree::Group(group) => {
+                    self.scan(&group.stream());
+                    quote = false;
+                }
+                proc_macro2::TokenTree::Literal(_) => quote = false,
+            }
+        }
+    }
+}
+
+impl<'ast> syn::visit::Visit<'ast> for BodyMentions<'_> {
+    fn visit_lifetime(&mut self, lifetime: &'ast syn::Lifetime) {
+        self.found |= lifetime.ident == *self.name;
+    }
+
+    fn visit_macro(&mut self, mac: &'ast syn::Macro) {
+        self.scan(&mac.tokens);
+    }
+
+    fn visit_token_stream(&mut self, tokens: &'ast TokenStream) {
+        self.scan(tokens);
+    }
+}
+
 struct LifetimeUses<'a> {
     name: &'a syn::Ident,
     count: usize,
@@ -1288,6 +1579,136 @@ fn bounds_to_where(generics: &mut syn::Generics) {
     let written = core::mem::take(&mut clause.predicates);
     clause.predicates.extend(moved);
     clause.predicates.extend(written);
+}
+
+/// Merge the `where` predicates of one bounded type into one and sort its bounds by text, the
+/// parameters of `generics` read by position so that renamed parameters sort alike. A predicate
+/// with a `for<…>` binder or an attribute stays apart, and bounds of the `Fn` family, with an
+/// associated item binding or opaque to the parser keep their order.
+fn sort_bounds(generics: &mut syn::Generics) {
+    use quote::ToTokens as _;
+
+    let mut names: Vec<(bool, String)> = Vec::with_capacity(generics.params.len());
+    for param in &generics.params {
+        names.push(match param {
+            syn::GenericParam::Type(param) => (false, param.ident.to_string()),
+            syn::GenericParam::Const(param) => (false, param.ident.to_string()),
+            syn::GenericParam::Lifetime(param) => (true, param.lifetime.ident.to_string()),
+        });
+    }
+    let Some(clause) = &mut generics.where_clause else {
+        return;
+    };
+    let mut merged: Vec<(Option<String>, syn::WherePredicate)> =
+        Vec::with_capacity(clause.predicates.len());
+    for predicate in core::mem::take(&mut clause.predicates) {
+        let syn::WherePredicate::Type(mut next) = predicate else {
+            merged.push((None, predicate));
+            continue;
+        };
+        if !next.attrs.is_empty() || next.lifetimes.is_some() {
+            merged.push((None, syn::WherePredicate::Type(next)));
+            continue;
+        }
+        let key = next.bounded_ty.to_token_stream().to_string();
+        let earlier = merged
+            .iter_mut()
+            .find_map(|(earlier_key, earlier)| match earlier {
+                syn::WherePredicate::Type(earlier) if earlier_key.as_ref() == Some(&key) => {
+                    Some(earlier)
+                }
+                _ => None,
+            });
+        if let Some(earlier) = earlier {
+            earlier.bounds.extend(core::mem::take(&mut next.bounds));
+        } else {
+            merged.push((Some(key), syn::WherePredicate::Type(next)));
+        }
+    }
+    for (key, predicate) in &mut merged {
+        if key.is_some()
+            && let syn::WherePredicate::Type(predicate) = predicate
+            && predicate.bounds.iter().all(sortable_bound)
+        {
+            let mut bounds: Vec<syn::TypeParamBound> =
+                core::mem::take(&mut predicate.bounds).into_iter().collect();
+            bounds.sort_by_cached_key(|bound| bound_key(bound, &names));
+            predicate.bounds = bounds.into_iter().collect();
+        }
+    }
+    clause
+        .predicates
+        .extend(merged.into_iter().map(|(_, predicate)| predicate));
+}
+
+/// Whether a bound's place in its list is free: a lifetime, or a trait bound outside the `Fn`
+/// family that binds no associated item.
+fn sortable_bound(bound: &syn::TypeParamBound) -> bool {
+    let free = |segment: &syn::PathSegment| match &segment.arguments {
+        syn::PathArguments::None => true,
+        syn::PathArguments::AngleBracketed(arguments) => arguments.args.iter().all(|argument| {
+            matches!(
+                argument,
+                syn::GenericArgument::Lifetime(_)
+                    | syn::GenericArgument::Type(_)
+                    | syn::GenericArgument::Const(_)
+            )
+        }),
+        syn::PathArguments::Parenthesized(_) => false,
+    };
+    matches!(bound, syn::TypeParamBound::Lifetime(_))
+        || matches!(bound, syn::TypeParamBound::Trait(bound) if bound.path.segments.iter().all(free))
+}
+
+/// The sort key of a bound: its token text with each parameter of the generics written as
+/// its position.
+fn bound_key(bound: &syn::TypeParamBound, names: &[(bool, String)]) -> String {
+    use quote::ToTokens as _;
+
+    fn write(stream: TokenStream, names: &[(bool, String)], out: &mut String) {
+        let mut lifetime = false;
+        for token in stream {
+            match token {
+                proc_macro2::TokenTree::Group(group) => {
+                    let _ = core::fmt::Write::write_fmt(
+                        out,
+                        format_args!("{:?}\u{2}", group.delimiter()),
+                    );
+                    write(group.stream(), names, out);
+                    out.push('\u{3}');
+                    lifetime = false;
+                }
+                proc_macro2::TokenTree::Ident(ident) => {
+                    let text = ident.to_string();
+                    match names
+                        .iter()
+                        .position(|(is_lifetime, name)| *is_lifetime == lifetime && *name == text)
+                    {
+                        Some(position) => {
+                            out.push('#');
+                            out.push_str(&position.to_string());
+                        }
+                        None => out.push_str(&text),
+                    }
+                    out.push(' ');
+                    lifetime = false;
+                }
+                proc_macro2::TokenTree::Punct(punct) => {
+                    out.push(punct.as_char());
+                    lifetime = punct.as_char() == '\'';
+                }
+                proc_macro2::TokenTree::Literal(literal) => {
+                    out.push_str(&literal.to_string());
+                    out.push(' ');
+                    lifetime = false;
+                }
+            }
+        }
+    }
+
+    let mut out = String::new();
+    write(bound.to_token_stream(), names, &mut out);
+    out
 }
 
 /// Bounds retain their order and values.
