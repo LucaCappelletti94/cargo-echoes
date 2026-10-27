@@ -47,6 +47,10 @@ pub(crate) struct Options<'a> {
     /// The scopes around the file leave every std derive, formatting macro and crate root bound
     /// to the std item.
     pub(crate) std_names: bool,
+    /// No attribute on the module, an ancestor or the crate root removes the standard prelude.
+    pub(crate) prelude: bool,
+    /// No trait in view declares a method named `to_string` or `to_owned`.
+    pub(crate) owned_methods: bool,
     /// The source context's helper summary table, when one is indexed.
     pub(crate) helper_table: Option<&'a crate::helpers::HelperTable>,
     pub(crate) helper_module: &'a [String],
@@ -325,6 +329,12 @@ pub(crate) struct Renamer<'env> {
     prim_fallback: bool,
     /// The scopes around the pass leave every std formatting macro name bound to the std macro.
     std_names: bool,
+    /// The standard prelude is active in the module being visited.
+    prelude: bool,
+    /// No trait in view declares a method named `to_string` or `to_owned`.
+    owned_methods: bool,
+    /// An enclosing block of the current item already read its owned strings and empty vectors.
+    prelude_folded: bool,
     /// The inline modules around the traversal, whose frames stay on the stack.
     inline_depth: usize,
     /// A live observer attribute froze the declarations being visited.
@@ -381,6 +391,9 @@ impl<'env> Renamer<'env> {
             compiles: false,
             prim_fallback: false,
             std_names: false,
+            prelude: false,
+            owned_methods: false,
+            prelude_folded: false,
             inline_depth: 0,
             observed: false,
             constants_observed: false,
@@ -433,6 +446,8 @@ impl<'env> Renamer<'env> {
         renamer.compiles = compiles;
         renamer.prim_fallback = options.prim_fallback;
         renamer.std_names = options.std_names;
+        renamer.prelude = options.prelude;
+        renamer.owned_methods = options.owned_methods;
         renamer.observed = options.observed;
         renamer.tail_blocked = options.enclosing_observed;
         renamer.seed = options.seed;
@@ -1193,11 +1208,47 @@ impl<'env> Renamer<'env> {
             && !self.scopes.iter().any(|scope| scope.frozen)
     }
 
+    /// Whether owned strings and empty vectors may take their canonical spelling: the value
+    /// proofs hold under the standard prelude. The item analysis runs only over compiling files,
+    /// so it reads them too and orders items by the same spelling the main pass prints.
+    fn prelude_allowed(&self) -> bool {
+        self.prelude
+            && (self.compiles || self.analysis)
+            && !self.observed
+            && !self.constants_observed
+            && self.macro_origins.is_none()
+            && !self.scopes.iter().any(|scope| scope.frozen)
+            && self.prim_fallback
+            && !self.glob_uncertain()
+            && !self.cfg_blocked()
+    }
+
     pub(crate) fn values_allowed(&self) -> bool {
         self.constants_allowed()
             && self.prim_fallback
             && !self.glob_uncertain()
             && !self.cfg_blocked()
+    }
+
+    /// Whether no binding in view claims `name` in the type namespace, so the standard prelude
+    /// item answers to it.
+    pub(crate) fn type_unclaimed(&self, name: &str) -> bool {
+        self.lookup(&[Ns::Type], name).is_none()
+    }
+
+    /// Whether no trait in view declares a method named `to_string` or `to_owned`.
+    pub(crate) fn owned_methods(&self) -> bool {
+        self.owned_methods
+    }
+
+    /// Whether `path` names the standard `vec!` macro.
+    pub(crate) fn standard_vec(&self, path: &syn::Path) -> bool {
+        matches!(
+            self.standard_name(path, false),
+            Some(crate::macros::MacroResolution::Macro(
+                crate::macros::MacroGrammar::Vector
+            ))
+        )
     }
 
     /// Replace a built-in `concat!` of string literals with the literal of its joined value.
@@ -2595,6 +2646,8 @@ pub(crate) fn normalize_file(
     renamer.into_reference_facts()
 }
 
+/// The item analysis of a compiling file, which reads owned strings and empty vectors like the
+/// main pass so that both see one spelling.
 pub(crate) fn analyze_file(file: &mut syn::File, options: Options<'_>) -> ReferenceFacts {
     let mut renamer = Renamer::seeded(options, false);
     renamer.analysis = true;
@@ -3131,7 +3184,9 @@ impl VisitMut for Renamer<'_> {
         let helper_blocked = self.helper_blocked;
         self.helper_blocked |= crate::drift::item_attrs(item)
             .is_some_and(|attrs| crate::context::blocking_attr(attrs));
+        let prelude_folded = core::mem::replace(&mut self.prelude_folded, false);
         syn::visit_mut::visit_item_mut(self, item);
+        self.prelude_folded = prelude_folded;
         self.constants_prepared = prepared;
         self.regions_active = regions_active;
         self.constants_observed = observed;
@@ -3177,6 +3232,11 @@ impl VisitMut for Renamer<'_> {
         }
         if self.compiles && self.tails_allowed() {
             crate::tails::drop_exit_semicolon(self, block);
+        }
+        let prelude_folded = self.prelude_folded;
+        if !prelude_folded && self.prelude_allowed() {
+            crate::prelude::normalize(self, block);
+            self.prelude_folded = true;
         }
         self.depth += 1;
         if self.constants_allowed() {
@@ -3241,6 +3301,7 @@ impl VisitMut for Renamer<'_> {
             let facts = self.block_facts.pop().expect("an analyzed block");
             facts.finish(block, &mut self.facts);
         }
+        self.prelude_folded = prelude_folded;
         self.tail_blocked = tail_blocked;
     }
 
@@ -3573,6 +3634,8 @@ impl VisitMut for Renamer<'_> {
             self.prim_fallback = crate::context::scope_primitives_known(items);
             let observed = self.observed;
             self.observed |= crate::context::live_attr(&item.attrs);
+            let prelude = self.prelude;
+            self.prelude &= !crate::context::removes_prelude(&item.attrs);
             self.frames.push(frame);
             self.inline_depth += 1;
             for sub_item in items.iter_mut() {
@@ -3582,6 +3645,7 @@ impl VisitMut for Renamer<'_> {
             let frame = self.frames.pop().expect("a scope frame");
             self.prim_fallback = primitive;
             self.observed = observed;
+            self.prelude = prelude;
             self.mod_frames.insert(id, frame);
         }
         if let Some(previous) = previous_module {

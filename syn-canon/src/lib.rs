@@ -16,6 +16,7 @@ mod form;
 mod helpers;
 mod items;
 mod macros;
+mod prelude;
 mod reference;
 mod schedule;
 mod scope;
@@ -79,6 +80,8 @@ pub fn canonicalize_failing(file: syn::File) -> CanonicalForm {
 }
 
 fn canonical(file: syn::File, compiles: bool) -> CanonicalForm {
+    let prelude = !context::removes_prelude(&file.attrs);
+    let owned_methods = !context::declares_owned_method(&file.items);
     form::canonical_file_with_options(
         file,
         compiles,
@@ -90,6 +93,8 @@ fn canonical(file: syn::File, compiles: bool) -> CanonicalForm {
             observed: false,
             enclosing_observed: false,
             std_names: true,
+            prelude,
+            owned_methods,
             helper_table: None,
             helper_module: &[],
             helper_blocked: false,
