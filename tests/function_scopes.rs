@@ -599,3 +599,43 @@ fn an_observing_impl_retains_the_commutative_operand_order() {
     };
     assert_ne!(view(&source("y * x")), view(&source("x * y")));
 }
+
+#[test]
+fn proven_identities_reduce_in_the_borrowed_view() {
+    let body = |expression: &str| format!("fn f(x: u32, y: u32) -> u32 {{ {expression} }}");
+    for (written, reduced) in [
+        ("(x + 0) ^ y", "x ^ y"),
+        ("x.wrapping_mul(1) | (y & 0)", "x"),
+        ("read(); x - x", "read(); 0u32"),
+    ] {
+        assert_eq!(view(&body(written)), view(&body(reduced)), "{written}");
+    }
+}
+
+#[test]
+fn unproven_identities_stay_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f(x: Unknown) -> Unknown { x + 0 }"),
+        view("fn f(x: Unknown) -> Unknown { x }")
+    );
+    assert_ne!(
+        view("fn f() -> u32 { read() * 0 }"),
+        view("fn f() -> u32 { 0u32 }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_identity_operand() {
+    assert_ne!(
+        failing_form("fn f(x: u32) -> u32 { x | 0 }"),
+        failing_form("fn f(x: u32) -> u32 { x }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_identity_operand() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f(x: u32) -> u32 {{ {body} }}\n}}")
+    };
+    assert_ne!(view(&source("x * 1")), view(&source("x")));
+}

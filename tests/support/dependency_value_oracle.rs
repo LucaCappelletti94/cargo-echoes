@@ -60,15 +60,23 @@ fn emit(op: char, mut leaves: Vec<Value>) -> Value {
         });
         false
     });
-    if let Some(value) = literal
-        && (op != '^' || value != 0 || leaves.is_empty())
-    {
-        leaves.push(Value::Literal(value));
+    let (identity, absorbing) = match op {
+        '&' => (u32::MAX, Some(0)),
+        '|' => (0, Some(u32::MAX)),
+        _ => (0, None),
+    };
+    if let Some(value) = literal {
+        if Some(value) == absorbing {
+            return Value::Literal(value);
+        }
+        if value != identity {
+            leaves.push(Value::Literal(value));
+        }
     }
     leaves.sort();
-    if leaves.len() == 1 {
-        leaves.pop().unwrap()
-    } else {
-        Value::Operation(op, leaves)
+    match leaves.len() {
+        0 => Value::Literal(identity),
+        1 => leaves.pop().unwrap(),
+        _ => Value::Operation(op, leaves),
     }
 }

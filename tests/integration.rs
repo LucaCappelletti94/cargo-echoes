@@ -1236,6 +1236,51 @@ fn commutative_functions_keep_subtraction_order() {
     assert_eq!(function_groups(&scan(4)).len(), 0);
 }
 
+const IDENTITY_FIXTURE: &str = "tests/fixtures/identityws";
+
+#[test]
+fn identity_doctests_group_only_the_reduced_operands() {
+    let report = Echoes::default().run(IDENTITY_FIXTURE).unwrap();
+    assert_eq!(report.total, 4);
+    assert_eq!(report.unique, 2);
+    let expected = [vec![
+        "identityws::Padded",
+        "identityws::Plain",
+        "identityws::Scaled",
+    ]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(21)
+        .run(IDENTITY_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(22)
+        .run(IDENTITY_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn identity_functions_keep_other_constants_separate() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(IDENTITY_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec![
+        "identityws::padded",
+        "identityws::plain",
+        "identityws::scaled",
+    ]];
+    for tokens in [0, 3] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(4)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

@@ -1,0 +1,2609 @@
+[
+  {
+    "id": "id_add_zero_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x+0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_zero_add_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{0+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_sub_zero_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x-0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_mul_one_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x*1} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_div_one_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x/1} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_or_zero_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x|0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_shl_zero_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x<<0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_shr_zero_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x>>0u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_and_ones_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x&255u8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_wrapping_add_zero_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x.wrapping_add(0)} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_saturating_mul_one_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x.saturating_mul(1)} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n255\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_mul_zero_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x*0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{0u8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_and_zero_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x&0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{0u8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_sub_self_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x-x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{0u8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_or_ones_u8",
+    "family": "identities",
+    "a": "fn f(x:u8)->u8{x|255u8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8)->u8{255u8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u8,255,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n255\n255\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n255\n255\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n255\n255\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n255\n255\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_add_zero_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x+0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_zero_add_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{0+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_sub_zero_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x-0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_mul_one_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x*1} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_div_one_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x/1} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_or_zero_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x|0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_shl_zero_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x<<0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_shr_zero_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x>>0u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_and_ones_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x&4294967295u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_wrapping_add_zero_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x.wrapping_add(0)} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_saturating_mul_one_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x.saturating_mul(1)} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_mul_zero_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x*0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{0u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_and_zero_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x&0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{0u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_sub_self_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x-x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{0u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_or_ones_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x|4294967295u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{4294967295u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n4294967295\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n4294967295\n4294967295\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n4294967295\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n4294967295\n4294967295\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_add_zero_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x+0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_zero_add_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{0+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_sub_zero_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x-0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_mul_one_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x*1} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_div_one_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x/1} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_or_zero_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x|0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_shl_zero_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x<<0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_shr_zero_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x>>0u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_and_ones_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x&340282366920938463463374607431768211455u128} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_wrapping_add_zero_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x.wrapping_add(0)} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_saturating_mul_one_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x.saturating_mul(1)} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n340282366920938463463374607431768211455\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_mul_zero_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x*0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{0u128} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_and_zero_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x&0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{0u128} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_sub_self_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x-x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{0u128} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_or_ones_u128",
+    "family": "identities",
+    "a": "fn f(x:u128)->u128{x|340282366920938463463374607431768211455u128} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128)->u128{340282366920938463463374607431768211455u128} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u128,340282366920938463463374607431768211455,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "340282366920938463463374607431768211455\n340282366920938463463374607431768211455\n340282366920938463463374607431768211455\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "340282366920938463463374607431768211455\n340282366920938463463374607431768211455\n340282366920938463463374607431768211455\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "340282366920938463463374607431768211455\n340282366920938463463374607431768211455\n340282366920938463463374607431768211455\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "340282366920938463463374607431768211455\n340282366920938463463374607431768211455\n340282366920938463463374607431768211455\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_add_zero_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x+0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_zero_add_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{0+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_sub_zero_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x-0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_mul_one_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x*1} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_div_one_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x/1} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_or_zero_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x|0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_shl_zero_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x<<0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_shr_zero_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x>>0u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_and_ones_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x&-1i8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_wrapping_add_zero_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x.wrapping_add(0)} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_saturating_mul_one_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x.saturating_mul(1)} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n127\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_mul_zero_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x*0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{0i8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_and_zero_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x&0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{0i8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_sub_self_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x-x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{0i8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_or_ones_i8",
+    "family": "identities",
+    "a": "fn f(x:i8)->i8{x|-1i8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8)->i8{-1i8} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-128i8,127,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1\n-1\n-1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1\n-1\n-1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1\n-1\n-1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1\n-1\n-1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_add_zero_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x+0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_zero_add_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{0+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_sub_zero_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x-0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_mul_one_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x*1} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_div_one_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x/1} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_or_zero_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x|0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_shl_zero_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x<<0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_shr_zero_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x>>0u32} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_and_ones_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x&-1i64} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_wrapping_add_zero_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x.wrapping_add(0)} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_saturating_mul_one_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x.saturating_mul(1)} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_mul_zero_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x*0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{0i64} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_and_zero_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x&0} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{0i64} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_sub_self_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x-x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{0i64} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_or_ones_i64",
+    "family": "identities",
+    "a": "fn f(x:i64)->i64{x|-1i64} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64)->i64{-1i64} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [-9223372036854775808i64,9223372036854775807,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1\n-1\n-1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1\n-1\n-1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1\n-1\n-1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1\n-1\n-1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_bool_and_true",
+    "family": "identities",
+    "a": "fn f(p:bool)->bool{p&true} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "b": "fn f(p:bool)->bool{p} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_bool_or_true",
+    "family": "identities",
+    "a": "fn f(p:bool)->bool{p|true} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "b": "fn f(p:bool)->bool{true} fn main(){for p in [false,true]{println!(\"{}\",f(p));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_double_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x*2} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,4294967295,5]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967294\n10\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\npanic Some(\"attempt to multiply with overflow\")\n10\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "id_round_trip_u32",
+    "family": "identities",
+    "a": "fn f(x:u32)->u32{x-1+1} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,7]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){std::panic::set_hook(Box::new(|_|{}));for x in [0u32,7]{match std::panic::catch_unwind(||f(x)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "profile-dependent",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to subtract with overflow\")\n7\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n7\n"
+        }
+      }
+    }
+  }
+]
