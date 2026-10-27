@@ -1193,3 +1193,39 @@ fn an_observing_impl_retains_match_arm_spellings() {
         view(&source("match x { 0 => 1, 1 => 7, _ => 3 }"))
     );
 }
+
+#[test]
+fn discarded_call_bindings_read_as_statements_in_the_borrowed_view() {
+    assert_eq!(
+        view("fn f(v: &mut Vec<u32>) { let _ = v.pop(); let _ = g(); }"),
+        view("fn f(v: &mut Vec<u32>) { v.pop(); g(); }")
+    );
+    for (bound, dropped) in [
+        (
+            "fn f(v: Vec<u32>) { let _ = v; }",
+            "fn f(v: Vec<u32>) { v; }",
+        ),
+        (
+            "fn f(v: &mut Vec<u32>) { let _last = v.pop(); }",
+            "fn f(v: &mut Vec<u32>) { v.pop(); }",
+        ),
+    ] {
+        assert_ne!(view(bound), view(dropped), "{bound}");
+    }
+}
+
+#[test]
+fn the_failure_mode_retains_discarded_call_bindings() {
+    assert_ne!(
+        failing_form("fn f(v: &mut Vec<u32>) { let _ = v.pop(); }"),
+        failing_form("fn f(v: &mut Vec<u32>) { v.pop(); }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_discarded_call_bindings() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f(v: &mut Vec<u32>) {{ {body} }}\n}}")
+    };
+    assert_ne!(view(&source("let _ = v.pop();")), view(&source("v.pop();")));
+}

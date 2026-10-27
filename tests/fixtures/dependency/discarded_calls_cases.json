@@ -1,0 +1,167 @@
+[
+  {
+    "id": "dc_call",
+    "family": "discarded_calls",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn make(n:&'static str)->D{println!(\"make {}\",n);D(n)} fn main(){let _a=D(\"a\");let _=make(\"t\");println!(\"after\");}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn make(n:&'static str)->D{println!(\"make {}\",n);D(n)} fn main(){let _a=D(\"a\");make(\"t\");println!(\"after\");}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "make t\ndrop t\nafter\ndrop a\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "make t\ndrop t\nafter\ndrop a\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "make t\ndrop t\nafter\ndrop a\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "make t\ndrop t\nafter\ndrop a\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_method",
+    "family": "discarded_calls",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} impl D{fn twin(&self)->D{D(\"twin\")}} fn main(){let a=D(\"a\");let _=a.twin();println!(\"after\");}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} impl D{fn twin(&self)->D{D(\"twin\")}} fn main(){let a=D(\"a\");a.twin();println!(\"after\");}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop twin\nafter\ndrop a\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop twin\nafter\ndrop a\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop twin\nafter\ndrop a\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop twin\nafter\ndrop a\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_temporary_argument",
+    "family": "discarded_calls",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn take(_d:&D)->D{D(\"out\")} fn main(){let _=take(&D(\"arg\"));println!(\"after\");}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn take(_d:&D)->D{D(\"out\")} fn main(){take(&D(\"arg\"));println!(\"after\");}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop out\ndrop arg\nafter\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop out\ndrop arg\nafter\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop out\ndrop arg\nafter\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop out\ndrop arg\nafter\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_named_binding",
+    "family": "discarded_calls",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn make()->D{D(\"t\")} fn main(){let _x=make();println!(\"after\");}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn make()->D{D(\"t\")} fn main(){make();println!(\"after\");}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "after\ndrop t\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "after\ndrop t\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop t\nafter\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop t\nafter\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_place",
+    "family": "discarded_calls",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn main(){let a=D(\"a\");let _=a;println!(\"after\");}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn main(){let a=D(\"a\");a;println!(\"after\");}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "after\ndrop a\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "after\ndrop a\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop a\nafter\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop a\nafter\n"
+        }
+      }
+    }
+  }
+]

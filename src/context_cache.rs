@@ -207,6 +207,9 @@ pub mod alpha {
         let first = if let Some(found) = value { found } else { 0 };
         match digit { 2 => first, 0 => 1, 1 => first, _ => 9 }
     }
+    pub fn trimmed(values: &mut Vec<u32>) {
+        let _ = values.pop();
+    }
 }
 mod custom {
     macro_rules! vec {
