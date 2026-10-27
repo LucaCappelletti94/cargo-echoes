@@ -541,9 +541,7 @@ impl Walker<'_, '_> {
     /// literal whose type the receiver infers staying the argument, or the other operand when
     /// one operand is the method's identity.
     fn commutative(&self, mut method: syn::ExprMethodCall) -> (syn::Expr, Option<Lbl>) {
-        let Some(tag) = schedule::commutative_method(&method) else {
-            return (syn::Expr::MethodCall(method), None);
-        };
+        let tag = schedule::commutative_method(&method).expect("a native commutative method");
         let receiver = self.scalar_in_place(&mut method.receiver, true);
         let argument = self.scalar_in_place(&mut method.args[0], true);
         let (Some(receiver), Some(argument)) = (receiver, argument) else {
