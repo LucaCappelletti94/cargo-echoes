@@ -222,7 +222,7 @@ impl Walker<'_, '_> {
                             | syn::BinOp::Mul(_)
                     ));
         if self.dedup
-            && schedule::borrowed_comparison(&binary).is_some()
+            && matches!(binary.op, syn::BinOp::Eq(_) | syn::BinOp::Ne(_))
             && let Some((left, right)) = self.borrowed_operands(&mut binary, total_calls)
         {
             return self.labeled_binary(binary, left, right);
@@ -267,6 +267,13 @@ impl Walker<'_, '_> {
         else {
             return None;
         };
+        if left.mutability.is_some()
+            || right.mutability.is_some()
+            || !left.attrs.is_empty()
+            || !right.attrs.is_empty()
+        {
+            return None;
+        }
         let left_label = self.scalar_in_place(&mut left.expr, total_calls);
         let right_label = self.scalar_in_place(&mut right.expr, total_calls);
         let (Some(left_label), Some(right_label)) = (left_label, right_label) else {

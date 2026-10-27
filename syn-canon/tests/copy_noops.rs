@@ -59,6 +59,14 @@ fn other_copies_keep_their_spelling() {
     for (written, canonical) in [
         ("*&mut x", "x"),
         ("if &x < &y { x } else { y }", "if x < y { x } else { y }"),
+        (
+            "if &mut x == &mut 1u32 { x } else { y }",
+            "if x == 1u32 { x } else { y }",
+        ),
+        (
+            "if &x == &make() { x } else { y }",
+            "if x == make() { x } else { y }",
+        ),
     ] {
         separate(
             &format!("fn f(mut x: u32, y: u32) -> u32 {{ {written} }}"),
