@@ -14,6 +14,14 @@ use crate::schedule::{
 };
 use crate::scope::PrimTy;
 
+/// The single unqualified type name a cast targets.
+fn cast_name(ty: &syn::Type) -> Option<&syn::Ident> {
+    match ty {
+        syn::Type::Path(path) if path.qself.is_none() => path.path.get_ident(),
+        _ => None,
+    }
+}
+
 struct Bound {
     depth: usize,
     nodes: usize,
@@ -344,21 +352,65 @@ impl Walker<'_, '_> {
                 self.branch(conditional(r#match), total_calls)
             }
             syn::Expr::Group(group) => self.scalar(*group.expr, total_calls),
+            syn::Expr::Cast(mut cast) if self.dedup => {
+                let operand = self.scalar_in_place(&mut cast.expr, total_calls);
+                let source = operand.as_ref().and_then(Lbl::prim);
+                let target = cast_name(&cast.ty).and_then(|name| self.renamer.type_name_prim(name));
+                match (source, target) {
+                    (Some(source), Some(target)) if source == target => (*cast.expr, operand),
+                    _ => (syn::Expr::Cast(cast), None),
+                }
+            }
+            syn::Expr::Call(call) if self.dedup => self.call(call, total_calls),
             syn::Expr::MethodCall(method) if self.native_commutative(&method) => {
                 self.commutative(method)
-            }
-            expr @ syn::Expr::Call(_) if total_calls => {
-                let mut locals = 0;
-                let label =
-                    schedule::label_expr(self.renamer, &self.env, &expr, 0, &mut locals, None).0;
-                let label = label.prim().is_some().then_some(label);
-                (expr, label)
             }
             expr @ (syn::Expr::Lit(_) | syn::Expr::Path(_) | syn::Expr::Unary(_)) => {
                 let label = schedule::scalar_leaf(&self.env, &expr);
                 (expr, label)
             }
             expr => (expr, None),
+        }
+    }
+
+    /// The label of a call the enclosing operation proves total, kept when it names a primitive.
+    fn total_call(&self, expr: syn::Expr) -> (syn::Expr, Option<Lbl>) {
+        let mut locals = 0;
+        let label = schedule::label_expr(self.renamer, &self.env, &expr, 0, &mut locals, None).0;
+        let label = label.prim().is_some().then_some(label);
+        (expr, label)
+    }
+
+    /// A call, read as a cast when it is the standard `T::from` of a proven primitive into a
+    /// proven primitive `T` it converts to without loss, and as its operand when the types agree.
+    fn call(&self, mut call: syn::ExprCall, total_calls: bool) -> (syn::Expr, Option<Lbl>) {
+        let Some((name, target)) = schedule::from_conversion(self.renamer, &call) else {
+            return if total_calls {
+                self.total_call(syn::Expr::Call(call))
+            } else {
+                (syn::Expr::Call(call), None)
+            };
+        };
+        let name = name.clone();
+        let operand = self.scalar_in_place(&mut call.args[0], total_calls);
+        match operand.as_ref().and_then(Lbl::prim) {
+            Some(source) if source == target => {
+                (core::mem::replace(&mut call.args[0], empty_expr()), operand)
+            }
+            Some(source) if schedule::lossless(source, target) => {
+                let cast = syn::ExprCast {
+                    attrs: Vec::new(),
+                    expr: Box::new(core::mem::replace(&mut call.args[0], empty_expr())),
+                    as_token: syn::token::As::default(),
+                    ty: Box::new(syn::Type::Path(syn::TypePath {
+                        attrs: Vec::new(),
+                        qself: None,
+                        path: syn::Path::from(name),
+                    })),
+                };
+                (syn::Expr::Cast(cast), None)
+            }
+            _ => (syn::Expr::Call(call), None),
         }
     }
 
@@ -701,7 +753,14 @@ impl VisitMut for Walker<'_, '_> {
             | syn::Expr::If(_)
             | syn::Expr::Lit(_)
             | syn::Expr::Path(_)
-            | syn::Expr::Group(_) => {
+            | syn::Expr::Group(_)
+            | syn::Expr::Cast(_) => {
+                let owned = core::mem::replace(expr, empty_expr());
+                *expr = self.scalar(owned, false).0;
+            }
+            syn::Expr::Call(call)
+                if self.dedup && schedule::from_conversion(self.renamer, call).is_some() =>
+            {
                 let owned = core::mem::replace(expr, empty_expr());
                 *expr = self.scalar(owned, false).0;
             }

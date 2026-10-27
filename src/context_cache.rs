@@ -185,6 +185,9 @@ pub mod alpha {
     pub fn label() -> String {
         String::from("sentinel")
     }
+    pub fn widened(value: u32, flag: bool) -> u64 {
+        u64::from(value) + flag as u64
+    }
 }
 mod custom {
     macro_rules! vec {
