@@ -198,6 +198,11 @@ pub mod alpha {
         if value == 0 { return None; }
         Some(value)
     }
+    pub fn skipped(values: &[u32], quiet: bool) {
+        if quiet { return; }
+        for value in values { if *value == 0 { continue; } epsilon(*value); }
+        epsilon(0u32);
+    }
 }
 mod custom {
     macro_rules! vec {
