@@ -1023,3 +1023,51 @@ fn an_observing_impl_retains_primitive_copies() {
     assert_ne!(view(&source("x.clone()")), view(&source("x")));
     assert_ne!(view(&source("*&x")), view(&source("x")));
 }
+
+#[test]
+fn constructor_returns_read_as_tails_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "fn f() -> Result<(), u8> { mark(); return Ok(()); }",
+            "fn f() -> Result<(), u8> { mark(); Ok(()) }",
+        ),
+        (
+            "fn f(p: bool, x: u32) -> Option<u32> { if p { return None; } Some(x) }",
+            "fn f(p: bool, x: u32) -> Option<u32> { if p { None } else { Some(x) } }",
+        ),
+    ] {
+        assert_eq!(view(written), view(canonical), "{written}");
+    }
+}
+
+#[test]
+fn claimed_constructors_and_temporaries_keep_their_returns_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "use custom::Ok; fn f() -> Result<(), u8> { return Ok(()); }",
+            "use custom::Ok; fn f() -> Result<(), u8> { Ok(()) }",
+        ),
+        (
+            "fn f() -> Option<usize> { return Some(make().len()); }",
+            "fn f() -> Option<usize> { Some(make().len()) }",
+        ),
+    ] {
+        assert_ne!(view(written), view(canonical), "{written}");
+    }
+}
+
+#[test]
+fn the_failure_mode_retains_constructor_returns() {
+    assert_ne!(
+        failing_form("fn f() -> Result<(), u8> { return Ok(()); }"),
+        failing_form("fn f() -> Result<(), u8> { Ok(()) }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_constructor_returns() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f() -> Result<(), u8> {{ {body} }}\n}}")
+    };
+    assert_ne!(view(&source("return Ok(());")), view(&source("Ok(())")));
+}

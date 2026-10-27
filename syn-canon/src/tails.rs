@@ -76,7 +76,7 @@ pub(crate) fn normalize(
         let mut proof = Proof {
             renamer,
             locals: 0,
-            let_else: compiles,
+            compiles,
             early: compiles && early,
         };
         proof.block(block, renamer.frame_env(), true);
@@ -93,7 +93,7 @@ pub(crate) fn normalize_expr(
         let mut proof = Proof {
             renamer,
             locals: 0,
-            let_else: compiles,
+            compiles,
             early: compiles && early,
         };
         proof.expr(expr, &renamer.frame_env(), true);
@@ -113,7 +113,7 @@ pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr) {
     let proof = Proof {
         renamer,
         locals: 0,
-        let_else: false,
+        compiles: false,
         early: false,
     };
     let deferred = matches!(expr, syn::Expr::Closure(_) | syn::Expr::Async(_))
@@ -129,8 +129,9 @@ pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr) {
 struct Proof<'a, 'env> {
     renamer: &'a Renamer<'env>,
     locals: usize,
-    /// `let`-`else` over a place may read as `match`.
-    let_else: bool,
+    /// The source compiles, so `let`-`else` over a place may read as `match` and prelude
+    /// constructors count as values.
+    compiles: bool,
     /// Early returns before a tail may read as `else` branches.
     early: bool,
 }
@@ -206,7 +207,7 @@ impl<'env> Proof<'_, 'env> {
             return false;
         };
         let types_known = local_types_known && types_known;
-        if self.let_else && types_known {
+        if self.compiles && types_known {
             self.let_else(&mut block.stmts, env.clone());
         }
         let Some((last, prefix)) = block.stmts.split_last_mut() else {
@@ -552,6 +553,20 @@ impl<'env> Proof<'_, 'env> {
             syn::Expr::Lit(_) => true,
             syn::Expr::Tuple(tuple) => tuple.elems.iter().all(|element| self.value(element, env)),
             syn::Expr::Group(group) => self.value(&group.expr, env),
+            syn::Expr::Call(call) => {
+                self.compiles
+                    && call.attrs.is_empty()
+                    && call.args.len() == 1
+                    && self
+                        .renamer
+                        .prelude_variant(&call.func, &["Ok", "Err", "Some"])
+                    && self.value(&call.args[0], env)
+            }
+            syn::Expr::Path(_)
+                if self.compiles && self.renamer.prelude_variant(expr, &["None"]) =>
+            {
+                true
+            }
             _ => {
                 Self::native(expr, env)
                     || Self::unit(expr, env)

@@ -1538,6 +1538,43 @@ fn primitive_copy_functions_group_with_their_plain_form() {
     assert_eq!(function_groups(&scan(6)).len(), 0);
 }
 
+const RETURNS_FIXTURE: &str = "tests/fixtures/returnsws";
+
+#[test]
+fn constructor_return_doctests_group_with_their_branches() {
+    let report = Echoes::default().run(RETURNS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["returnsws::Branched", "returnsws::Returned"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(28)
+        .run(RETURNS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(29)
+        .run(RETURNS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn constructor_return_functions_group_with_their_tails() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(RETURNS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["returnsws::bump", "returnsws::step"]];
+    for tokens in [0, 6] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(7)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

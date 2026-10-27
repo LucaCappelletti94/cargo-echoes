@@ -194,6 +194,10 @@ pub mod alpha {
     pub fn copied(value: u32, other: u32) -> bool {
         &value == &other
     }
+    pub fn checked(value: u32) -> Option<u32> {
+        if value == 0 { return None; }
+        Some(value)
+    }
 }
 mod custom {
     macro_rules! vec {

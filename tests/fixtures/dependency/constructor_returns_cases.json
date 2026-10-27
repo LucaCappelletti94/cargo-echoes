@@ -1,0 +1,202 @@
+[
+  {
+    "id": "cr_ok_unit",
+    "family": "constructor_returns",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(x:&mut u32)->Result<(),u8>{let _l=D(\"local\");*x+=1;return Ok(());} fn main(){let mut x=1;println!(\"{:?} {}\",f(&mut x),x);}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(x:&mut u32)->Result<(),u8>{let _l=D(\"local\");*x+=1;Ok(())} fn main(){let mut x=1;println!(\"{:?} {}\",f(&mut x),x);}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\nOk(()) 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\nOk(()) 2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\nOk(()) 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\nOk(()) 2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cr_err",
+    "family": "constructor_returns",
+    "a": "fn f(x:u32)->Result<u32,u8>{if x>2{return Err(1);}return Ok(x);} fn main(){for x in [1u32,5]{println!(\"{:?}\",f(x));}}",
+    "b": "fn f(x:u32)->Result<u32,u8>{if x>2{Err(1)}else{Ok(x)}} fn main(){for x in [1u32,5]{println!(\"{:?}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Ok(1)\nErr(1)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Ok(1)\nErr(1)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Ok(1)\nErr(1)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Ok(1)\nErr(1)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cr_option",
+    "family": "constructor_returns",
+    "a": "fn f(p:bool,x:u32)->Option<u32>{if p{return None;}Some(x)} fn main(){for p in [false,true]{println!(\"{:?}\",f(p,3));}}",
+    "b": "fn f(p:bool,x:u32)->Option<u32>{if p{None}else{Some(x)}} fn main(){for p in [false,true]{println!(\"{:?}\",f(p,3));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(3)\nNone\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(3)\nNone\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(3)\nNone\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(3)\nNone\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cr_nested",
+    "family": "constructor_returns",
+    "a": "fn f(x:u32)->Result<Option<(u32,bool)>,u8>{return Ok(Some((x,x>1)));} fn main(){println!(\"{:?}\",f(2));}",
+    "b": "fn f(x:u32)->Result<Option<(u32,bool)>,u8>{Ok(Some((x,x>1)))} fn main(){println!(\"{:?}\",f(2));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Ok(Some((2, true)))\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Ok(Some((2, true)))\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Ok(Some((2, true)))\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Ok(Some((2, true)))\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cr_overflow_arg",
+    "family": "constructor_returns",
+    "a": "fn f(x:u32)->Option<u32>{return Some(x+1);} fn main(){println!(\"{:?}\",f(std::hint::black_box(u32::MAX)));}",
+    "b": "fn f(x:u32)->Option<u32>{Some(x+1)} fn main(){println!(\"{:?}\",f(std::hint::black_box(u32::MAX)));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(0)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(0)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        }
+      }
+    }
+  },
+  {
+    "id": "cr_shadowed_some",
+    "family": "constructor_returns",
+    "a": "fn Some(x:u32)->Option<u32>{Option::Some(x+1)} fn f(x:u32)->Option<u32>{return Some(x);} fn main(){println!(\"{:?}\",f(1));}",
+    "b": "fn f(x:u32)->Option<u32>{Option::Some(x)} fn main(){println!(\"{:?}\",f(1));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(2)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(2)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(1)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(1)\n"
+        }
+      }
+    }
+  }
+]

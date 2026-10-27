@@ -1361,6 +1361,23 @@ impl<'env> Renamer<'env> {
         self.prelude && self.type_unclaimed(name)
     }
 
+    /// Whether `expr` names one of the prelude variants `names` by its bare name, with the
+    /// standard prelude active and no binding claiming the name, so it constructs the standard
+    /// `Option` or `Result` without a temporary of its own.
+    pub(crate) fn prelude_variant(&self, expr: &syn::Expr, names: &[&str]) -> bool {
+        let syn::Expr::Path(path) = expr else {
+            return false;
+        };
+        self.prelude
+            && path.attrs.is_empty()
+            && path.qself.is_none()
+            && path.path.get_ident().is_some_and(|ident| {
+                let name = crate::scope::ident_name(ident);
+                names.contains(&name.as_str())
+                    && self.lookup(&[Ns::Value, Ns::Type], &name).is_none()
+            })
+    }
+
     /// The proven primitive type of a declared type, when the declaration
     /// establishes one through fully known local definitions.
     pub(crate) fn param_prim(&self, ty: &syn::Type) -> Option<PrimTy> {
