@@ -102,6 +102,66 @@ fn prelude_removals_keep_the_spelling() {
 }
 
 #[test]
+fn block_claims_keep_the_spelling() {
+    for declaration in [
+        "struct String;",
+        "enum ToOwned {}",
+        "union ToString { x: u8 }",
+        "trait ToOwned {}",
+        "trait ToString = Clone;",
+        "type String = u8;",
+        "mod ToOwned {}",
+        "macro_rules! String { () => {} }",
+        "extern crate custom as ToOwned;",
+        "use custom::Text as String;",
+        "use custom::*;",
+        "fn g<ToOwned>() {}",
+    ] {
+        separate(
+            &format!("fn f() -> usize {{ {declaration} \"a\".to_owned().len() }}"),
+            &format!("fn f() -> usize {{ {declaration} \"a\".to_string().len() }}"),
+        );
+    }
+    for declaration in ["macro_rules! vec { () => {} }", "struct Vec;"] {
+        separate(
+            &format!("fn f() -> usize {{ {declaration} let v: Vec<u8> = vec![]; v.len() }}"),
+            &format!("fn f() -> usize {{ {declaration} let v: Vec<u8> = Vec::new(); v.len() }}"),
+        );
+    }
+}
+
+#[test]
+fn attributed_syntax_keeps_the_spelling() {
+    for (written, canonical) in [
+        (
+            "#[observe] let s = \"a\".to_owned(); s.len()",
+            "#[observe] let s = \"a\".to_string(); s.len()",
+        ),
+        (
+            "match 0u8 { #[observe] _ => \"a\".to_owned().len() }",
+            "match 0u8 { #[observe] _ => \"a\".to_string().len() }",
+        ),
+        (
+            "(#[observe] \"a\".to_owned()).len()",
+            "(#[observe] \"a\".to_string()).len()",
+        ),
+    ] {
+        separate(
+            &format!("fn f() -> usize {{ {written} }}"),
+            &format!("fn f() -> usize {{ {canonical} }}"),
+        );
+    }
+    equivalent(
+        "fn f() -> usize { let s = \"a\".to_owned(); match s.len() { n => n } }",
+        "fn f() -> usize { let s = \"a\".to_string(); match s.len() { n => n } }",
+    );
+    equivalent(
+        "fn f() -> String { fn g() -> String { \"b\".to_owned() } g() + \"a\" }",
+        "fn f() -> String { fn g() -> String { String::from(\"b\") } g() + \"a\" }",
+    );
+}
+
+#[test]
 fn other_shapes_keep_the_spelling() {
     for (written, canonical) in [
         ("\"a\".into()", "\"a\".to_string()"),
