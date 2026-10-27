@@ -691,3 +691,54 @@ fn an_observing_impl_retains_the_nested_conditional() {
         view(&source("if p && q { mark(); }"))
     );
 }
+
+#[test]
+fn early_returns_read_as_else_branches_in_the_borrowed_view() {
+    let body =
+        |statements: &str| format!("fn f(p: bool, q: bool, x: u32) -> u32 {{ {statements} }}");
+    for (written, branched) in [
+        (
+            "if p { mark(); return x; } 0u32",
+            "if p { mark(); x } else { 0u32 }",
+        ),
+        (
+            "if p { return x; } if q { return 1u32; } 0u32",
+            "if p { x } else if q { 1u32 } else { 0u32 }",
+        ),
+    ] {
+        assert_eq!(view(&body(written)), view(&body(branched)), "{written}");
+    }
+}
+
+#[test]
+fn unproven_early_returns_keep_the_return_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f(p: Unknown, x: u32) -> u32 { if p { return x; } 0u32 }"),
+        view("fn f(p: Unknown, x: u32) -> u32 { if p { x } else { 0u32 } }")
+    );
+    assert_ne!(
+        view("fn f(p: bool, x: u32) -> u32 { if p { return x; } read() }"),
+        view("fn f(p: bool, x: u32) -> u32 { if p { x } else { read() } }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_early_return() {
+    assert_ne!(
+        failing_form("fn f(p: bool, x: u32) -> u32 { if p { return x; } 0u32 }"),
+        failing_form("fn f(p: bool, x: u32) -> u32 { if p { x } else { 0u32 } }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_early_return() {
+    let source = |body: &str| {
+        format!(
+            "struct S;\n#[observe]\nimpl S {{\n    fn f(p: bool, x: u32) -> u32 {{ {body} }}\n}}"
+        )
+    };
+    assert_ne!(
+        view(&source("if p { return x; } 0u32")),
+        view(&source("if p { x } else { 0u32 }"))
+    );
+}

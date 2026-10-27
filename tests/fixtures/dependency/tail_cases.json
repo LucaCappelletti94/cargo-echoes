@@ -89,5 +89,19 @@
     "a": "struct D(&'static str);\nimpl D { fn unit(&self) {} }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() { let local = D(\"local\"); { D(\"temp\").unit() } return; }\nfn main() { f(); }",
     "b": "struct D(&'static str);\nimpl D { fn unit(&self) {} }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f() { let local = D(\"local\"); { D(\"temp\").unit() } }\nfn main() { f(); }",
     "expected": "edition-dependent"
+  },
+  {
+    "id": "T15_early_return_tail_temporary",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } fn opt(&self, p: bool) -> Option<u32> { if p { Some(1) } else { None } } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f(p: bool) -> u32 { let local = D(\"local\"); if p { return 1; } D(\"temp\").value() }\nfn main() { println!(\"{}\", f(false)); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } fn opt(&self, p: bool) -> Option<u32> { if p { Some(1) } else { None } } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn f(p: bool) -> u32 { let local = D(\"local\"); if p { 1 } else { D(\"temp\").value() } }\nfn main() { println!(\"{}\", f(false)); }",
+    "expected": "edition-dependent"
+  },
+  {
+    "id": "T16_early_return_let_scrutinee",
+    "family": "tail-scope",
+    "a": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } fn opt(&self, p: bool) -> Option<u32> { if p { Some(1) } else { None } } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn g() -> u32 { println!(\"tail\"); 2 }\nfn f(p: bool) -> u32 { if let Some(v) = D(\"scrutinee\").opt(p) { return v; } g() }\nfn main() { println!(\"{}\", f(false)); }",
+    "b": "struct D(&'static str);\nimpl D { fn value(&self) -> u32 { 0 } fn opt(&self, p: bool) -> Option<u32> { if p { Some(1) } else { None } } }\nimpl Drop for D { fn drop(&mut self) { use std::io::Write as _; let _ = writeln!(std::io::stdout(), \"drop {}\", self.0); } }\nfn g() -> u32 { println!(\"tail\"); 2 }\nfn f(p: bool) -> u32 { if let Some(v) = D(\"scrutinee\").opt(p) { v } else { g() } }\nfn main() { println!(\"{}\", f(false)); }",
+    "expected": "edition-dependent"
   }
 ]

@@ -1325,6 +1325,46 @@ fn nested_conditional_functions_merge_conditions_and_wildcard_arms() {
     assert_eq!(function_groups(&scan(9)).len(), 0);
 }
 
+const EARLY_RETURN_FIXTURE: &str = "tests/fixtures/earlyretws";
+
+#[test]
+fn early_return_doctests_group_with_their_branches() {
+    let report = Echoes::default().run(EARLY_RETURN_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["earlyretws::Branched", "earlyretws::Early"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(23)
+        .run(EARLY_RETURN_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(24)
+        .run(EARLY_RETURN_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn early_return_functions_group_with_branches_and_else_if_ladders() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(EARLY_RETURN_FIXTURE)
+            .unwrap()
+    };
+    let expected = [
+        vec!["earlyretws::branched", "earlyretws::early"],
+        vec!["earlyretws::chained", "earlyretws::ladder"],
+    ];
+    for tokens in [0, 9] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(10)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {
