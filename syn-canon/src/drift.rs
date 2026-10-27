@@ -982,35 +982,37 @@ fn collapse_else_if(expr_if: &mut syn::ExprIf) {
 /// `return;`, and in a loop body a `continue` of that loop, so both forms run `S` or `R` and then
 /// leave the block. The rest keeps the locals and the temporary scopes of its statements.
 fn guard_clauses(stmts: &mut Vec<syn::Stmt>, jump: &dyn Fn(&syn::Stmt) -> bool) {
-    let Some(index) =
-        (0..stmts.len()).find(|&index| guard(&stmts[index], jump) && settled(&stmts[index + 1..]))
+    let Some(index) = (0..stmts.len())
+        .find(|&index| guard(&mut stmts[index], jump).is_some() && settled(&stmts[index + 1..]))
     else {
         return;
     };
     let mut rest = stmts.split_off(index + 1);
     guard_clauses(&mut rest, jump);
-    if let Some(syn::Stmt::Expr(syn::Expr::If(branch), semi)) = stmts.last_mut() {
-        branch.then_branch.stmts.pop();
-        guard_clauses(&mut branch.then_branch.stmts, jump);
-        *semi = None;
-        if branch.then_branch.stmts.is_empty() {
-            negate_condition(&mut branch.cond);
-            branch.then_branch.stmts = rest;
-            return;
-        }
-        branch.else_branch = Some((
-            syn::token::Else::default(),
-            Box::new(syn::Expr::Block(syn::ExprBlock {
-                attrs: Vec::new(),
-                label: None,
-                block: syn::Block {
-                    brace_token: syn::token::Brace::default(),
-                    stmts: rest,
-                },
-            })),
-        ));
-        collapse_else_if(branch);
+    let (branch, semi) = stmts
+        .last_mut()
+        .and_then(|stmt| guard(stmt, jump))
+        .expect("the guard at the found index");
+    branch.then_branch.stmts.pop();
+    guard_clauses(&mut branch.then_branch.stmts, jump);
+    *semi = None;
+    if branch.then_branch.stmts.is_empty() {
+        negate_condition(&mut branch.cond);
+        branch.then_branch.stmts = rest;
+        return;
     }
+    branch.else_branch = Some((
+        syn::token::Else::default(),
+        Box::new(syn::Expr::Block(syn::ExprBlock {
+            attrs: Vec::new(),
+            label: None,
+            block: syn::Block {
+                brace_token: syn::token::Brace::default(),
+                stmts: rest,
+            },
+        })),
+    ));
+    collapse_else_if(branch);
 }
 
 /// Replace `cond` by its negation, unwrapping an unattributed `!`.
@@ -1030,17 +1032,23 @@ fn negate_condition(cond: &mut syn::Expr) {
     };
 }
 
-/// Whether `stmt` is an unattributed `if` without `else` and without a `let` condition whose
-/// block ends in `jump`.
-fn guard(stmt: &syn::Stmt, jump: &dyn Fn(&syn::Stmt) -> bool) -> bool {
-    matches!(
-        stmt,
-        syn::Stmt::Expr(syn::Expr::If(branch), _)
+/// The `if` of `stmt` and its semicolon when `stmt` is an unattributed `if` without `else` and
+/// without a `let` condition whose block ends in `jump`.
+fn guard<'a>(
+    stmt: &'a mut syn::Stmt,
+    jump: &dyn Fn(&syn::Stmt) -> bool,
+) -> Option<(&'a mut syn::ExprIf, &'a mut Option<syn::token::Semi>)> {
+    match stmt {
+        syn::Stmt::Expr(syn::Expr::If(branch), semi)
             if branch.attrs.is_empty()
                 && branch.else_branch.is_none()
                 && !binds(&branch.cond)
-                && branch.then_branch.stmts.last().is_some_and(jump)
-    )
+                && branch.then_branch.stmts.last().is_some_and(jump) =>
+        {
+            Some((branch, semi))
+        }
+        _ => None,
+    }
 }
 
 /// Whether a condition holds a `let`, alone or in an `&&` chain.
@@ -1095,20 +1103,22 @@ fn loop_as_while(expr: &mut syn::Expr) {
                     && jump.label.as_ref().is_none_or(|name| Some(name) == label)
         )
     };
-    let Some((first, rest)) = plain.body.stmts.split_first() else {
+    let Some((first, rest)) = plain.body.stmts.split_first_mut() else {
         return;
     };
-    if !guard(first, &breaks)
-        || !matches!(first, syn::Stmt::Expr(syn::Expr::If(branch), _) if branch.then_branch.stmts.len() == 1)
-        || rest.iter().any(|stmt| matches!(stmt, syn::Stmt::Item(_)))
-    {
+    if rest.iter().any(|stmt| matches!(stmt, syn::Stmt::Item(_))) {
         return;
     }
-    let mut stmts = core::mem::take(&mut plain.body.stmts);
-    let rest = stmts.split_off(1);
-    let Some(syn::Stmt::Expr(syn::Expr::If(branch), _)) = stmts.pop() else {
+    let Some((branch, _)) =
+        guard(first, &breaks).filter(|(branch, _)| branch.then_branch.stmts.len() == 1)
+    else {
         return;
     };
+    let cond = core::mem::replace(
+        &mut branch.cond,
+        Box::new(syn::Expr::Verbatim(TokenStream::new())),
+    );
+    plain.body.stmts.remove(0);
     *expr = syn::Expr::While(syn::ExprWhile {
         attrs: core::mem::take(&mut plain.attrs),
         label: plain.label.take(),
@@ -1116,11 +1126,11 @@ fn loop_as_while(expr: &mut syn::Expr) {
         cond: Box::new(syn::Expr::Unary(syn::ExprUnary {
             attrs: Vec::new(),
             op: syn::UnOp::Not(syn::token::Not::default()),
-            expr: branch.cond,
+            expr: cond,
         })),
         body: syn::Block {
             brace_token: syn::token::Brace::default(),
-            stmts: rest,
+            stmts: core::mem::take(&mut plain.body.stmts),
         },
     });
 }

@@ -64,6 +64,10 @@ fn return_guards_read_as_conditionals() {
         "fn f() { let _ = |p: bool| { if p { return; } b(); }; }",
         "fn f() { let _ = |p: bool| { if !p { b(); } }; }",
     );
+    equivalent(
+        "impl S { fn f(p: bool) { if p { return; } b(); } }",
+        "impl S { fn f(p: bool) { if !p { b(); } } }",
+    );
 }
 
 #[test]
@@ -137,6 +141,10 @@ fn other_guards_keep_their_jump() {
     separate(
         "async fn f(p: bool) { if p { return; } b(); }",
         "async fn f(p: bool) { if !p { b(); } }",
+    );
+    separate(
+        "impl S { async fn f(p: bool) { if p { return; } b(); } }",
+        "impl S { async fn f(p: bool) { if !p { b(); } } }",
     );
     separate(
         "#[observe] fn f(p: bool) { if p { return; } b(); }",
