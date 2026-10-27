@@ -1507,6 +1507,37 @@ fn reordered_bound_functions_group() {
     assert_eq!(function_groups(&scan(8)).len(), 0);
 }
 
+const COPY_FIXTURE: &str = "tests/fixtures/copyws";
+
+#[test]
+fn cloned_comparison_doctests_group_with_their_plain_form() {
+    let report = Echoes::default().run(COPY_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["copyws::Cloned", "copyws::Plain"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default().min_tokens(18).run(COPY_FIXTURE).unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default().min_tokens(19).run(COPY_FIXTURE).unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn primitive_copy_functions_group_with_their_plain_form() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(COPY_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["copyws::direct", "copyws::mixed"]];
+    for tokens in [0, 5] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(6)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

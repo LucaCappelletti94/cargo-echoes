@@ -221,6 +221,12 @@ impl Walker<'_, '_> {
                             | syn::BinOp::Add(_)
                             | syn::BinOp::Mul(_)
                     ));
+        if self.dedup
+            && schedule::borrowed_comparison(&binary).is_some()
+            && let Some((left, right)) = self.borrowed_operands(&mut binary, total_calls)
+        {
+            return self.labeled_binary(binary, left, right);
+        }
         let left = self.scalar_in_place(&mut binary.left, total_calls);
         let right = self.scalar_in_place(&mut binary.right, total_calls);
         let (Some(left), Some(right)) = (left, right) else {
@@ -247,6 +253,33 @@ impl Walker<'_, '_> {
             return (syn::Expr::Assign(assign), None);
         }
         self.labeled_binary(binary, left, right)
+    }
+
+    /// The labels of the referents of `&a == &b` or `&a != &b`, both proven primitives, with
+    /// the borrows removed, since the standard `PartialEq` for references compares referents.
+    fn borrowed_operands(
+        &self,
+        binary: &mut syn::ExprBinary,
+        total_calls: bool,
+    ) -> Option<(Lbl, Lbl)> {
+        let (syn::Expr::Reference(left), syn::Expr::Reference(right)) =
+            (binary.left.as_mut(), binary.right.as_mut())
+        else {
+            return None;
+        };
+        let left_label = self.scalar_in_place(&mut left.expr, total_calls);
+        let right_label = self.scalar_in_place(&mut right.expr, total_calls);
+        let (Some(left_label), Some(right_label)) = (left_label, right_label) else {
+            return None;
+        };
+        if left_label.prim().is_none() || right_label.prim().is_none() {
+            return None;
+        }
+        let left = core::mem::replace(&mut *left.expr, empty_expr());
+        let right = core::mem::replace(&mut *right.expr, empty_expr());
+        *binary.left = left;
+        *binary.right = right;
+        Some((left_label, right_label))
     }
 
     /// The reduction of a binary operation whose operands both carry labels.
@@ -347,6 +380,24 @@ impl Walker<'_, '_> {
                 }
                 (syn::Expr::Unary(unary), None)
             }
+            syn::Expr::Unary(mut unary)
+                if self.dedup
+                    && matches!(unary.op, syn::UnOp::Deref(_))
+                    && schedule::shared_borrow(&unary.expr).is_some() =>
+            {
+                if let syn::Expr::Reference(reference) = unary.expr.as_mut()
+                    && let Some(label) = self.scalar_in_place(&mut reference.expr, total_calls)
+                    && label.prim().is_some()
+                {
+                    return (
+                        core::mem::replace(&mut *reference.expr, empty_expr()),
+                        Some(label),
+                    );
+                }
+                let expr = syn::Expr::Unary(unary);
+                let label = schedule::scalar_leaf(&self.env, &expr);
+                (expr, label)
+            }
             syn::Expr::If(branch) if self.dedup => self.branch(branch, total_calls),
             syn::Expr::Match(r#match) if self.dedup && self.boolean_match(&r#match) => {
                 self.branch(conditional(r#match), total_calls)
@@ -364,6 +415,14 @@ impl Walker<'_, '_> {
             syn::Expr::Call(call) if self.dedup => self.call(call, total_calls),
             syn::Expr::MethodCall(method) if self.native_commutative(&method) => {
                 self.commutative(method)
+            }
+            syn::Expr::MethodCall(mut method)
+                if self.dedup && schedule::clone_call(&method) && self.renamer.clone_free() =>
+            {
+                match self.scalar_in_place(&mut method.receiver, total_calls) {
+                    Some(label) if label.prim().is_some() => (*method.receiver, Some(label)),
+                    _ => (syn::Expr::MethodCall(method), None),
+                }
             }
             expr @ (syn::Expr::Lit(_) | syn::Expr::Path(_) | syn::Expr::Unary(_)) => {
                 let label = schedule::scalar_leaf(&self.env, &expr);
@@ -774,7 +833,10 @@ impl VisitMut for Walker<'_, '_> {
                 self.visit_expr_mut(&mut raw.expr);
                 self.dedup = dedup;
             }
-            syn::Expr::MethodCall(method) if self.native_commutative(method) => {
+            syn::Expr::MethodCall(method)
+                if self.native_commutative(method)
+                    || self.dedup && schedule::clone_call(method) && self.renamer.clone_free() =>
+            {
                 let owned = core::mem::replace(expr, empty_expr());
                 *expr = self.scalar(owned, false).0;
             }

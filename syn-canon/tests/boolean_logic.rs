@@ -198,7 +198,6 @@ fn unproven_operands_keep_their_order() {
 
 #[test]
 fn borrowed_storage_keeps_its_operand() {
-    separate(&function("*&(p && true)"), &function("*&p"));
     separate(
         "fn f(p: bool) -> &'static bool { &(p || false) }",
         "fn f(p: bool) -> &'static bool { &p }",

@@ -1377,9 +1377,27 @@ fn label_binary(
     locals: &mut usize,
     orders: Option<&RefCell<FieldOrders>>,
 ) -> (Lbl, Vec<Site>) {
+    if let Some((left, right)) = borrowed_comparison(bin) {
+        let (left, mut sites) = label_expr(renamer, env, left, consumer, locals, orders);
+        let (right, r_sites) = label_expr(renamer, env, right, consumer, locals, orders);
+        if left.prim().is_some() && right.prim().is_some() {
+            sites.extend(r_sites);
+            return binary_label(bin, left, right, sites);
+        }
+    }
     let (left, mut sites) = label_expr(renamer, env, &bin.left, consumer, locals, orders);
     let (right, r_sites) = label_expr(renamer, env, &bin.right, consumer, locals, orders);
     sites.extend(r_sites);
+    binary_label(bin, left, right, sites)
+}
+
+/// The label of the binary operation `bin` over its operand labels and their sites.
+fn binary_label(
+    bin: &syn::ExprBinary,
+    left: Lbl,
+    right: Lbl,
+    mut sites: Vec<Site>,
+) -> (Lbl, Vec<Site>) {
     let label = if bin.attrs.is_empty()
         && let Some(reduced) = equality_label(bin.op, &left, &right)
     {
@@ -1559,6 +1577,9 @@ fn label_method(
 ) -> (Lbl, Vec<Site>) {
     let (receiver, receiver_sites) =
         label_expr(renamer, env, &method.receiver, consumer, locals, orders);
+    if clone_call(method) && receiver.prim().is_some() && renamer.clone_free() {
+        return (receiver, receiver_sites);
+    }
     let mut sites: Vec<_> = receiver_sites
         .into_iter()
         .map(|site| Site {
@@ -1677,6 +1698,15 @@ fn label_unary(
     locals: &mut usize,
     orders: Option<&RefCell<FieldOrders>>,
 ) -> (Lbl, Vec<Site>) {
+    if matches!(unary.op, syn::UnOp::Deref(_))
+        && unary.attrs.is_empty()
+        && let Some(inner) = shared_borrow(&unary.expr)
+    {
+        let (label, sites) = label_expr(renamer, env, inner, consumer, locals, orders);
+        if label.prim().is_some() {
+            return (label, sites);
+        }
+    }
     let (inner, sites) = label_expr(renamer, env, &unary.expr, consumer, locals, orders);
     let label = if matches!(unary.op, syn::UnOp::Not(_))
         && unary.attrs.is_empty()
@@ -1687,6 +1717,35 @@ fn label_unary(
         Lbl::Other("u".into(), vec![inner])
     };
     (label, sites)
+}
+
+/// The operand of an unattributed shared borrow `&e`.
+pub(crate) fn shared_borrow(expr: &syn::Expr) -> Option<&syn::Expr> {
+    match expr {
+        syn::Expr::Reference(reference)
+            if reference.attrs.is_empty() && reference.mutability.is_none() =>
+        {
+            Some(&reference.expr)
+        }
+        _ => None,
+    }
+}
+
+/// The operands of an `==` or `!=` between two shared borrows, which compares the referents.
+pub(crate) fn borrowed_comparison(bin: &syn::ExprBinary) -> Option<(&syn::Expr, &syn::Expr)> {
+    if !matches!(bin.op, syn::BinOp::Eq(_) | syn::BinOp::Ne(_)) || !bin.attrs.is_empty() {
+        return None;
+    }
+    Some((shared_borrow(&bin.left)?, shared_borrow(&bin.right)?))
+}
+
+/// Whether a call is an unattributed `clone()` without turbofish, which on a proven primitive
+/// copies its receiver when `Renamer::clone_free` holds.
+pub(crate) fn clone_call(method: &syn::ExprMethodCall) -> bool {
+    method.attrs.is_empty()
+        && method.turbofish.is_none()
+        && method.args.is_empty()
+        && crate::scope::ident_name(&method.method) == "clone"
 }
 
 /// The single unattributed, bounded value tail of a clean block.

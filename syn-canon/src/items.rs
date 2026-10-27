@@ -2249,6 +2249,7 @@ pub(crate) fn normalize(
             std_names: options.std_names,
             prelude: options.prelude,
             owned_methods: options.owned_methods,
+            clone_free: options.clone_free,
             helper_table: Some(table),
             helper_module: options.helper_module,
             helper_blocked: options.helper_blocked,

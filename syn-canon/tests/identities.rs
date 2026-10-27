@@ -147,8 +147,8 @@ fn effects_partial_values_and_other_constants_stay() {
 #[test]
 fn borrowed_storage_keeps_its_expression() {
     separate(
-        "fn f(x: u32) -> u32 { *&(x | 0) }",
-        "fn f(x: u32) -> u32 { *&x }",
+        "fn f(x: u32) -> &'static u32 { &(x | 0) }",
+        "fn f(x: u32) -> &'static u32 { &x }",
     );
 }
 
