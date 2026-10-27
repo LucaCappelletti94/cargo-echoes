@@ -76,6 +76,26 @@ fn adjacent_arms_with_equal_bodies_join() {
     ] {
         equivalent(&function(split), &function(joined));
     }
+    for (split, joined) in [
+        (
+            "fn f(s: &[u32], y: u32) -> u32 { match s { [0, ..] => y, [] => y, _ => 1 } }",
+            "fn f(s: &[u32], y: u32) -> u32 { match s { [0, ..] | [] => y, _ => 1 } }",
+        ),
+        (
+            "fn f(r: &u32, y: u32) -> u32 { match r { &(0 | 1) => y, &2 => y, _ => 3 } }",
+            "fn f(r: &u32, y: u32) -> u32 { match r { &(0 | 1) | &2 => y, _ => 3 } }",
+        ),
+        (
+            "struct P { a: u32, b: u32 } fn f(p: P, y: u32) -> u32 { match p { P { a: 0, .. } => y, P { a: 1, b: 0 } => y, _ => 2 } }",
+            "struct P { a: u32, b: u32 } fn f(p: P, y: u32) -> u32 { match p { P { a: 0, .. } | P { a: 1, b: 0 } => y, _ => 2 } }",
+        ),
+    ] {
+        equivalent(split, joined);
+    }
+    separate(
+        "struct P { a: u32, b: u32 } fn f(p: P, y: u32) -> u32 { match p { P { a, b: 0 } => a, P { a, b: 1 } => a, _ => y } }",
+        "struct P { a: u32, b: u32 } fn f(p: P, y: u32) -> u32 { match p { P { a, b: 0 } | P { a, b: 1 } => a, _ => y } }",
+    );
 }
 
 #[test]
@@ -151,6 +171,22 @@ fn let_else_over_a_place_reads_as_match() {
     equivalent(
         "fn f() { let _ = |o: Option<u32>| -> u32 { let Some(v) = o else { return 0; }; v }; }",
         "fn f() { let _ = |o: Option<u32>| -> u32 { match o { Some(v) => { v } _ => { return 0; } } }; }",
+    );
+    equivalent(
+        "fn f(o: Option<u32>) { let Some(_) = o else { return; }; }",
+        "fn f(o: Option<u32>) { match o { Some(_) => {} _ => { return; } } }",
+    );
+    equivalent(
+        "fn f(o: Option<u32>) { let Some(v) = o else { return; }; println!(\"{v}\"); }",
+        "fn f(o: Option<u32>) { match o { Some(v) => { println!(\"{v}\"); } _ => { return; } } }",
+    );
+    separate(
+        "fn f(o: Option<u32>) -> u32 { let Some(v) = o else { return 0; }; mark(v); unreachable!() }",
+        "fn f(o: Option<u32>) -> u32 { match o { Some(v) => { mark(v); unreachable!() } _ => { return 0; } } }",
+    );
+    equivalent(
+        &function("match x { 0 => y, 1 | 2 => y, _ => x }"),
+        &function("match x { 0 | 1 | 2 => y, _ => x }"),
     );
 }
 
