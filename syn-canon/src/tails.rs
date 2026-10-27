@@ -63,16 +63,26 @@ pub(crate) fn drop_exit_semicolon(renamer: &Renamer<'_>, block: &mut syn::Block)
     }
 }
 
-pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block) {
+/// Normalize the returns of a body. With `early`, an `if` without `else` that ends in a `return`
+/// before the tail reads as the `if` with the tail as its `else` branch.
+pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block, early: bool) {
     if schedule::within_bounds(block, 0) {
-        let mut proof = Proof { renamer, locals: 0 };
+        let mut proof = Proof {
+            renamer,
+            locals: 0,
+            early,
+        };
         proof.block(block, renamer.frame_env(), true);
     }
 }
 
-pub(crate) fn normalize_expr(renamer: &Renamer<'_>, expr: &mut syn::Expr) {
+pub(crate) fn normalize_expr(renamer: &Renamer<'_>, expr: &mut syn::Expr, early: bool) {
     if schedule::expression_within_bounds(expr) {
-        let mut proof = Proof { renamer, locals: 0 };
+        let mut proof = Proof {
+            renamer,
+            locals: 0,
+            early,
+        };
         proof.expr(expr, &renamer.frame_env(), true);
     }
 }
@@ -87,7 +97,11 @@ pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr) {
     let [syn::Stmt::Expr(expr, None)] = block.block.stmts.as_mut_slice() else {
         return;
     };
-    let proof = Proof { renamer, locals: 0 };
+    let proof = Proof {
+        renamer,
+        locals: 0,
+        early: false,
+    };
     let deferred = matches!(expr, syn::Expr::Closure(_) | syn::Expr::Async(_))
         && crate::drift::expr_attrs(expr).is_empty();
     if !schedule::expression_within_bounds(expr)
@@ -101,6 +115,8 @@ pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr) {
 struct Proof<'a, 'env> {
     renamer: &'a Renamer<'env>,
     locals: usize,
+    /// Early returns before a tail may read as `else` branches.
+    early: bool,
 }
 
 impl<'env> Proof<'_, 'env> {
@@ -191,7 +207,7 @@ impl<'env> Proof<'_, 'env> {
             block.stmts.pop();
             return true;
         }
-        match last {
+        let safe = match last {
             syn::Stmt::Expr(expr, semi) => {
                 let returned = matches!(expr, syn::Expr::Return(_));
                 if semi.is_some() && !returned {
@@ -206,8 +222,59 @@ impl<'env> Proof<'_, 'env> {
                 }
                 safe
             }
-            _ => true,
+            _ => return true,
+        };
+        self.early_returns(&mut block.stmts, &env, types_known, safe)
+    }
+
+    /// Read `if p { S; return v; } y` before the tail `y` as `if p { S; return v; } else { y }`,
+    /// whose then block then folds its `return` as a tail. `y` moves into a temporary scope of
+    /// its own and the condition stays one, so both must be proven free of temporaries.
+    fn early_returns(
+        &mut self,
+        stmts: &mut alloc::vec::Vec<syn::Stmt>,
+        env: &Env<'env>,
+        types_known: bool,
+        mut safe: bool,
+    ) -> bool {
+        while self.early
+            && safe
+            && let [
+                ..,
+                syn::Stmt::Expr(syn::Expr::If(branch), semi),
+                syn::Stmt::Expr(tail, None),
+            ] = stmts.as_mut_slice()
+            && branch.attrs.is_empty()
+            && branch.else_branch.is_none()
+            && matches!(
+                branch.then_branch.stmts.last(),
+                Some(syn::Stmt::Expr(syn::Expr::Return(ret), _))
+                    if ret.attrs.iter().all(crate::drift::is_inert_attr)
+            )
+            && self.value(&branch.cond, env)
+        {
+            let tail =
+                core::mem::replace(tail, syn::Expr::Verbatim(proc_macro2::TokenStream::new()));
+            let otherwise = match tail {
+                syn::Expr::If(chained) if chained.attrs.is_empty() => syn::Expr::If(chained),
+                tail => syn::Expr::Block(syn::ExprBlock {
+                    attrs: alloc::vec::Vec::new(),
+                    label: None,
+                    block: syn::Block {
+                        brace_token: syn::token::Brace::default(),
+                        stmts: alloc::vec![syn::Stmt::Expr(tail, None)],
+                    },
+                }),
+            };
+            branch.else_branch = Some((
+                syn::token::Else::default(),
+                alloc::boxed::Box::new(otherwise),
+            ));
+            *semi = None;
+            safe = self.block(&mut branch.then_branch, env.clone(), types_known);
+            stmts.pop();
         }
+        safe
     }
 
     fn expr(&mut self, expr: &mut syn::Expr, env: &Env<'env>, types_known: bool) -> bool {

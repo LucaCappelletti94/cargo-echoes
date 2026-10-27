@@ -494,7 +494,7 @@ impl Walker<'_> {
             mod_frames: &self.mod_frames,
             targets: &self.targets,
         };
-        let form = build_function_body_form(inherited, body);
+        let form = build_function_body_form(inherited, body, sig.asyncness.is_none());
         self.emit_candidate(ContextKind::FunctionBody, span, input_tokens, form);
         self.visit_block(body);
         self.frames.pop();
@@ -1051,15 +1051,20 @@ impl Visit<'_> for Walker<'_> {
     }
 }
 
-/// Normalize one cloned function body against the inherited environment.
-fn build_function_body_form(inherited: Inherited<'_>, body: &syn::Block) -> CanonicalForm {
+/// Normalize one cloned function body against the inherited environment, reading early
+/// returns before the tail as `else` branches when `early`.
+fn build_function_body_form(
+    inherited: Inherited<'_>,
+    body: &syn::Block,
+    early: bool,
+) -> CanonicalForm {
     let mut block = body.clone();
     let frames = inherited.frames;
     let mut renamer = Renamer::contextual(inherited);
     if !renamer.observes_tokens() {
         crate::drift::normalize_block(&mut block, frames);
     }
-    renamer.normalize_return_body(&mut block);
+    renamer.normalize_return_body(&mut block, early);
     renamer.visit_block_mut(&mut block);
     let facts = renamer.into_reference_facts();
     crate::form::from_node(&block, &facts)

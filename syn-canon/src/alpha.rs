@@ -1273,9 +1273,11 @@ impl<'env> Renamer<'env> {
         !self.analysis && !self.tail_blocked && self.macro_origins.is_none()
     }
 
-    pub(crate) fn normalize_return_body(&self, block: &mut syn::Block) {
+    /// Normalize the returns of a body, reading early returns before the tail as `else`
+    /// branches when `early` and the source compiles.
+    pub(crate) fn normalize_return_body(&self, block: &mut syn::Block, early: bool) {
         if self.tails_allowed() {
-            crate::tails::normalize(self, block);
+            crate::tails::normalize(self, block, early && self.compiles);
         }
     }
 
@@ -2395,7 +2397,7 @@ impl<'env> Renamer<'env> {
         visit_fn_inputs(self, sig.inputs.iter_mut());
         syn::visit_mut::visit_return_type_mut(self, &mut sig.output);
         if let Some(body) = body {
-            self.normalize_return_body(body);
+            self.normalize_return_body(body, sig.asyncness.is_none());
             self.visit_block_mut(body);
         }
         self.pop();
@@ -3611,7 +3613,11 @@ impl VisitMut for Renamer<'_> {
         }
         syn::visit_mut::visit_return_type_mut(self, &mut closure.output);
         if self.tails_allowed() {
-            crate::tails::normalize_expr(self, &mut closure.body);
+            crate::tails::normalize_expr(
+                self,
+                &mut closure.body,
+                self.compiles && closure.asyncness.is_none(),
+            );
             crate::tails::unwrap(self, &mut closure.body);
         }
         syn::visit_mut::visit_expr_mut(self, &mut closure.body);
@@ -3620,7 +3626,7 @@ impl VisitMut for Renamer<'_> {
     }
 
     fn visit_expr_async_mut(&mut self, expr: &mut syn::ExprAsync) {
-        self.normalize_return_body(&mut expr.block);
+        self.normalize_return_body(&mut expr.block, false);
         syn::visit_mut::visit_expr_async_mut(self, expr);
     }
 

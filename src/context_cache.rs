@@ -174,6 +174,10 @@ pub mod alpha {
     pub fn armed(flag: bool, other: bool) -> u32 {
         if flag { if other { 1u32 } else { 0u32 } } else { 0u32 }
     }
+    pub fn guarded(flag: bool, value: u32) -> u32 {
+        if flag { return value; }
+        0u32
+    }
 }
 mod custom {
     macro_rules! vec {

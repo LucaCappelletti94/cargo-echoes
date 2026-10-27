@@ -1,0 +1,268 @@
+[
+  {
+    "id": "er_u32",
+    "family": "early_return",
+    "a": "fn f(p:bool,x:u32,y:u32)->u32{if p{return x;}y} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->u32{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "er_then_effect",
+    "family": "early_return",
+    "a": "fn f(p:bool,x:u32,y:u32)->u32{if p{println!(\"then\");return x;}y} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->u32{if p{println!(\"then\");x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\nthen\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\nthen\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\nthen\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\nthen\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "er_return_tail",
+    "family": "early_return",
+    "a": "fn f(p:bool,x:u32,y:u32)->u32{if p{return x;}return y;} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->u32{if p{x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "er_chain",
+    "family": "early_return",
+    "a": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{if p{return x;}if q{return y;}x+y} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "b": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{if p{x}else if q{y}else{x+y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n2\n1\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n2\n1\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n2\n1\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n2\n1\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "er_local_drops",
+    "family": "early_return",
+    "a": "struct D(&'static str); impl D{fn value(&self)->u32{0} fn opt(&self,p:bool)->Option<u32>{if p{Some(1)}else{None}}} impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(p:bool,x:u32,y:u32)->u32{let _l=D(\"local\");if p{let _m=D(\"then\");return x;}y} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "b": "struct D(&'static str); impl D{fn value(&self)->u32{0} fn opt(&self,p:bool)->Option<u32>{if p{Some(1)}else{None}}} impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(p:bool,x:u32,y:u32)->u32{let _l=D(\"local\");if p{let _m=D(\"then\");x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n2\ndrop then\ndrop local\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n2\ndrop then\ndrop local\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n2\ndrop then\ndrop local\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n2\ndrop then\ndrop local\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "er_closure",
+    "family": "early_return",
+    "a": "fn main(){let f=|p:bool,x:u32,y:u32|->u32{if p{return x;}y};for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "b": "fn main(){let f=|p:bool,x:u32,y:u32|->u32{if p{x}else{y}};for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "er_overflowing_condition",
+    "family": "early_return",
+    "a": "fn f(p:bool,x:u32,y:u32)->u32{let _=p;if x+1>y{return x;}y} fn main(){println!(\"{}\",f(true,std::hint::black_box(u32::MAX),2u32));}",
+    "b": "fn f(p:bool,x:u32,y:u32)->u32{let _=p;if x+1>y{x}else{y}} fn main(){println!(\"{}\",f(true,std::hint::black_box(u32::MAX),2u32));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "diverge",
+          "stdout": "",
+          "exit": 101
+        }
+      }
+    }
+  },
+  {
+    "id": "er_no_return",
+    "family": "early_return",
+    "a": "fn f(p:bool,x:u32,y:u32)->u32{if p{println!(\"then\");}y} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "b": "fn f(p:bool,x:u32,y:u32)->u32{if p{println!(\"then\");x}else{y}} fn main(){for p in [false,true]{println!(\"{}\",f(p,1u32,2u32));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\nthen\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\nthen\n2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\nthen\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\nthen\n1\n"
+        }
+      }
+    }
+  }
+]

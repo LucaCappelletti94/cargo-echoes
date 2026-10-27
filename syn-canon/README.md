@@ -32,6 +32,10 @@ assert_eq!(
     canonical("fn f(p: bool, q: bool, x: u32, y: u32) -> u32 { if p && q { x } else { y } }"),
 );
 assert_eq!(
+    canonical("fn f(p: bool, x: u32, y: u32) -> u32 { if p { return x; } y }"),
+    canonical("fn f(p: bool, x: u32, y: u32) -> u32 { if p { x } else { y } }"),
+);
+assert_eq!(
     canonical(r#"fn f() -> &'static str { concat!("a", r"\n") }"#),
     canonical(r#"fn f() -> &'static str { "a\\n" }"#),
 );
@@ -56,7 +60,7 @@ println!("{forms:?}");
 
 `no_std` with `alloc`. It powers [`cargo-echoes`](https://github.com/LucaCappelletti94/cargo-echoes), which finds duplicated doctests.
 
-Equal forms mean approximate duplication, since the normalization cannot see what the compiler resolves, such as inferred types, macro expansions or an enclosing `cfg`. Tail `return` folds require temporary-free values and forwarded control heads, preserving return boundaries for unknown calls, borrows, destructor dependencies and unresolved values in both comparison modes. Reflexive equality, comparison with a `bool` literal, `&&` and `||` operand order, literals and repeats, `^` cancellation, identity and absorbing operands such as `x + 0`, `x * 1`, `x | 0` and `x & 0`, operand order of `+`, `*`, `wrapping_add`, `wrapping_mul`, `saturating_add`, `saturating_mul` and `abs_diff`, boolean `match` folding, nested `if` merging into `&&` and compound assignment to a local binding require compiling mode and proven total boolean or fixed-width integer operands, and `concat!` folding requires compiling mode, the built-in macro and string literal arguments. In compiling mode a `let` binding's fixed-width integer annotation moves onto an integer literal initializer as its suffix.
+Equal forms mean approximate duplication, since the normalization cannot see what the compiler resolves, such as inferred types, macro expansions or an enclosing `cfg`. Tail `return` folds require temporary-free values and forwarded control heads, preserving return boundaries for unknown calls, borrows, destructor dependencies and unresolved values in both comparison modes. An `if` ending in `return` before a tail reads as an `if` with the tail as its `else` branch only in compiling mode, outside `async` bodies, with a proven condition and a temporary-free tail. Reflexive equality, comparison with a `bool` literal, `&&` and `||` operand order, literals and repeats, `^` cancellation, identity and absorbing operands such as `x + 0`, `x * 1`, `x | 0` and `x & 0`, operand order of `+`, `*`, `wrapping_add`, `wrapping_mul`, `saturating_add`, `saturating_mul` and `abs_diff`, boolean `match` folding, nested `if` merging into `&&` and compound assignment to a local binding require compiling mode and proven total boolean or fixed-width integer operands, and `concat!` folding requires compiling mode, the built-in macro and string literal arguments. In compiling mode a `let` binding's fixed-width integer annotation moves onto an integer literal initializer as its suffix.
 
 Macro input retains significant commas unless lexical resolution proves a supported standard grammar. Enclosing macros and live attributes preserve comma spelling.
 
