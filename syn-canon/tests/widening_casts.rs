@@ -84,6 +84,7 @@ fn lossy_and_unproven_conversions_stay_apart() {
         ("i8", "u16"),
         ("u32", "usize"),
         ("u8", "usize"),
+        ("u8", "bool"),
         ("Unknown", "u64"),
     ] {
         separate(

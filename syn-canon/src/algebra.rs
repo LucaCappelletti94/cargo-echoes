@@ -365,7 +365,6 @@ impl Walker<'_, '_> {
             syn::Expr::MethodCall(method) if self.native_commutative(&method) => {
                 self.commutative(method)
             }
-            expr @ syn::Expr::Call(_) if total_calls => self.total_call(expr),
             expr @ (syn::Expr::Lit(_) | syn::Expr::Path(_) | syn::Expr::Unary(_)) => {
                 let label = schedule::scalar_leaf(&self.env, &expr);
                 (expr, label)
