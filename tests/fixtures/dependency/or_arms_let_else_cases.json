@@ -1,0 +1,332 @@
+[
+  {
+    "id": "oa_literals",
+    "family": "or_arms_let_else",
+    "a": "fn f(x:u32,y:u32)->u32{match x{0=>y,1=>y,_=>x}} fn main(){for x in 0u32..5{println!(\"{}\",f(x,9u32));}}",
+    "b": "fn f(x:u32,y:u32)->u32{match x{0|1=>y,_=>x}} fn main(){for x in 0u32..5{println!(\"{}\",f(x,9u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n2\n3\n4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n2\n3\n4\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n2\n3\n4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n2\n3\n4\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "oa_effect_body",
+    "family": "or_arms_let_else",
+    "a": "fn f(x:u32,y:u32)->u32{match x{1=>{println!(\"hit\");y},3=>{println!(\"hit\");y},_=>x}} fn main(){for x in 0u32..5{println!(\"{}\",f(x,9u32));}}",
+    "b": "fn f(x:u32,y:u32)->u32{match x{1|3=>{println!(\"hit\");y},_=>x}} fn main(){for x in 0u32..5{println!(\"{}\",f(x,9u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\nhit\n9\n2\nhit\n9\n4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\nhit\n9\n2\nhit\n9\n4\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\nhit\n9\n2\nhit\n9\n4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\nhit\n9\n2\nhit\n9\n4\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "oa_wild_first",
+    "family": "or_arms_let_else",
+    "a": "fn f(x:u32,y:u32)->u32{match (x,y){(0,_)=>y,(_,9)=>y,_=>x}} fn main(){for x in 0u32..5{println!(\"{}\",f(x,9u32));}}",
+    "b": "fn f(x:u32,y:u32)->u32{match (x,y){(0,_)|(_,9)=>y,_=>x}} fn main(){for x in 0u32..5{println!(\"{}\",f(x,9u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n9\n9\n9\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n9\n9\n9\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n9\n9\n9\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n9\n9\n9\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "oa_ranges",
+    "family": "or_arms_let_else",
+    "a": "fn f(x:u32,y:u32)->u32{match x{0..=1=>y,3=>y,_=>x}} fn main(){for x in 0u32..5{println!(\"{}\",f(x,9u32));}}",
+    "b": "fn f(x:u32,y:u32)->u32{match x{0..=1|3=>y,_=>x}} fn main(){for x in 0u32..5{println!(\"{}\",f(x,9u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n2\n9\n4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n2\n9\n4\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n2\n9\n4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n2\n9\n4\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "oa_non_adjacent",
+    "family": "or_arms_let_else",
+    "a": "fn f(x:u32,y:u32)->u32{match x{0=>y,1=>x,0|1=>y,_=>x+1}} fn main(){for x in 0u32..5{println!(\"{}\",f(x,9u32));}}",
+    "b": "fn f(x:u32,y:u32)->u32{match x{0|1=>y,1=>x,_=>x+1}} fn main(){for x in 0u32..5{println!(\"{}\",f(x,9u32));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n1\n3\n4\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n1\n3\n4\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n3\n4\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n9\n3\n4\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_place",
+    "family": "or_arms_let_else",
+    "a": "fn f(o:Option<u32>,y:u32)->u32{let Some(v)=o else{return y;};v} fn main(){for o in [None,Some(3u32)]{println!(\"{}\",f(o,7u32));}}",
+    "b": "fn f(o:Option<u32>,y:u32)->u32{match o{Some(v)=>{v}_=>{return y;}}} fn main(){for o in [None,Some(3u32)]{println!(\"{}\",f(o,7u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_local_drops",
+    "family": "or_arms_let_else",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o:Option<u32>,y:u32)->u32{let _a=D(\"a\");let Some(v)=o else{return y;};let _b=D(\"b\");println!(\"rest\");v} fn main(){for o in [None,Some(3u32)]{println!(\"{}\",f(o,7u32));}}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o:Option<u32>,y:u32)->u32{let _a=D(\"a\");match o{Some(v)=>{let _b=D(\"b\");println!(\"rest\");v}_=>{return y;}}} fn main(){for o in [None,Some(3u32)]{println!(\"{}\",f(o,7u32));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop a\n7\nrest\ndrop b\ndrop a\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop a\n7\nrest\ndrop b\ndrop a\n3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop a\n7\nrest\ndrop b\ndrop a\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop a\n7\nrest\ndrop b\ndrop a\n3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_owned_binding",
+    "family": "or_arms_let_else",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o:Option<D>,y:u32)->u32{let Some(v)=o else{return y;};println!(\"rest {}\",v.0);let _b=D(\"b\");1} fn main(){println!(\"{}\",f(None,7));println!(\"{}\",f(Some(D(\"v\")),7));}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o:Option<D>,y:u32)->u32{match o{Some(v)=>{println!(\"rest {}\",v.0);let _b=D(\"b\");1}_=>{return y;}}} fn main(){println!(\"{}\",f(None,7));println!(\"{}\",f(Some(D(\"v\")),7));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\nrest v\ndrop b\ndrop v\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\nrest v\ndrop b\ndrop v\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\nrest v\ndrop b\ndrop v\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\nrest v\ndrop b\ndrop v\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_nested",
+    "family": "or_arms_let_else",
+    "a": "fn f(o:Option<u32>,q:Option<u32>,y:u32)->u32{let Some(a)=o else{return 0;};let Some(b)=q else{return 1;};println!(\"{} {}\",a,b);y} fn main(){for o in [None,Some(1u32)]{for q in [None,Some(2u32)]{println!(\"{}\",f(o,q,5));}}}",
+    "b": "fn f(o:Option<u32>,q:Option<u32>,y:u32)->u32{match o{Some(a)=>{match q{Some(b)=>{println!(\"{} {}\",a,b);y}_=>{return 1;}}}_=>{return 0;}}} fn main(){for o in [None,Some(1u32)]{for q in [None,Some(2u32)]{println!(\"{}\",f(o,q,5));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n1\n1 2\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n1\n1 2\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n1\n1 2\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n1\n1 2\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "le_temporary_scrutinee",
+    "family": "or_arms_let_else",
+    "a": "struct G; impl G{fn get(&self)->Option<u32>{Some(1)}} impl Drop for G{fn drop(&mut self){println!(\"drop guard\");}} fn f()->u32{let Some(v)=G.get() else{return 0;};println!(\"rest\");v} fn main(){println!(\"{}\",f());}",
+    "b": "struct G; impl G{fn get(&self)->Option<u32>{Some(1)}} impl Drop for G{fn drop(&mut self){println!(\"drop guard\");}} fn f()->u32{match G.get(){Some(v)=>{println!(\"rest\");v}_=>{return 0;}}} fn main(){println!(\"{}\",f());}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop guard\nrest\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop guard\nrest\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "rest\ndrop guard\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "rest\ndrop guard\n1\n"
+        }
+      }
+    }
+  }
+]

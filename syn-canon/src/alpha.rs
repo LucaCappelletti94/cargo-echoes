@@ -1273,11 +1273,11 @@ impl<'env> Renamer<'env> {
         !self.analysis && !self.tail_blocked && self.macro_origins.is_none()
     }
 
-    /// Normalize the returns of a body, reading early returns before the tail as `else`
-    /// branches when `early` and the source compiles.
+    /// Normalize the returns of a body in compiling mode, reading early returns before the tail
+    /// as `else` branches when `early`.
     pub(crate) fn normalize_return_body(&self, block: &mut syn::Block, early: bool) {
         if self.tails_allowed() {
-            crate::tails::normalize(self, block, early && self.compiles);
+            crate::tails::normalize(self, block, self.compiles, early);
         }
     }
 
@@ -3616,7 +3616,8 @@ impl VisitMut for Renamer<'_> {
             crate::tails::normalize_expr(
                 self,
                 &mut closure.body,
-                self.compiles && closure.asyncness.is_none(),
+                self.compiles,
+                closure.asyncness.is_none(),
             );
             crate::tails::unwrap(self, &mut closure.body);
         }
