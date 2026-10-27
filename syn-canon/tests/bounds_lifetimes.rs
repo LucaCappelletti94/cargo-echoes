@@ -190,3 +190,85 @@ fn function_views_sort_bounds_and_elide_lifetimes() {
         view::view_of(&file, "second")
     );
 }
+
+#[test]
+fn receivers_of_every_kind_follow_the_elision_rules() {
+    for (named, elided) in [
+        (
+            "fn get<'a>(self, x: &'a u8) -> &'a u8 { x }",
+            "fn get(self, x: &u8) -> &u8 { x }",
+        ),
+        (
+            "fn get<'a>(self: &'a Self) -> &'a u8 { &self.0 }",
+            "fn get(self: &Self) -> &u8 { &self.0 }",
+        ),
+        (
+            "fn get<'a>(self: Self, x: &'a u8) -> &'a u8 { x }",
+            "fn get(self: Self, x: &u8) -> &u8 { x }",
+        ),
+    ] {
+        equivalent(
+            &format!("struct S(u8); impl S {{ {named} }}"),
+            &format!("struct S(u8); impl S {{ {elided} }}"),
+        );
+    }
+    for (named, elided) in [
+        (
+            "fn get<'a>(self: Box<Self>, x: &'a u8) -> &'a u8 { x }",
+            "fn get(self: Box<Self>, x: &u8) -> &u8 { x }",
+        ),
+        (
+            "fn get<'a>(#[inspect] &'a self) -> &'a u8 { &self.0 }",
+            "fn get(#[inspect] &self) -> &u8 { &self.0 }",
+        ),
+    ] {
+        separate(
+            &format!("struct S(u8); impl S {{ {named} }}"),
+            &format!("struct S(u8); impl S {{ {elided} }}"),
+        );
+    }
+}
+
+#[test]
+fn opaque_signatures_and_bodies_keep_the_lifetime() {
+    for (named, elided) in [
+        (
+            "fn f<'a>(#[inspect] x: &'a u8) -> &'a u8 { x }",
+            "fn f(#[inspect] x: &u8) -> &u8 { x }",
+        ),
+        (
+            "fn f<'a>(x: &'a m!()) -> &'a u8 { x }",
+            "fn f(x: &m!()) -> &u8 { x }",
+        ),
+        (
+            "fn f<'a>(x: &'a [u8; m!()]) -> &'a u8 { &x[0] }",
+            "fn f(x: &[u8; m!()]) -> &u8 { &x[0] }",
+        ),
+        (
+            "fn f<'a>(x: &'a u8) -> &'a u8 { #[inspect('a)] let y = x; y }",
+            "fn f(x: &u8) -> &u8 { #[inspect('a)] let y = x; y }",
+        ),
+    ] {
+        separate(named, elided);
+    }
+}
+
+#[test]
+fn bounds_with_grouped_and_literal_arguments_sort() {
+    for (written, sorted) in [
+        (
+            "fn f<T>(t: T) where T: AsRef<[u8]> + Clone {}",
+            "fn f<T>(t: T) where T: Clone + AsRef<[u8]> {}",
+        ),
+        (
+            "fn f<T>(t: T) where T: Tr<{ 1 }> + Clone {}",
+            "fn f<T>(t: T) where T: Clone + Tr<{ 1 }> {}",
+        ),
+        (
+            "fn f<T>(t: T) where T: Tr<1> + Clone {}",
+            "fn f<T>(t: T) where T: Clone + Tr<1> {}",
+        ),
+    ] {
+        equivalent(written, sorted);
+    }
+}

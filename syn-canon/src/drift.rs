@@ -1152,37 +1152,39 @@ fn elidable(sig: &syn::Signature, body: Option<&syn::Block>, name: &syn::Ident) 
     for input in &sig.inputs {
         match input {
             syn::FnArg::Receiver(receiver) => {
-                if !receiver.attrs.is_empty() {
+                let known = matches!(
+                    receiver.kind,
+                    syn::ReceiverKind::Value
+                        | syn::ReceiverKind::Reference(..)
+                        | syn::ReceiverKind::Typed(..)
+                );
+                if !receiver.attrs.is_empty() || !known {
                     return false;
                 }
-                match &receiver.kind {
-                    syn::ReceiverKind::Value => {}
-                    syn::ReceiverKind::Reference(_, lifetime, _) => {
-                        reference_receiver = true;
-                        inputs.positions += 1;
-                        if lifetime
-                            .as_ref()
-                            .is_some_and(|lifetime| lifetime.ident == *name)
-                        {
-                            inputs.references += 1;
-                            in_receiver = true;
-                        }
+                if let syn::ReceiverKind::Reference(_, lifetime, _) = &receiver.kind {
+                    reference_receiver = true;
+                    inputs.positions += 1;
+                    if lifetime
+                        .as_ref()
+                        .is_some_and(|lifetime| lifetime.ident == *name)
+                    {
+                        inputs.references += 1;
+                        in_receiver = true;
                     }
-                    syn::ReceiverKind::Typed(_, ty) => {
-                        match ty.as_ref() {
-                            syn::Type::Reference(reference) => {
-                                reference_receiver = true;
-                                in_receiver = reference
-                                    .lifetime
-                                    .as_ref()
-                                    .is_some_and(|lifetime| lifetime.ident == *name);
-                            }
-                            syn::Type::Path(path) if path.path.is_ident("Self") => {}
-                            _ => plain_receiver = false,
+                }
+                if let syn::ReceiverKind::Typed(_, ty) = &receiver.kind {
+                    match ty.as_ref() {
+                        syn::Type::Reference(reference) => {
+                            reference_receiver = true;
+                            in_receiver = reference
+                                .lifetime
+                                .as_ref()
+                                .is_some_and(|lifetime| lifetime.ident == *name);
                         }
-                        inputs.visit_type(ty);
+                        syn::Type::Path(path) if path.path.is_ident("Self") => {}
+                        _ => plain_receiver = false,
                     }
-                    _ => return false,
+                    inputs.visit_type(ty);
                 }
             }
             syn::FnArg::Typed(typed) => {
@@ -1324,10 +1326,6 @@ impl<'ast> syn::visit::Visit<'ast> for SignatureUses<'_> {
     }
 
     fn visit_macro(&mut self, _: &'ast syn::Macro) {
-        self.opaque = true;
-    }
-
-    fn visit_attribute(&mut self, _: &'ast syn::Attribute) {
         self.opaque = true;
     }
 }
@@ -1658,30 +1656,20 @@ fn sort_bounds(generics: &mut syn::Generics) {
 /// Whether a bound's place in its list is free: a lifetime, or a trait bound outside the `Fn`
 /// family that binds no associated item.
 fn sortable_bound(bound: &syn::TypeParamBound) -> bool {
-    match bound {
-        syn::TypeParamBound::Lifetime(_) => true,
-        syn::TypeParamBound::Trait(bound) => {
-            bound
-                .path
-                .segments
-                .iter()
-                .all(|segment| match &segment.arguments {
-                    syn::PathArguments::None => true,
-                    syn::PathArguments::AngleBracketed(arguments) => {
-                        arguments.args.iter().all(|argument| {
-                            matches!(
-                                argument,
-                                syn::GenericArgument::Lifetime(_)
-                                    | syn::GenericArgument::Type(_)
-                                    | syn::GenericArgument::Const(_)
-                            )
-                        })
-                    }
-                    syn::PathArguments::Parenthesized(_) => false,
-                })
-        }
-        _ => false,
-    }
+    let free = |segment: &syn::PathSegment| match &segment.arguments {
+        syn::PathArguments::None => true,
+        syn::PathArguments::AngleBracketed(arguments) => arguments.args.iter().all(|argument| {
+            matches!(
+                argument,
+                syn::GenericArgument::Lifetime(_)
+                    | syn::GenericArgument::Type(_)
+                    | syn::GenericArgument::Const(_)
+            )
+        }),
+        syn::PathArguments::Parenthesized(_) => false,
+    };
+    matches!(bound, syn::TypeParamBound::Lifetime(_))
+        || matches!(bound, syn::TypeParamBound::Trait(bound) if bound.path.segments.iter().all(free))
 }
 
 /// The sort key of a bound: its token text with each parameter of the generics written as
@@ -1695,10 +1683,9 @@ fn bound_key(bound: &syn::TypeParamBound, names: &[(bool, String)]) -> String {
             match token {
                 proc_macro2::TokenTree::Group(group) => {
                     out.push(match group.delimiter() {
-                        proc_macro2::Delimiter::Parenthesis => '(',
                         proc_macro2::Delimiter::Bracket => '[',
                         proc_macro2::Delimiter::Brace => '{',
-                        proc_macro2::Delimiter::None => '\u{2}',
+                        _ => '(',
                     });
                     write(group.stream(), names, out);
                     out.push('\u{3}');
