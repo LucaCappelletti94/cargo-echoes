@@ -742,3 +742,62 @@ fn an_observing_impl_retains_the_early_return() {
         view(&source("if p { x } else { 0u32 }"))
     );
 }
+
+#[test]
+fn split_arms_and_let_else_read_as_their_joined_forms_in_the_borrowed_view() {
+    for (written, joined) in [
+        (
+            "fn f(x: u32, y: u32) -> u32 { match x { 0 => y, 1 => y, _ => x } }",
+            "fn f(x: u32, y: u32) -> u32 { match x { 0 | 1 => y, _ => x } }",
+        ),
+        (
+            "fn f(o: Option<u32>) -> u32 { let Some(v) = o else { return 0; }; mark(v); v }",
+            "fn f(o: Option<u32>) -> u32 { match o { Some(v) => { mark(v); v } _ => { return 0; } } }",
+        ),
+    ] {
+        assert_eq!(view(written), view(joined), "{written}");
+    }
+}
+
+#[test]
+fn bound_arms_and_temporary_scrutinees_stay_apart_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f(t: (u32, u32)) -> u32 { match t { (a, 0) => a, (a, 1) => a, _ => 0 } }"),
+        view("fn f(t: (u32, u32)) -> u32 { match t { (a, 0) | (a, 1) => a, _ => 0 } }")
+    );
+    assert_ne!(
+        view("fn f() -> u32 { let Some(v) = make() else { return 0; }; v }"),
+        view("fn f() -> u32 { match make() { Some(v) => { v } _ => { return 0; } } }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_split_arms_and_let_else() {
+    assert_ne!(
+        failing_form("fn f(x: u32, y: u32) -> u32 { match x { 0 => y, 1 => y, _ => x } }"),
+        failing_form("fn f(x: u32, y: u32) -> u32 { match x { 0 | 1 => y, _ => x } }")
+    );
+    assert_ne!(
+        failing_form("fn f(o: Option<u32>) -> u32 { let Some(v) = o else { return 0; }; v }"),
+        failing_form(
+            "fn f(o: Option<u32>) -> u32 { match o { Some(v) => { v } _ => { return 0; } } }"
+        )
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_split_arms_and_let_else() {
+    let source = |body: &str| {
+        format!(
+            "struct S;\n#[observe]\nimpl S {{\n    fn f(o: Option<u32>, x: u32) -> u32 {{ {body} }}\n}}"
+        )
+    };
+    assert_ne!(
+        view(&source("match x { 0 => x, 1 => x, _ => 2u32 }")),
+        view(&source("match x { 0 | 1 => x, _ => 2u32 }"))
+    );
+    assert_ne!(
+        view(&source("let Some(v) = o else { return 0; }; v")),
+        view(&source("match o { Some(v) => { v } _ => { return 0; } } "))
+    );
+}

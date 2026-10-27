@@ -1365,6 +1365,43 @@ fn early_return_functions_group_with_branches_and_else_if_ladders() {
     assert_eq!(function_groups(&scan(10)).len(), 0);
 }
 
+const OR_ARMS_FIXTURE: &str = "tests/fixtures/orarmsws";
+
+#[test]
+fn split_arm_doctests_group_with_their_or_pattern() {
+    let report = Echoes::default().run(OR_ARMS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["orarmsws::Joined", "orarmsws::Split"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(27)
+        .run(OR_ARMS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(28)
+        .run(OR_ARMS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn let_else_functions_group_with_their_match() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(OR_ARMS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["orarmsws::matched", "orarmsws::unwrapped"]];
+    for tokens in [0, 15] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(16)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

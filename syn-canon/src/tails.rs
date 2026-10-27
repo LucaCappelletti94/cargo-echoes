@@ -63,25 +63,38 @@ pub(crate) fn drop_exit_semicolon(renamer: &Renamer<'_>, block: &mut syn::Block)
     }
 }
 
-/// Normalize the returns of a body. With `early`, an `if` without `else` that ends in a `return`
-/// before the tail reads as the `if` with the tail as its `else` branch.
-pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block, early: bool) {
+/// Normalize the returns of a body. Compiling source reads `let`-`else` over a place as `match`,
+/// and with `early` also an `if` without `else` that ends in a `return` before the tail as the
+/// `if` with the tail as its `else` branch.
+pub(crate) fn normalize(
+    renamer: &Renamer<'_>,
+    block: &mut syn::Block,
+    compiles: bool,
+    early: bool,
+) {
     if schedule::within_bounds(block, 0) {
         let mut proof = Proof {
             renamer,
             locals: 0,
-            early,
+            let_else: compiles,
+            early: compiles && early,
         };
         proof.block(block, renamer.frame_env(), true);
     }
 }
 
-pub(crate) fn normalize_expr(renamer: &Renamer<'_>, expr: &mut syn::Expr, early: bool) {
+pub(crate) fn normalize_expr(
+    renamer: &Renamer<'_>,
+    expr: &mut syn::Expr,
+    compiles: bool,
+    early: bool,
+) {
     if schedule::expression_within_bounds(expr) {
         let mut proof = Proof {
             renamer,
             locals: 0,
-            early,
+            let_else: compiles,
+            early: compiles && early,
         };
         proof.expr(expr, &renamer.frame_env(), true);
     }
@@ -100,6 +113,7 @@ pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr) {
     let proof = Proof {
         renamer,
         locals: 0,
+        let_else: false,
         early: false,
     };
     let deferred = matches!(expr, syn::Expr::Closure(_) | syn::Expr::Async(_))
@@ -115,6 +129,8 @@ pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr) {
 struct Proof<'a, 'env> {
     renamer: &'a Renamer<'env>,
     locals: usize,
+    /// `let`-`else` over a place may read as `match`.
+    let_else: bool,
     /// Early returns before a tail may read as `else` branches.
     early: bool,
 }
@@ -190,6 +206,9 @@ impl<'env> Proof<'_, 'env> {
             return false;
         };
         let types_known = local_types_known && types_known;
+        if self.let_else && types_known {
+            self.let_else(&mut block.stmts, env.clone());
+        }
         let Some((last, prefix)) = block.stmts.split_last_mut() else {
             return true;
         };
@@ -225,6 +244,123 @@ impl<'env> Proof<'_, 'env> {
             _ => return true,
         };
         self.early_returns(&mut block.stmts, &env, types_known, safe)
+    }
+
+    /// Read the first `let P = e else { D };` whose initializer is a place as
+    /// `match e { P => { rest } _ => { D } }`, then the `let`-`else` statements of `rest`. A place
+    /// creates no temporary the statement would drop before `rest`, and the tail of `rest` must
+    /// create none either, since it moves into the scope of the arm. The block declares no item,
+    /// which the enclosing statement would see.
+    fn let_else(&mut self, stmts: &mut alloc::vec::Vec<syn::Stmt>, mut env: Env<'env>) {
+        for index in 0..stmts.len() {
+            let (head, rest) = stmts.split_at_mut(index + 1);
+            let syn::Stmt::Local(local) = &mut head[index] else {
+                continue;
+            };
+            if local.attrs.is_empty()
+                && !matches!(local.pat, syn::Pat::Type(_))
+                && let Some(init) = &mut local.init
+                && let Some((_, diverge)) = &mut init.diverge
+                && Self::place(&init.expr, &env)
+                && self.settled(&local.pat, rest, &env)
+            {
+                let pat = core::mem::replace(
+                    &mut local.pat,
+                    syn::Pat::Verbatim(proc_macro2::TokenStream::new()),
+                );
+                let scrutinee = core::mem::replace(
+                    &mut init.expr,
+                    alloc::boxed::Box::new(syn::Expr::Verbatim(proc_macro2::TokenStream::new())),
+                );
+                let diverge = core::mem::replace(
+                    diverge,
+                    alloc::boxed::Box::new(syn::Expr::Verbatim(proc_macro2::TokenStream::new())),
+                );
+                for name in schedule::pat_names(&pat) {
+                    self.bind(&mut env, name, None);
+                }
+                let mut body = syn::Block {
+                    brace_token: syn::token::Brace::default(),
+                    stmts: stmts.split_off(index + 1),
+                };
+                self.let_else(&mut body.stmts, env);
+                let arm = |pat, body| syn::Arm {
+                    attrs: alloc::vec::Vec::new(),
+                    pat,
+                    fat_arrow_token: syn::token::FatArrow::default(),
+                    body,
+                    comma: None,
+                };
+                let wild = syn::Pat::Wild(syn::PatWild {
+                    attrs: alloc::vec::Vec::new(),
+                    underscore_token: syn::token::Underscore::default(),
+                });
+                stmts[index] = syn::Stmt::Expr(
+                    syn::Expr::Match(syn::ExprMatch {
+                        attrs: alloc::vec::Vec::new(),
+                        match_token: syn::token::Match::default(),
+                        expr: scrutinee,
+                        brace_token: syn::token::Brace::default(),
+                        arms: alloc::vec![
+                            arm(
+                                pat,
+                                alloc::boxed::Box::new(syn::Expr::Block(syn::ExprBlock {
+                                    attrs: alloc::vec::Vec::new(),
+                                    label: None,
+                                    block: body,
+                                })),
+                            ),
+                            arm(wild, diverge),
+                        ],
+                    }),
+                    None,
+                );
+                return;
+            }
+            self.local(local, &mut env, true);
+        }
+    }
+
+    /// Whether `expr` names a parameter, closure input or local binding, a place that creates no
+    /// temporary.
+    fn place(expr: &syn::Expr, env: &Env<'env>) -> bool {
+        let syn::Expr::Path(path) = expr else {
+            return false;
+        };
+        path.attrs.is_empty()
+            && path.qself.is_none()
+            && path.path.get_ident().is_some_and(|ident| {
+                env.get(&crate::scope::ident_name(ident))
+                    .is_some_and(|value| {
+                        matches!(
+                            value.port,
+                            Port::Param(_) | Port::Closure(_) | Port::Local(_)
+                        )
+                    })
+            })
+    }
+
+    /// Whether the statements after a `let`-`else` binding `pat` end without a tail or in a
+    /// tail that creates no temporary.
+    fn settled(&mut self, pat: &syn::Pat, rest: &[syn::Stmt], env: &Env<'env>) -> bool {
+        let Some((last, prefix)) = rest.split_last() else {
+            return true;
+        };
+        let tail = match last {
+            syn::Stmt::Expr(tail, None) => tail,
+            syn::Stmt::Macro(mac) => return mac.semi_token.is_some(),
+            _ => return true,
+        };
+        let mut env = env.clone();
+        for name in schedule::pat_names(pat) {
+            self.bind(&mut env, name, None);
+        }
+        for stmt in prefix {
+            if let syn::Stmt::Local(local) = stmt {
+                self.local(local, &mut env, true);
+            }
+        }
+        Self::place(tail, &env) || self.value(tail, &env)
     }
 
     /// Read `if p { S; return v; } y` before the tail `y` as `if p { S; return v; } else { y }`,

@@ -277,6 +277,11 @@ impl VisitMut for Drift<'_> {
                 fold_empty_else(expr_if);
             }
         }
+        if self.compiles
+            && let syn::Expr::Match(expr_match) = expr
+        {
+            join_equal_arms(expr_match);
+        }
         if let syn::Expr::Closure(closure) = expr {
             let protected_inputs = closure
                 .inputs
@@ -912,6 +917,79 @@ fn collapse_else_if(expr_if: &mut syn::ExprIf) {
     }
     if let Some(syn::Stmt::Expr(inner, None)) = block.block.stmts.pop() {
         **otherwise = inner;
+    }
+}
+
+/// Adjacent unattributed arms whose patterns bind nothing and whose bodies spell the same tokens
+/// join into one arm of an or-pattern, which `match` tries in the same order. An identifier
+/// pattern may be a binding, so it keeps its arm.
+fn join_equal_arms(expr_match: &mut syn::ExprMatch) {
+    use quote::ToTokens as _;
+    let arms = core::mem::take(&mut expr_match.arms);
+    let mut joined: Vec<syn::Arm> = Vec::with_capacity(arms.len());
+    let mut previous: Option<String> = None;
+    for arm in arms {
+        let body = (arm.attrs.is_empty() && binding_free(&arm.pat))
+            .then(|| arm.body.to_token_stream().to_string());
+        if let Some(last) = joined.last_mut()
+            && body.is_some()
+            && body == previous
+        {
+            join_alternative(&mut last.pat, arm.pat);
+            continue;
+        }
+        previous = body;
+        joined.push(arm);
+    }
+    expr_match.arms = joined;
+}
+
+/// Append `pat` to the alternatives of `into`, flattening an unattributed or-pattern on either
+/// side.
+fn join_alternative(into: &mut syn::Pat, pat: syn::Pat) {
+    let first = core::mem::replace(into, syn::Pat::Verbatim(proc_macro2::TokenStream::new()));
+    let mut joined = match first {
+        syn::Pat::Or(alternatives) => alternatives,
+        single => syn::PatOr {
+            attrs: Vec::new(),
+            leading_vert: None,
+            cases: core::iter::once(single).collect(),
+        },
+    };
+    match pat {
+        syn::Pat::Or(alternatives) => joined.cases.extend(alternatives.cases),
+        single => joined.cases.push(single),
+    }
+    *into = syn::Pat::Or(joined);
+}
+
+/// Whether an unattributed pattern binds no name and names no identifier that could be one.
+/// Drift has already removed unattributed parentheses.
+fn binding_free(pat: &syn::Pat) -> bool {
+    match pat {
+        syn::Pat::Lit(lit) => lit.attrs.is_empty(),
+        syn::Pat::Range(range) => range.attrs.is_empty(),
+        syn::Pat::Wild(wild) => wild.attrs.is_empty(),
+        syn::Pat::Rest(rest) => rest.attrs.is_empty(),
+        syn::Pat::Path(path) => path.attrs.is_empty(),
+        syn::Pat::Reference(reference) => {
+            reference.attrs.is_empty() && binding_free(&reference.pat)
+        }
+        syn::Pat::Or(or) => or.attrs.is_empty() && or.cases.iter().all(binding_free),
+        syn::Pat::Tuple(tuple) => tuple.attrs.is_empty() && tuple.elems.iter().all(binding_free),
+        syn::Pat::Slice(slice) => slice.attrs.is_empty() && slice.elems.iter().all(binding_free),
+        syn::Pat::TupleStruct(tuple) => {
+            tuple.attrs.is_empty() && tuple.elems.iter().all(binding_free)
+        }
+        syn::Pat::Struct(pat) => {
+            pat.attrs.is_empty()
+                && pat.rest.as_ref().is_none_or(|rest| rest.attrs.is_empty())
+                && pat
+                    .fields
+                    .iter()
+                    .all(|field| field.attrs.is_empty() && binding_free(&field.pat))
+        }
+        _ => false,
     }
 }
 

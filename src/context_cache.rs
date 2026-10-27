@@ -178,6 +178,10 @@ pub mod alpha {
         if flag { return value; }
         0u32
     }
+    pub fn slot(slot: Option<u32>) -> u32 {
+        let Some(value) = slot else { return 0u32; };
+        match value { 0 => 1u32, 1 => 1u32, _ => value }
+    }
 }
 mod custom {
     macro_rules! vec {
