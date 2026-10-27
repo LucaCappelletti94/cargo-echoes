@@ -1488,6 +1488,16 @@ fn label_call(
     locals: &mut usize,
     orders: Option<&RefCell<FieldOrders>>,
 ) -> (Lbl, Vec<Site>) {
+    if let Some((name, target)) = from_conversion(renamer, call) {
+        let (value, sites) = label_expr(renamer, env, &call.args[0], consumer, locals, orders);
+        match value.prim() {
+            Some(source) if source == target => return (value, sites),
+            Some(source) if lossless(source, target) => {
+                return (cast_label(renamer, value, name), sites);
+            }
+            _ => {}
+        }
+    }
     let (callee, mut sites) = label_expr(renamer, env, &call.func, consumer, locals, orders);
     let mut args: Vec<Lbl> = Vec::new();
     for arg in &call.args {
@@ -2506,16 +2516,73 @@ fn label_cast(
     let (value, sites) = label_expr(renamer, env, &cast.expr, consumer, locals, orders);
     let ty = match &*cast.ty {
         syn::Type::Path(path) if path.qself.is_none() => {
-            if path.path.segments.len() == 1 {
-                let name = path.path.segments[0].ident.to_string();
-                renamer.type_identity(unraw(&name)).text()
-            } else {
-                path_text(&path.path)
+            if let Some(name) = path.path.get_ident() {
+                if value.prim().is_some() && value.prim() == renamer.type_name_prim(name) {
+                    return (value, sites);
+                }
+                return (cast_label(renamer, value, name), sites);
             }
+            path_text(&path.path)
         }
         _ => "?".into(),
     };
     (Lbl::Other("cast".into(), vec![value, Lbl::Lit(ty)]), sites)
+}
+
+/// The label of a cast of `value` to the single type name `name`.
+fn cast_label(renamer: &Renamer, value: Lbl, name: &syn::Ident) -> Lbl {
+    let ty = renamer.type_identity(unraw(&name.to_string())).text();
+    Lbl::Other("cast".into(), vec![value, Lbl::Lit(ty)])
+}
+
+/// Whether the standard library converts `source` into `target` with a lossless `From` impl:
+/// `bool` into any integer, and an integer into a wider one that keeps its sign or gains one.
+pub(crate) fn lossless(source: PrimTy, target: PrimTy) -> bool {
+    match (source, target) {
+        (PrimTy::Bool, PrimTy::Int { .. }) => true,
+        (
+            PrimTy::Int {
+                width: from,
+                signed: from_signed,
+            },
+            PrimTy::Int {
+                width: to,
+                signed: to_signed,
+            },
+        ) => to.bits() > from.bits() && (to_signed || !from_signed),
+        _ => false,
+    }
+}
+
+/// The type name and proven primitive `T` of an unattributed `T::from(x)` whose `from`
+/// resolves through the standard `From` of the prelude.
+pub(crate) fn from_conversion<'c>(
+    renamer: &Renamer,
+    call: &'c syn::ExprCall,
+) -> Option<(&'c syn::Ident, PrimTy)> {
+    let syn::Expr::Path(path) = &*call.func else {
+        return None;
+    };
+    if !call.attrs.is_empty()
+        || call.args.len() != 1
+        || !path.attrs.is_empty()
+        || path.qself.is_some()
+        || path.path.leading_colon.is_some()
+    {
+        return None;
+    }
+    let mut segments = path.path.segments.iter();
+    let (Some(ty), Some(method), None) = (segments.next(), segments.next(), segments.next()) else {
+        return None;
+    };
+    if !ty.arguments.is_none()
+        || !method.arguments.is_none()
+        || crate::scope::ident_name(&method.ident) != "from"
+        || !renamer.prelude_trait("From")
+    {
+        return None;
+    }
+    Some((&ty.ident, renamer.type_name_prim(&ty.ident)?))
 }
 
 /// The label of a raw pointer expression, its inner sites marked on the

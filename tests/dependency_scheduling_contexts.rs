@@ -584,7 +584,7 @@ fn nested_attributed_mutable_locals_keep_their_unproven_reads() {
 }
 
 #[test]
-fn local_type_aliases_keep_distinct_cast_target_identities() {
+fn local_type_alias_casts_follow_their_target_identity() {
     let code = |body: &str| {
         let source: syn::File = syn::parse_str(body).unwrap();
         syn_canon::canonicalize(source)
@@ -617,10 +617,10 @@ fn local_type_aliases_keep_distinct_cast_target_identities() {
         code(&reordered),
         "the producers keep their scheduled order"
     );
-    assert_ne!(
+    assert_eq!(
         scoped,
         code(&primitive),
-        "the alias keeps a distinct cast target"
+        "an identity cast through an alias reduces like the primitive one"
     );
 }
 

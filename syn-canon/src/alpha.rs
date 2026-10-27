@@ -1332,6 +1332,20 @@ impl<'env> Renamer<'env> {
         }
     }
 
+    /// The proven primitive the single type name `ident` spells here.
+    pub(crate) fn type_name_prim(&self, ident: &syn::Ident) -> Option<PrimTy> {
+        if !self.prim_fallback {
+            return None;
+        }
+        self.name_prim(&crate::scope::ident_name(ident))
+    }
+
+    /// Whether the standard prelude is active and no binding claims the trait `name`, so its
+    /// associated functions resolve to the standard trait.
+    pub(crate) fn prelude_trait(&self, name: &str) -> bool {
+        self.prelude && self.type_unclaimed(name)
+    }
+
     /// The proven primitive type of a declared type, when the declaration
     /// establishes one through fully known local definitions.
     pub(crate) fn param_prim(&self, ty: &syn::Type) -> Option<PrimTy> {

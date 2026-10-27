@@ -1439,6 +1439,37 @@ fn empty_vector_functions_group_only_under_the_prelude() {
     assert_eq!(function_groups(&scan(12)).len(), 0);
 }
 
+const CAST_FIXTURE: &str = "tests/fixtures/castws";
+
+#[test]
+fn widening_cast_doctests_group_with_their_conversions() {
+    let report = Echoes::default().run(CAST_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["castws::Cast", "castws::Converted"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default().min_tokens(19).run(CAST_FIXTURE).unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default().min_tokens(20).run(CAST_FIXTURE).unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn widening_cast_functions_group_with_their_conversions() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(CAST_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["castws::converted", "castws::widened"]];
+    for tokens in [0, 7] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(8)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

@@ -1,0 +1,499 @@
+[
+  {
+    "id": "wc_u8_u16",
+    "family": "widening_casts",
+    "a": "fn f(x:u8)->u16{x as u16} fn main(){for x in [0u8,1,255]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:u8)->u16{u16::from(x)} fn main(){for x in [0u8,1,255]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n255\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n255\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n255\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n255\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_u8_i16",
+    "family": "widening_casts",
+    "a": "fn f(x:u8)->i16{x as i16} fn main(){for x in [0u8,200,255]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:u8)->i16{i16::from(x)} fn main(){for x in [0u8,200,255]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n200\n255\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n200\n255\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n200\n255\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n200\n255\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_u32_u64",
+    "family": "widening_casts",
+    "a": "fn f(x:u32)->u64{x as u64} fn main(){for x in [0u32,u32::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:u32)->u64{u64::from(x)} fn main(){for x in [0u32,u32::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_u32_i64",
+    "family": "widening_casts",
+    "a": "fn f(x:u32)->i64{x as i64} fn main(){for x in [0u32,u32::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:u32)->i64{i64::from(x)} fn main(){for x in [0u32,u32::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_u64_u128",
+    "family": "widening_casts",
+    "a": "fn f(x:u64)->u128{x as u128} fn main(){for x in [0u64,u64::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:u64)->u128{u128::from(x)} fn main(){for x in [0u64,u64::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n18446744073709551615\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n18446744073709551615\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n18446744073709551615\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n18446744073709551615\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_i8_i16",
+    "family": "widening_casts",
+    "a": "fn f(x:i8)->i16{x as i16} fn main(){for x in [i8::MIN,-1,i8::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:i8)->i16{i16::from(x)} fn main(){for x in [i8::MIN,-1,i8::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n-1\n127\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n-1\n127\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n-1\n127\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n-1\n127\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_i32_i64",
+    "family": "widening_casts",
+    "a": "fn f(x:i32)->i64{x as i64} fn main(){for x in [i32::MIN,-1,i32::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:i32)->i64{i64::from(x)} fn main(){for x in [i32::MIN,-1,i32::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n-1\n2147483647\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n-1\n2147483647\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n-1\n2147483647\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n-1\n2147483647\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_i64_i128",
+    "family": "widening_casts",
+    "a": "fn f(x:i64)->i128{x as i128} fn main(){for x in [i64::MIN,i64::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:i64)->i128{i128::from(x)} fn main(){for x in [i64::MIN,i64::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n9223372036854775807\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_bool_u8",
+    "family": "widening_casts",
+    "a": "fn f(x:bool)->u8{x as u8} fn main(){for x in [false,true]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:bool)->u8{u8::from(x)} fn main(){for x in [false,true]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_bool_i32",
+    "family": "widening_casts",
+    "a": "fn f(x:bool)->i32{x as i32} fn main(){for x in [false,true]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:bool)->i32{i32::from(x)} fn main(){for x in [false,true]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_identity",
+    "family": "widening_casts",
+    "a": "fn f(x:u32)->u32{x as u32} fn main(){for x in [0u32,u32::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){for x in [0u32,u32::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_from_identity",
+    "family": "widening_casts",
+    "a": "fn f(x:u32)->u32{u32::from(x)} fn main(){for x in [0u32,u32::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:u32)->u32{x} fn main(){for x in [0u32,u32::MAX]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4294967295\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_sign_change",
+    "family": "widening_casts",
+    "a": "fn f(x:i32)->u64{x as u64} fn main(){for x in [-1i32,5]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:i32)->u64{(x as u32) as u64} fn main(){for x in [-1i32,5]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_narrowing",
+    "family": "widening_casts",
+    "a": "fn f(x:u32)->u16{x as u16} fn main(){for x in [70000u32,5]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(x:u32)->u16{u16::try_from(x).unwrap_or(0)} fn main(){for x in [70000u32,5]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4464\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4464\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "wc_shadowed_target",
+    "family": "widening_casts",
+    "a": "#[allow(non_camel_case_types)] struct u64(u32); impl From<u32> for u64{fn from(x:u32)->Self{u64(x+1)}} fn main(){println!(\"{}\",u64::from(std::hint::black_box(3u32)).0);}",
+    "b": "#[allow(non_camel_case_types)] struct u64(u32); impl From<u32> for u64{fn from(x:u32)->Self{u64(x+1)}} fn main(){println!(\"{}\",(std::hint::black_box(3u32) as u64).0);}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": [
+            "E0605"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0605"
+          ],
+          "run": "absent"
+        }
+      }
+    }
+  }
+]

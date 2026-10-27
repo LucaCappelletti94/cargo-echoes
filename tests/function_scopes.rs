@@ -856,3 +856,59 @@ fn an_observing_impl_retains_owned_string_spellings() {
         view(&source("\"a\".to_string()"))
     );
 }
+
+#[test]
+fn widening_casts_match_conversions_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "fn f(x: u32) -> u64 { x as u64 }",
+            "fn f(x: u32) -> u64 { u64::from(x) }",
+        ),
+        (
+            "fn f(x: u32) -> u32 { x as u32 }",
+            "fn f(x: u32) -> u32 { x }",
+        ),
+    ] {
+        assert_eq!(view(written), view(canonical), "{written}");
+    }
+}
+
+#[test]
+fn lossy_and_shadowed_conversions_stay_apart_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "fn f(x: u32) -> u16 { x as u16 }",
+            "fn f(x: u32) -> u16 { u16::from(x) }",
+        ),
+        (
+            "use custom::u64; fn f(x: u32) -> u64 { x as u64 }",
+            "use custom::u64; fn f(x: u32) -> u64 { u64::from(x) }",
+        ),
+        (
+            "#![no_std] fn f(x: u32) -> u64 { x as u64 }",
+            "#![no_std] fn f(x: u32) -> u64 { u64::from(x) }",
+        ),
+    ] {
+        assert_ne!(view(written), view(canonical), "{written}");
+    }
+}
+
+#[test]
+fn the_failure_mode_retains_cast_spellings() {
+    assert_ne!(
+        failing_form("fn f(x: u32) -> u64 { x as u64 }"),
+        failing_form("fn f(x: u32) -> u64 { u64::from(x) }")
+    );
+    assert_ne!(
+        failing_form("fn f(x: u32) -> u32 { x as u32 }"),
+        failing_form("fn f(x: u32) -> u32 { x }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_cast_spellings() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f(x: u32) -> u64 {{ {body} }}\n}}")
+    };
+    assert_ne!(view(&source("x as u64")), view(&source("u64::from(x)")));
+}
