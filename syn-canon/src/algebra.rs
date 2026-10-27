@@ -454,12 +454,10 @@ impl Walker<'_, '_> {
     /// Merge `if p { if q { a } else { b } } else { b }` into `if p && q { a } else { b }`, and
     /// `if p { if q { a } }` into `if p && q { a }`, while the outer `then` block holds only the
     /// inner `if`, both `else` branches are the same tokens and both conditions are proven
-    /// total booleans, which `&&` evaluates in the same situations.
+    /// total booleans, which `&&` evaluates in the same situations. The outer `if` arrives
+    /// unattributed, since `scalar` keeps attributed expressions as written.
     fn collapse(&self, mut branch: syn::ExprIf, total_calls: bool) -> syn::ExprIf {
         loop {
-            if !branch.attrs.is_empty() {
-                return branch;
-            }
             let last = branch.then_branch.stmts.pop();
             let inner = match (last, branch.then_branch.stmts.is_empty()) {
                 (Some(syn::Stmt::Expr(syn::Expr::If(inner), None)), true) => inner,
