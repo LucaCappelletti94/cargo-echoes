@@ -1170,17 +1170,8 @@ fn elidable(sig: &syn::Signature, body: Option<&syn::Block>, name: &syn::Ident) 
                     }
                 }
                 if let syn::ReceiverKind::Typed(_, ty) = &receiver.kind {
-                    match ty.as_ref() {
-                        syn::Type::Reference(reference) => {
-                            reference_receiver = true;
-                            in_receiver = reference
-                                .lifetime
-                                .as_ref()
-                                .is_some_and(|lifetime| lifetime.ident == *name);
-                        }
-                        syn::Type::Path(path) if path.path.is_ident("Self") => {}
-                        _ => plain_receiver = false,
-                    }
+                    plain_receiver &=
+                        matches!(ty.as_ref(), syn::Type::Path(path) if path.path.is_ident("Self"));
                     inputs.visit_type(ty);
                 }
             }
@@ -1679,11 +1670,10 @@ fn bound_key(bound: &syn::TypeParamBound, names: &[(bool, String)]) -> String {
         for token in stream {
             match token {
                 proc_macro2::TokenTree::Group(group) => {
-                    out.push(match group.delimiter() {
-                        proc_macro2::Delimiter::Bracket => '[',
-                        proc_macro2::Delimiter::Brace => '{',
-                        _ => '(',
-                    });
+                    let _ = core::fmt::Write::write_fmt(
+                        out,
+                        format_args!("{:?}\u{2}", group.delimiter()),
+                    );
                     write(group.stream(), names, out);
                     out.push('\u{3}');
                     lifetime = false;
