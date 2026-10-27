@@ -639,3 +639,55 @@ fn an_observing_impl_retains_the_identity_operand() {
     };
     assert_ne!(view(&source("x * 1")), view(&source("x")));
 }
+
+#[test]
+fn nested_conditionals_merge_in_the_borrowed_view() {
+    let body =
+        |statements: &str| format!("fn f(p: bool, q: bool, x: u32) -> u32 {{ {statements} }}");
+    for (written, merged) in [
+        ("if p { if q { mark(); } } x", "if p && q { mark(); } x"),
+        (
+            "if p { if q { x } else { read() } } else { read() }",
+            "if q && p { x } else { read() }",
+        ),
+        (
+            "match p { false => 0u32, _ => x }",
+            "if p { x } else { 0u32 }",
+        ),
+    ] {
+        assert_eq!(view(&body(written)), view(&body(merged)), "{written}");
+    }
+}
+
+#[test]
+fn unproven_nested_conditionals_stay_nested_in_the_borrowed_view() {
+    assert_ne!(
+        view("fn f(p: Unknown, q: bool) { if p { if q { mark(); } } }"),
+        view("fn f(p: Unknown, q: bool) { if p && q { mark(); } }")
+    );
+    assert_ne!(
+        view(
+            "fn f(p: bool, q: bool, x: u32) -> u32 { if p { if q { x } else { 1u32 } } else { 2u32 } }"
+        ),
+        view("fn f(p: bool, q: bool, x: u32) -> u32 { if p && q { x } else { 2u32 } }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_the_nested_conditional() {
+    assert_ne!(
+        failing_form("fn f(p: bool, q: bool) { if p { if q { mark(); } } }"),
+        failing_form("fn f(p: bool, q: bool) { if p && q { mark(); } }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_the_nested_conditional() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f(p: bool, q: bool) {{ {body} }}\n}}")
+    };
+    assert_ne!(
+        view(&source("if p { if q { mark(); } }")),
+        view(&source("if p && q { mark(); }"))
+    );
+}

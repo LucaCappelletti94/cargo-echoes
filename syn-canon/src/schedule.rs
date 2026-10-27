@@ -2106,7 +2106,8 @@ fn label_match_expr(
 }
 
 /// The scrutinee and the `true` and `false` arm bodies of an unattributed,
-/// exhaustive two-arm match over literal boolean patterns.
+/// exhaustive two-arm match over unguarded boolean patterns: two different
+/// literals, or a literal followed by `_` for the other value.
 pub(crate) fn boolean_match(
     r#match: &syn::ExprMatch,
 ) -> Option<(&syn::Expr, &syn::Expr, &syn::Expr)> {
@@ -2116,14 +2117,21 @@ pub(crate) fn boolean_match(
     if !r#match.attrs.is_empty() {
         return None;
     }
-    let value = |arm: &syn::Arm| match &arm.pat {
-        syn::Pat::Lit(syn::ExprLit {
-            attrs,
-            lit: syn::Lit::Bool(literal),
-        }) if attrs.is_empty() && arm.attrs.is_empty() => Some(literal.value),
-        _ => None,
+    let pattern = |arm: &syn::Arm| {
+        if !arm.attrs.is_empty() {
+            return None;
+        }
+        match &arm.pat {
+            syn::Pat::Lit(syn::ExprLit {
+                attrs,
+                lit: syn::Lit::Bool(literal),
+            }) if attrs.is_empty() => Some(Some(literal.value)),
+            syn::Pat::Wild(wild) if wild.attrs.is_empty() => Some(None),
+            _ => None,
+        }
     };
-    let (selected, other) = (value(first)?, value(second)?);
+    let selected = pattern(first)??;
+    let other = pattern(second)?.unwrap_or(!selected);
     if selected == other {
         return None;
     }

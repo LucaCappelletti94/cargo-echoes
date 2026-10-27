@@ -1,0 +1,365 @@
+[
+  {
+    "id": "nc_else_u32",
+    "family": "nested_conditionals",
+    "a": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{if p{if q{x}else{y}}else{y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "b": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{if p&&q{x}else{y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "nc_effect_else",
+    "family": "nested_conditionals",
+    "a": "fn read()->u32{println!(\"read\");9u32} fn f(p:bool,q:bool,x:u32,y:u32)->u32{if p{if q{x}else{read()}}else{read()}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "b": "fn read()->u32{println!(\"read\");9u32} fn f(p:bool,q:bool,x:u32,y:u32)->u32{if p&&q{x}else{read()}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "read\n9\nread\n9\nread\n9\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "read\n9\nread\n9\nread\n9\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "read\n9\nread\n9\nread\n9\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "read\n9\nread\n9\nread\n9\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "nc_effect_then",
+    "family": "nested_conditionals",
+    "a": "fn read()->u32{println!(\"read\");9u32} fn f(p:bool,q:bool,x:u32,y:u32)->u32{if p{if q{read()}else{y}}else{y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "b": "fn read()->u32{println!(\"read\");9u32} fn f(p:bool,q:bool,x:u32,y:u32)->u32{if q&&p{read()}else{y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\nread\n9\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\nread\n9\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\nread\n9\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\nread\n9\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "nc_comparison",
+    "family": "nested_conditionals",
+    "a": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{if x<y{if p{x}else{y}}else{y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "b": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{if p&&x<y{x}else{y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "nc_statement",
+    "family": "nested_conditionals",
+    "a": "fn f(p:bool,q:bool,r:bool){let _=r;if p{if q{println!(\"m\");}}} fn main(){for p in [false,true]{for q in [false,true]{for r in [false,true]{f(p,q,r);}}}}",
+    "b": "fn f(p:bool,q:bool,r:bool){let _=r;if p&&q{println!(\"m\");}} fn main(){for p in [false,true]{for q in [false,true]{for r in [false,true]{f(p,q,r);}}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "m\nm\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "m\nm\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "m\nm\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "m\nm\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "nc_triple",
+    "family": "nested_conditionals",
+    "a": "fn f(p:bool,q:bool,r:bool){if p{if q{if r{println!(\"m\");}}}} fn main(){for p in [false,true]{for q in [false,true]{for r in [false,true]{f(p,q,r);}}}}",
+    "b": "fn f(p:bool,q:bool,r:bool){if r&&(q&&p){println!(\"m\");}} fn main(){for p in [false,true]{for q in [false,true]{for r in [false,true]{f(p,q,r);}}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "m\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "m\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "m\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "m\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "nc_wildcard_true",
+    "family": "nested_conditionals",
+    "a": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{let _=q;match p{true=>x,_=>y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "b": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{let _=q;if p{x}else{y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "nc_wildcard_false",
+    "family": "nested_conditionals",
+    "a": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{let _=q;match p{false=>y,_=>x}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "b": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{let _=q;if p{x}else{y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n1\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "nc_different_else",
+    "family": "nested_conditionals",
+    "a": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{if p{if q{x}else{y}}else{x}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "b": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{if p&&q{x}else{y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n2\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n2\n2\n1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "nc_outer_else_only",
+    "family": "nested_conditionals",
+    "a": "fn f(p:bool,q:bool,r:bool){let _=r;if p{if q{println!(\"m\");}}else{println!(\"o\");}} fn main(){for p in [false,true]{for q in [false,true]{for r in [false,true]{f(p,q,r);}}}}",
+    "b": "fn f(p:bool,q:bool,r:bool){let _=r;if p&&q{println!(\"m\");}else{println!(\"o\");}} fn main(){for p in [false,true]{for q in [false,true]{for r in [false,true]{f(p,q,r);}}}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "o\no\no\no\nm\nm\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "o\no\no\no\nm\nm\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "o\no\no\no\no\no\nm\nm\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "o\no\no\no\no\no\nm\nm\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "nc_wildcard_first",
+    "family": "nested_conditionals",
+    "a": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{let _=q;match p{_=>x,true=>y}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "b": "fn f(p:bool,q:bool,x:u32,y:u32)->u32{let _=q;if p{y}else{x}} fn main(){for p in [false,true]{for q in [false,true]{println!(\"{}\",f(p,q,1u32,2u32));}}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n1\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n1\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n2\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n2\n2\n"
+        }
+      }
+    }
+  }
+]

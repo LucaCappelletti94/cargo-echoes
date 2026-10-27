@@ -154,6 +154,21 @@ fn tail_expr_mut(block: &mut syn::Block) -> Option<&mut syn::Expr> {
     Some(expr)
 }
 
+/// Whether two optional `else` branches are both absent or spell the same tokens.
+fn same_branch(
+    left: Option<&(syn::token::Else, Box<syn::Expr>)>,
+    right: Option<&(syn::token::Else, Box<syn::Expr>)>,
+) -> bool {
+    use quote::ToTokens as _;
+    match (left, right) {
+        (None, None) => true,
+        (Some((_, left)), Some((_, right))) => {
+            left.to_token_stream().to_string() == right.to_token_stream().to_string()
+        }
+        _ => false,
+    }
+}
+
 /// The name of a binding `expr` reads by one unattributed identifier, the only place a compound
 /// assignment expands without reading a field, an index or a dereference twice.
 fn local_name(expr: &syn::Expr) -> Option<String> {
@@ -436,7 +451,65 @@ impl Walker<'_, '_> {
         self.scalar_in_place(expr, total_calls)
     }
 
-    fn branch(&self, mut branch: syn::ExprIf, total_calls: bool) -> (syn::Expr, Option<Lbl>) {
+    /// Merge `if p { if q { a } else { b } } else { b }` into `if p && q { a } else { b }`, and
+    /// `if p { if q { a } }` into `if p && q { a }`, while the outer `then` block holds only the
+    /// inner `if`, both `else` branches are the same tokens and both conditions are proven
+    /// total booleans, which `&&` evaluates in the same situations.
+    fn collapse(&self, mut branch: syn::ExprIf, total_calls: bool) -> syn::ExprIf {
+        loop {
+            if !branch.attrs.is_empty() {
+                return branch;
+            }
+            let last = branch.then_branch.stmts.pop();
+            let inner = match (last, branch.then_branch.stmts.is_empty()) {
+                (Some(syn::Stmt::Expr(syn::Expr::If(inner), None)), true) => inner,
+                (Some(syn::Stmt::Expr(syn::Expr::Match(inner), None)), true)
+                    if self.boolean_match(&inner) =>
+                {
+                    conditional(inner)
+                }
+                (last, _) => {
+                    branch.then_branch.stmts.extend(last);
+                    return branch;
+                }
+            };
+            let conditions = if inner.attrs.is_empty()
+                && same_branch(branch.else_branch.as_ref(), inner.else_branch.as_ref())
+            {
+                self.proven_conditions(&branch.cond, &inner.cond, total_calls)
+            } else {
+                None
+            };
+            let Some(((outer, outer_label), (nested, nested_label))) = conditions else {
+                branch
+                    .then_branch
+                    .stmts
+                    .push(syn::Stmt::Expr(syn::Expr::If(inner), None));
+                return branch;
+            };
+            let (cond, _) = logical('∧', (outer, outer_label), (nested, nested_label), true);
+            *branch.cond = cond;
+            branch.then_branch = inner.then_branch;
+        }
+    }
+
+    /// The normalized outer and inner conditions with their labels, when both are proven total
+    /// booleans.
+    fn proven_conditions(
+        &self,
+        outer: &syn::Expr,
+        inner: &syn::Expr,
+        total_calls: bool,
+    ) -> Option<((syn::Expr, Lbl), (syn::Expr, Lbl))> {
+        let (outer, outer_label) = self.scalar(outer.clone(), total_calls);
+        let (inner, inner_label) = self.scalar(inner.clone(), total_calls);
+        let (outer_label, inner_label) = (outer_label?, inner_label?);
+        (outer_label.prim() == Some(PrimTy::Bool) && inner_label.prim() == Some(PrimTy::Bool))
+            .then_some(((outer, outer_label), (inner, inner_label)))
+    }
+
+    fn branch(&self, branch: syn::ExprIf, total_calls: bool) -> (syn::Expr, Option<Lbl>) {
+        let mut branch = self.collapse(branch, total_calls);
         let Some((_, otherwise)) = &mut branch.else_branch else {
             self.scalar_in_place(&mut branch.cond, total_calls);
             return (syn::Expr::If(branch), None);
