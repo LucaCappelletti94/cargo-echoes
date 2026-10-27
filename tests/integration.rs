@@ -1606,6 +1606,37 @@ fn breaking_loop_functions_group_with_their_while_loops() {
     assert_eq!(function_groups(&scan(14)).len(), 0);
 }
 
+const ARMS_FIXTURE: &str = "tests/fixtures/armsws";
+
+#[test]
+fn if_let_doctests_group_with_their_matches() {
+    let report = Echoes::default().run(ARMS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["armsws::IfLet", "armsws::Matched"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default().min_tokens(25).run(ARMS_FIXTURE).unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default().min_tokens(26).run(ARMS_FIXTURE).unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn reordered_variant_arms_group_their_functions() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(ARMS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["armsws::pause", "armsws::wait"]];
+    for tokens in [0, 11] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(12)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

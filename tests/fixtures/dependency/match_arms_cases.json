@@ -1,0 +1,299 @@
+[
+  {
+    "id": "ma_if_let_else",
+    "family": "match_arms",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o:Option<D>)->u32{let _g=D(\"g\");if let Some(v)=o{println!(\"some {}\",v.0);1}else{println!(\"none\");0}} fn main(){println!(\"{}\",f(Some(D(\"x\"))));println!(\"{}\",f(None));}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o:Option<D>)->u32{let _g=D(\"g\");match o{None=>{println!(\"none\");0},Some(v)=>{println!(\"some {}\",v.0);1}}} fn main(){println!(\"{}\",f(Some(D(\"x\"))));println!(\"{}\",f(None));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\ndrop g\n1\nnone\ndrop g\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\ndrop g\n1\nnone\ndrop g\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\ndrop g\n1\nnone\ndrop g\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\ndrop g\n1\nnone\ndrop g\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ma_if_let_unit",
+    "family": "match_arms",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o:Option<D>){let n=o;if let Some(v)=n{println!(\"some {}\",v.0);}let _r=D(\"rest\");println!(\"rest\");} fn main(){f(Some(D(\"x\")));f(None);}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o:Option<D>){let n=o;match n{Some(v)=>{println!(\"some {}\",v.0);}_=>{}}let _r=D(\"rest\");println!(\"rest\");} fn main(){f(Some(D(\"x\")));f(None);}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\nrest\ndrop rest\nrest\ndrop rest\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\nrest\ndrop rest\nrest\ndrop rest\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\nrest\ndrop rest\nrest\ndrop rest\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\nrest\ndrop rest\nrest\ndrop rest\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ma_catch_none",
+    "family": "match_arms",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o:Option<D>)->u32{match o{None=>{println!(\"none\");0},Some(v)=>{println!(\"some {}\",v.0);1}}} fn main(){println!(\"{}\",f(Some(D(\"x\"))));println!(\"{}\",f(None));}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o:Option<D>)->u32{match o{Some(v)=>{println!(\"some {}\",v.0);1},_=>{println!(\"none\");0}}} fn main(){println!(\"{}\",f(Some(D(\"x\"))));println!(\"{}\",f(None));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\n1\nnone\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\n1\nnone\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\n1\nnone\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "some x\ndrop x\n1\nnone\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ma_join_none",
+    "family": "match_arms",
+    "a": "fn f(o:Option<u32>)->u32{match o{None=>1,Some(0)=>1,Some(v)=>v+2}} fn main(){for o in [None,Some(0),Some(5)]{println!(\"{}\",f(o));}}",
+    "b": "fn f(o:Option<u32>)->u32{match o{None|Some(0)=>1,Some(v)=>v+2}} fn main(){for o in [None,Some(0),Some(5)]{println!(\"{}\",f(o));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n7\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n7\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ma_literal_order",
+    "family": "match_arms",
+    "a": "fn f(x:u32)->&'static str{match x{2=>\"two\",0=>\"zero\",1=>\"two\",_=>\"many\"}} fn main(){for x in 0..4{println!(\"{}\",f(x));}}",
+    "b": "fn f(x:u32)->&'static str{match x{0=>\"zero\",1|2=>\"two\",_=>\"many\"}} fn main(){for x in 0..4{println!(\"{}\",f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "zero\ntwo\ntwo\nmany\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "zero\ntwo\ntwo\nmany\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "zero\ntwo\ntwo\nmany\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "zero\ntwo\ntwo\nmany\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ma_enum_order",
+    "family": "match_arms",
+    "a": "enum E{A,B(u32),C{v:u32}} fn f(e:E)->u32{match e{E::C{v}=>v,E::A=>0,E::B(v)=>v+1}} fn main(){for e in [E::A,E::B(3),E::C{v:9}]{println!(\"{}\",f(e));}}",
+    "b": "enum E{A,B(u32),C{v:u32}} fn f(e:E)->u32{match e{E::A=>0,E::B(v)=>v+1,E::C{v}=>v}} fn main(){for e in [E::A,E::B(3),E::C{v:9}]{println!(\"{}\",f(e));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4\n9\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4\n9\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4\n9\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n4\n9\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ma_result_order",
+    "family": "match_arms",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(r:Result<D,u8>)->u32{match r{Err(e)=>{println!(\"err {}\",e);u32::from(e)},Ok(v)=>{println!(\"ok {}\",v.0);7}}} fn main(){println!(\"{}\",f(Ok(D(\"x\"))));println!(\"{}\",f(Err(3)));}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(r:Result<D,u8>)->u32{match r{Ok(v)=>{println!(\"ok {}\",v.0);7},Err(e)=>{println!(\"err {}\",e);u32::from(e)}}} fn main(){println!(\"{}\",f(Ok(D(\"x\"))));println!(\"{}\",f(Err(3)));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "ok x\ndrop x\n7\nerr 3\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "ok x\ndrop x\n7\nerr 3\n3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "ok x\ndrop x\n7\nerr 3\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "ok x\ndrop x\n7\nerr 3\n3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ma_overlapping_literals",
+    "family": "match_arms",
+    "a": "fn f(x:u32)->&'static str{match x{1=>\"a\",0x1=>\"b\",_=>\"c\"}} fn main(){println!(\"{}\",f(1));}",
+    "b": "fn f(x:u32)->&'static str{match x{0x1=>\"b\",1=>\"a\",_=>\"c\"}} fn main(){println!(\"{}\",f(1));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "b\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "b\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ma_guard_order",
+    "family": "match_arms",
+    "a": "fn f(x:u32,p:bool)->&'static str{match x{1 if p=>\"g\",1=>\"h\",0=>\"z\",_=>\"o\"}} fn main(){println!(\"{}\",f(1,true));}",
+    "b": "fn f(x:u32,p:bool)->&'static str{match x{0=>\"z\",1=>\"h\",1 if p=>\"g\",_=>\"o\"}} fn main(){println!(\"{}\",f(1,true));}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "g\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "g\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "h\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "h\n"
+        }
+      }
+    }
+  }
+]

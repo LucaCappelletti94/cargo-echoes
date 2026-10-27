@@ -202,6 +202,8 @@ pub(crate) struct Frame {
     pub(crate) observed: bool,
     /// Standard names an import may rebind, all set under an unknown glob.
     pub(crate) std_rebound: u64,
+    /// The variant names, in declaration order, of each enum binding of the type namespace.
+    enums: BTreeMap<BindingId, Vec<String>>,
 }
 
 impl Frame {
@@ -249,6 +251,23 @@ impl Frame {
             .get_mut(ns.key(name))
             .expect("a prebound name")
             .macro_resolution = standard;
+    }
+
+    /// Record the variants of the enum `name` binds in the type namespace.
+    pub(crate) fn set_variants(&mut self, name: &str, item: &syn::ItemEnum) {
+        let id = self.lookup(Ns::Type, name).expect("a prebound enum").id;
+        self.enums.insert(
+            id,
+            item.variants
+                .iter()
+                .map(|variant| ident_name(&variant.ident))
+                .collect(),
+        );
+    }
+
+    /// The variants of the enum `binding` names, when this frame declared one.
+    pub(crate) fn variants(&self, binding: &Binding) -> Option<&[String]> {
+        self.enums.get(&binding.id).map(Vec::as_slice)
     }
 }
 

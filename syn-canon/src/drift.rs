@@ -280,7 +280,7 @@ impl VisitMut for Drift<'_> {
         if self.compiles
             && let syn::Expr::Match(expr_match) = expr
         {
-            join_equal_arms(expr_match);
+            join_equal_arms(expr_match, &|_| false);
         }
         if let syn::Expr::Closure(closure) = expr {
             let protected_inputs = closure
@@ -1137,14 +1137,17 @@ fn loop_as_while(expr: &mut syn::Expr) {
 
 /// Adjacent unattributed arms whose patterns bind nothing and whose bodies spell the same tokens
 /// join into one arm of an or-pattern, which `match` tries in the same order. An identifier
-/// pattern may be a binding, so it keeps its arm.
-fn join_equal_arms(expr_match: &mut syn::ExprMatch) {
+/// pattern may be a binding, so it keeps its arm unless `unit` proves it names a variant.
+pub(crate) fn join_equal_arms(
+    expr_match: &mut syn::ExprMatch,
+    unit: &dyn Fn(&syn::PatIdent) -> bool,
+) {
     use quote::ToTokens as _;
     let arms = core::mem::take(&mut expr_match.arms);
     let mut joined: Vec<syn::Arm> = Vec::with_capacity(arms.len());
     let mut previous: Option<String> = None;
     for arm in arms {
-        let body = (arm.attrs.is_empty() && binding_free(&arm.pat))
+        let body = (arm.attrs.is_empty() && binding_free(&arm.pat, unit))
             .then(|| arm.body.to_token_stream().to_string());
         if let Some(last) = joined.last_mut()
             && body.is_some()
@@ -1178,31 +1181,29 @@ fn join_alternative(into: &mut syn::Pat, pat: syn::Pat) {
     *into = syn::Pat::Or(joined);
 }
 
-/// Whether an unattributed pattern binds no name and names no identifier that could be one.
-/// Drift has already removed unattributed parentheses.
-fn binding_free(pat: &syn::Pat) -> bool {
+/// Whether an unattributed pattern binds no name and names no identifier that could be one, an
+/// identifier `unit` proves a variant aside. Drift has already removed unattributed parentheses.
+fn binding_free(pat: &syn::Pat, unit: &dyn Fn(&syn::PatIdent) -> bool) -> bool {
+    let free = |pat: &syn::Pat| binding_free(pat, unit);
     match pat {
         syn::Pat::Lit(lit) => lit.attrs.is_empty(),
         syn::Pat::Range(range) => range.attrs.is_empty(),
         syn::Pat::Wild(wild) => wild.attrs.is_empty(),
         syn::Pat::Rest(rest) => rest.attrs.is_empty(),
         syn::Pat::Path(path) => path.attrs.is_empty(),
-        syn::Pat::Reference(reference) => {
-            reference.attrs.is_empty() && binding_free(&reference.pat)
-        }
-        syn::Pat::Or(or) => or.attrs.is_empty() && or.cases.iter().all(binding_free),
-        syn::Pat::Tuple(tuple) => tuple.attrs.is_empty() && tuple.elems.iter().all(binding_free),
-        syn::Pat::Slice(slice) => slice.attrs.is_empty() && slice.elems.iter().all(binding_free),
-        syn::Pat::TupleStruct(tuple) => {
-            tuple.attrs.is_empty() && tuple.elems.iter().all(binding_free)
-        }
+        syn::Pat::Ident(ident) => unit(ident),
+        syn::Pat::Reference(reference) => reference.attrs.is_empty() && free(&reference.pat),
+        syn::Pat::Or(or) => or.attrs.is_empty() && or.cases.iter().all(free),
+        syn::Pat::Tuple(tuple) => tuple.attrs.is_empty() && tuple.elems.iter().all(free),
+        syn::Pat::Slice(slice) => slice.attrs.is_empty() && slice.elems.iter().all(free),
+        syn::Pat::TupleStruct(tuple) => tuple.attrs.is_empty() && tuple.elems.iter().all(free),
         syn::Pat::Struct(pat) => {
             pat.attrs.is_empty()
                 && pat.rest.as_ref().is_none_or(|rest| rest.attrs.is_empty())
                 && pat
                     .fields
                     .iter()
-                    .all(|field| field.attrs.is_empty() && binding_free(&field.pat))
+                    .all(|field| field.attrs.is_empty() && free(&field.pat))
         }
         _ => false,
     }
