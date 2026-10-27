@@ -51,6 +51,9 @@ pub(crate) struct Options<'a> {
     pub(crate) prelude: bool,
     /// No trait in view declares a method named `to_string` or `to_owned`.
     pub(crate) owned_methods: bool,
+    /// Every import in view comes from the standard library and no trait in view declares a
+    /// `clone` method.
+    pub(crate) clone_free: bool,
     /// The source context's helper summary table, when one is indexed.
     pub(crate) helper_table: Option<&'a crate::helpers::HelperTable>,
     pub(crate) helper_module: &'a [String],
@@ -333,6 +336,9 @@ pub(crate) struct Renamer<'env> {
     prelude: bool,
     /// No trait in view declares a method named `to_string` or `to_owned`.
     owned_methods: bool,
+    /// Every import in view comes from the standard library and no trait in view declares a
+    /// `clone` method.
+    clone_free: bool,
     /// An enclosing block of the current item already read its owned strings and empty vectors.
     prelude_folded: bool,
     /// The inline modules around the traversal, whose frames stay on the stack.
@@ -393,6 +399,7 @@ impl<'env> Renamer<'env> {
             std_names: false,
             prelude: false,
             owned_methods: false,
+            clone_free: false,
             prelude_folded: false,
             inline_depth: 0,
             observed: false,
@@ -448,6 +455,7 @@ impl<'env> Renamer<'env> {
         renamer.std_names = options.std_names;
         renamer.prelude = options.prelude;
         renamer.owned_methods = options.owned_methods;
+        renamer.clone_free = options.clone_free;
         renamer.observed = options.observed;
         renamer.tail_blocked = options.enclosing_observed;
         renamer.seed = options.seed;
@@ -1239,6 +1247,13 @@ impl<'env> Renamer<'env> {
     /// Whether no trait in view declares a method named `to_string` or `to_owned`.
     pub(crate) fn owned_methods(&self) -> bool {
         self.owned_methods
+    }
+
+    /// Whether `clone` on a primitive resolves to `Clone::clone`: the standard prelude is
+    /// active, every import in view comes from the standard library and no trait in view
+    /// declares a `clone` method.
+    pub(crate) fn clone_free(&self) -> bool {
+        self.prelude && self.clone_free
     }
 
     /// Whether `path` names the standard `vec!` macro.
@@ -2656,6 +2671,7 @@ pub(crate) fn normalize_file(
     options: Options<'_>,
 ) -> ReferenceFacts {
     let mut renamer = Renamer::seeded(options, compiles);
+    renamer.clone_free &= clone_free_file(file);
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
 }
@@ -2664,9 +2680,17 @@ pub(crate) fn normalize_file(
 /// main pass so that both see one spelling.
 pub(crate) fn analyze_file(file: &mut syn::File, options: Options<'_>) -> ReferenceFacts {
     let mut renamer = Renamer::seeded(options, false);
+    renamer.clone_free &= clone_free_file(file);
     renamer.analysis = true;
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
+}
+
+/// Whether a file, bodies included, imports only from the standard library and declares no
+/// trait method named `clone`, so `clone` on a primitive resolves to `Clone::clone`.
+fn clone_free_file(file: &syn::File) -> bool {
+    crate::context::standard_imports(&file.items)
+        && !crate::context::declares_trait_method(&file.items, &["clone"])
 }
 
 /// True for an ident pattern that names a unit struct, variant, or

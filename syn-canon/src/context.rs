@@ -73,6 +73,8 @@ struct Module {
     helper_blocked: bool,
     /// No attribute on the module, an ancestor or the crate root removes the standard prelude.
     prelude: bool,
+    /// Every `use` of the module imports from `std`, `core` or `alloc`.
+    standard_imports: bool,
 }
 
 /// One original declaration and its module environment.
@@ -105,6 +107,8 @@ pub struct SourceContext<'a> {
     helpers: crate::helpers::HelperTable,
     /// No trait of the crate declares a method named `to_string` or `to_owned`.
     owned_methods: bool,
+    /// No trait of the crate declares a method named `clone`.
+    clone_method: bool,
 }
 
 /// A function view selected from a source context.
@@ -158,6 +162,9 @@ impl FunctionView<'_> {
                 std_names: self.ctx.modules[self.entry.module.0].std_names,
                 prelude: self.ctx.modules[self.entry.module.0].prelude,
                 owned_methods: self.ctx.owned_methods,
+                clone_free: self.ctx.modules[self.entry.module.0].prelude
+                    && self.ctx.modules[self.entry.module.0].standard_imports
+                    && self.ctx.clone_method,
                 self_owner,
                 helper_table: Some(&self.ctx.helpers),
                 helper_module: &self.entry.helper_module,
@@ -228,6 +235,7 @@ impl<'a> SourceContext<'a> {
                         observed: ancestry.observed,
                         helper_blocked: ancestry.blocked,
                         prelude: !ancestry.bare,
+                        standard_imports: standard_imports(scope.items()),
                     });
                     (scope.key(), id)
                 })
@@ -258,13 +266,17 @@ impl<'a> SourceContext<'a> {
         }
         let owned_methods = !files
             .iter()
-            .any(|(_, file)| declares_owned_method(&file.items));
+            .any(|(_, file)| declares_trait_method(&file.items, &["to_string", "to_owned"]));
+        let clone_method = !files
+            .iter()
+            .any(|(_, file)| declares_trait_method(&file.items, &["clone"]));
         Self {
             modules,
             decls,
             gen_frames,
             helpers,
             owned_methods,
+            clone_method,
         }
     }
 
@@ -551,17 +563,42 @@ fn prelude_attribute_token(token: &proc_macro2::TokenTree) -> bool {
     }
 }
 
-/// Whether a trait among `items`, at any depth, declares a method named `to_string` or
-/// `to_owned`, which the owned string reading leaves to the compiler.
-pub(crate) fn declares_owned_method(items: &[syn::Item]) -> bool {
-    struct Search(bool);
-    impl syn::visit::Visit<'_> for Search {
+/// Whether a trait among `items`, at any depth, declares a method with one of `names`, which
+/// the readings of standard method calls leave to the compiler.
+pub(crate) fn declares_trait_method(items: &[syn::Item], names: &[&str]) -> bool {
+    struct Search<'a>(&'a [&'a str], bool);
+    impl syn::visit::Visit<'_> for Search<'_> {
         fn visit_trait_item_fn(&mut self, method: &syn::TraitItemFn) {
             let name = ident_name(&method.sig.ident);
-            self.0 |= name == "to_string" || name == "to_owned";
+            self.1 |= self.0.contains(&name.as_str());
         }
     }
-    let mut search = Search(false);
+    let mut search = Search(names, false);
+    for item in items {
+        syn::visit::Visit::visit_item(&mut search, item);
+    }
+    search.1
+}
+
+/// Whether every `use` among `items`, at any depth, imports from `std`, `core` or `alloc`, so
+/// it brings no trait method beyond the standard library's into view.
+pub(crate) fn standard_imports(items: &[syn::Item]) -> bool {
+    struct Search(bool);
+    impl syn::visit::Visit<'_> for Search {
+        fn visit_item_use(&mut self, item: &syn::ItemUse) {
+            self.0 &= standard_tree(&item.tree);
+        }
+    }
+    fn standard_tree(tree: &syn::UseTree) -> bool {
+        match tree {
+            syn::UseTree::Path(path) => {
+                matches!(ident_name(&path.ident).as_str(), "std" | "core" | "alloc")
+            }
+            syn::UseTree::Group(group) => group.items.iter().all(standard_tree),
+            _ => false,
+        }
+    }
+    let mut search = Search(true);
     for item in items {
         syn::visit::Visit::visit_item(&mut search, item);
     }

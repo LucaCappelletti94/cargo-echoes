@@ -225,6 +225,7 @@ pub(crate) fn item_payload(
             std_names: proof.std_names,
             prelude: false,
             owned_methods: false,
+            clone_free: false,
             helper_table: proof.table,
             helper_module: &[],
             helper_blocked: false,

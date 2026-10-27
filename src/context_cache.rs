@@ -191,6 +191,9 @@ pub mod alpha {
     pub fn picked<'a, T>(values: &'a [T]) -> Option<&'a T> where T: Ord + Copy {
         values.iter().max()
     }
+    pub fn copied(value: u32, other: u32) -> bool {
+        &value == &other
+    }
 }
 mod custom {
     macro_rules! vec {

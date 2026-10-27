@@ -969,3 +969,57 @@ fn an_observing_impl_retains_bound_order_and_lifetimes() {
         view(&source("fn f(x: &u32) -> &u32 { x }"))
     );
 }
+
+#[test]
+fn primitive_copies_reduce_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "fn f(x: u32) -> u32 { x.clone() }",
+            "fn f(x: u32) -> u32 { x }",
+        ),
+        ("fn f(x: u32) -> u32 { *&x }", "fn f(x: u32) -> u32 { x }"),
+        (
+            "fn f(x: u32, y: u32) -> bool { &x == &y }",
+            "fn f(x: u32, y: u32) -> bool { x == y }",
+        ),
+    ] {
+        assert_eq!(view(written), view(canonical), "{written}");
+    }
+}
+
+#[test]
+fn foreign_imports_and_values_keep_their_copies_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "use other::Dup; fn f(x: u32) -> u32 { x.clone() }",
+            "use other::Dup; fn f(x: u32) -> u32 { x }",
+        ),
+        (
+            "fn f(s: String) -> String { s.clone() }",
+            "fn f(s: String) -> String { s }",
+        ),
+    ] {
+        assert_ne!(view(written), view(canonical), "{written}");
+    }
+}
+
+#[test]
+fn the_failure_mode_retains_primitive_copies() {
+    assert_ne!(
+        failing_form("fn f(x: u32) -> u32 { x.clone() }"),
+        failing_form("fn f(x: u32) -> u32 { x }")
+    );
+    assert_ne!(
+        failing_form("fn f(x: u32) -> u32 { *&x }"),
+        failing_form("fn f(x: u32) -> u32 { x }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_primitive_copies() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f(x: u32) -> u32 {{ {body} }}\n}}")
+    };
+    assert_ne!(view(&source("x.clone()")), view(&source("x")));
+    assert_ne!(view(&source("*&x")), view(&source("x")));
+}

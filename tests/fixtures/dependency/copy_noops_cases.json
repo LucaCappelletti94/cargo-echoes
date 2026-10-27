@@ -1,0 +1,266 @@
+[
+  {
+    "id": "cn_deref",
+    "family": "copy_noops",
+    "a": "fn f(x:u32,y:u32)->u32{*&x^y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "b": "fn f(x:u32,y:u32)->u32{x^y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cn_clone",
+    "family": "copy_noops",
+    "a": "fn f(x:u32,y:u32)->u32{x.clone()^y.clone()} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "b": "fn f(x:u32,y:u32)->u32{x^y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cn_clone_bool",
+    "family": "copy_noops",
+    "a": "fn f(p:bool)->bool{p.clone()} fn main(){for x in [false,true]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "b": "fn f(p:bool)->bool{p} fn main(){for x in [false,true]{println!(\"{}\",f(std::hint::black_box(x)));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cn_borrow_eq",
+    "family": "copy_noops",
+    "a": "fn f(x:u32,y:u32)->bool{&x==&y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "b": "fn f(x:u32,y:u32)->bool{x==y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\nfalse\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\nfalse\nfalse\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\nfalse\nfalse\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true\nfalse\nfalse\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cn_borrow_ne",
+    "family": "copy_noops",
+    "a": "fn f(x:u32,y:u32)->bool{&x!=&y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "b": "fn f(x:u32,y:u32)->bool{x!=y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false\ntrue\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cn_std_import",
+    "family": "copy_noops",
+    "a": "use std::collections::HashMap; fn f(x:u32,y:u32)->u32{let _m:HashMap<u8,u8>=HashMap::new();x.clone()+0*y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "b": "use std::collections::HashMap; fn f(x:u32,y:u32)->u32{let _m:HashMap<u8,u8>=HashMap::new();x+0*y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n3\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n3\n4294967295\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n3\n4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n3\n4294967295\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cn_user_clone",
+    "family": "copy_noops",
+    "a": "trait Dup{fn clone(self)->Self;} impl Dup for u32{fn clone(self)->Self{self.wrapping_add(1)}} fn f(x:u32,y:u32)->u32{x.clone()^y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "b": "trait Dup{fn clone(self)->Self;} impl Dup for u32{fn clone(self)->Self{self.wrapping_add(1)}} fn f(x:u32,y:u32)->u32{x^y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cn_imported_clone",
+    "family": "copy_noops",
+    "a": "mod other{pub trait Dup{fn clone(self)->Self;} impl Dup for u32{fn clone(self)->Self{self.wrapping_add(1)}}} use other::Dup; fn f(x:u32,y:u32)->u32{x.clone()^y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "b": "mod other{pub trait Dup{fn clone(self)->Self;} impl Dup for u32{fn clone(self)->Self{self.wrapping_add(1)}}} use other::Dup; fn f(x:u32,y:u32)->u32{x^y} fn main(){for (x,y) in [(0u32,0u32),(3,5),(u32::MAX,1)]{println!(\"{}\",f(std::hint::black_box(x),y));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n1\n1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n6\n4294967294\n"
+        }
+      }
+    }
+  }
+]

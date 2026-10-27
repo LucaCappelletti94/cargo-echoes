@@ -762,7 +762,6 @@ fn nested_storage_observations_preserve_producer_declaration_order() {
         form(&source("consume(low);", true))
     );
     for body in [
-        "let _ = *(&low);",
         "#[allow(unused_parens)] (&low);",
         "let _ = { &low };",
         "if flag { let _ = &low; }",
