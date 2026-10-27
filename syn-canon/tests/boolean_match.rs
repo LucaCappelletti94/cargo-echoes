@@ -125,7 +125,6 @@ fn accepted_total_helpers_select_like_the_conditional() {
 #[test]
 fn unsupported_patterns_stay_matches() {
     for matched in [
-        "match p { true => x, _ => y }",
         "match p { true => x, b => y }",
         "match p { false | true => x }",
         "match p { true if q => x, false => y }",

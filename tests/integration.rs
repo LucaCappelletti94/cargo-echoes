@@ -921,13 +921,14 @@ const BOOLEAN_MATCH_FIXTURE: &str = "tests/fixtures/boolmatchws";
 fn boolean_match_doctests_group_only_the_proven_conditional_forms() {
     let report = Echoes::default().run(BOOLEAN_MATCH_FIXTURE).unwrap();
     assert_eq!(report.total, 8);
-    assert_eq!(report.unique, 6);
+    assert_eq!(report.unique, 5);
     assert_eq!(
         doctest_groups(&report),
         [vec![
             "boolmatchws::Conditional",
             "boolmatchws::Matched",
             "boolmatchws::Reversed",
+            "boolmatchws::Wildcard",
         ]]
     );
     let group = &report.groups[0];
@@ -944,11 +945,12 @@ fn boolean_match_doctests_group_only_the_proven_conditional_forms() {
 }
 
 #[test]
-fn boolean_match_functions_keep_wildcards_and_effects_separate() {
+fn boolean_match_functions_keep_effects_separate() {
     let expected = [vec![
         "boolmatchws::conditional",
         "boolmatchws::matched",
         "boolmatchws::reversed",
+        "boolmatchws::wildcard",
     ]];
     for tokens in [0, 5] {
         let report = Echoes::default()
@@ -1279,6 +1281,48 @@ fn identity_functions_keep_other_constants_separate() {
         assert_eq!(function_groups(&scan(tokens)), expected);
     }
     assert_eq!(function_groups(&scan(4)).len(), 0);
+}
+
+const NESTED_IF_FIXTURE: &str = "tests/fixtures/nestedifws";
+
+#[test]
+fn nested_conditional_doctests_group_only_equal_fallbacks() {
+    let report = Echoes::default().run(NESTED_IF_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["nestedifws::Joined", "nestedifws::Nested"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(28)
+        .run(NESTED_IF_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(29)
+        .run(NESTED_IF_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn nested_conditional_functions_merge_conditions_and_wildcard_arms() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(NESTED_IF_FIXTURE)
+            .unwrap()
+    };
+    let wildcard = vec!["nestedifws::conditional", "nestedifws::selected"];
+    let nested = vec!["nestedifws::joined", "nestedifws::nested"];
+    for tokens in [0, 5] {
+        assert_eq!(
+            function_groups(&scan(tokens)),
+            [wildcard.clone(), nested.clone()]
+        );
+    }
+    assert_eq!(function_groups(&scan(8)), [nested]);
+    assert_eq!(function_groups(&scan(9)).len(), 0);
 }
 
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
