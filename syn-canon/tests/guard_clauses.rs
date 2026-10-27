@@ -132,6 +132,10 @@ fn other_guards_keep_their_jump() {
             "let _ = while !p { a(); };",
         ),
         (
+            "loop { if p { break; } macro_rules! m { () => {} } m!(); }",
+            "while !p { macro_rules! m { () => {} } m!(); }",
+        ),
+        (
             "loop { a(); if p { break; } b(); }",
             "loop { a(); while !p { b(); } }",
         ),
