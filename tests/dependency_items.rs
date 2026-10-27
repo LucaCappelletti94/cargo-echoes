@@ -322,7 +322,11 @@ fn split_impl_keeps_bounds_separate() {
         "struct Pair<T, U>(T, U); impl<T: Copy, U: Default> Pair<T, U> { fn one() -> u32 { 1 } }",
         "struct Pair<T, U>(T, U); impl<T: Default, U: Copy> Pair<T, U> { fn one() -> u32 { 1 } }",
     );
-    distinct(
+}
+
+#[test]
+fn split_impl_bounds_fold_across_bound_order() {
+    folded(
         "struct Value<T>(T); impl<T: Copy + Default> Value<T> { fn one() -> u32 { 1 } }",
         "struct Value<T>(T); impl<T: Default + Copy> Value<T> { fn one() -> u32 { 1 } }",
     );

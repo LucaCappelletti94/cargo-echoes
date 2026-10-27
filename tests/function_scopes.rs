@@ -912,3 +912,60 @@ fn an_observing_impl_retains_cast_spellings() {
     };
     assert_ne!(view(&source("x as u64")), view(&source("u64::from(x)")));
 }
+
+#[test]
+fn bound_order_and_elidable_lifetimes_match_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "fn f<T: Copy + Clone>(t: T) -> T { t }",
+            "fn f<T>(t: T) -> T where T: Clone + Copy { t }",
+        ),
+        (
+            "fn f<'a>(x: &'a u32) -> &'a u32 { x }",
+            "fn f(x: &u32) -> &u32 { x }",
+        ),
+    ] {
+        assert_eq!(view(written), view(canonical), "{written}");
+    }
+}
+
+#[test]
+fn shared_and_function_bound_signatures_stay_apart_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "fn f<'a>(x: &'a u8, y: &'a u8) -> &'a u8 { x }",
+            "fn f(x: &u8, y: &u8) -> &u8 { x }",
+        ),
+        (
+            "fn f<F: Fn() + Clone>(g: F) {}",
+            "fn f<F: Clone + Fn()>(g: F) {}",
+        ),
+    ] {
+        assert_ne!(view(written), view(canonical), "{written}");
+    }
+}
+
+#[test]
+fn the_failure_mode_retains_bound_order_and_lifetimes() {
+    assert_ne!(
+        failing_form("fn f<T: Copy + Clone>(t: T) -> T { t }"),
+        failing_form("fn f<T: Clone + Copy>(t: T) -> T { t }")
+    );
+    assert_ne!(
+        failing_form("fn f<'a>(x: &'a u32) -> &'a u32 { x }"),
+        failing_form("fn f(x: &u32) -> &u32 { x }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_bound_order_and_lifetimes() {
+    let source = |method: &str| format!("struct S;\n#[observe]\nimpl S {{\n    {method}\n}}");
+    assert_ne!(
+        view(&source("fn f<T: Copy + Clone>(t: T) -> T { t }")),
+        view(&source("fn f<T: Clone + Copy>(t: T) -> T { t }"))
+    );
+    assert_ne!(
+        view(&source("fn f<'a>(x: &'a u32) -> &'a u32 { x }")),
+        view(&source("fn f(x: &u32) -> &u32 { x }"))
+    );
+}
