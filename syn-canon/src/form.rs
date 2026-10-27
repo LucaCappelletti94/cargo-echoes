@@ -223,6 +223,8 @@ pub(crate) fn item_payload(
             observed: false,
             enclosing_observed: false,
             std_names: proof.std_names,
+            prelude: false,
+            owned_methods: false,
             helper_table: proof.table,
             helper_module: &[],
             helper_blocked: false,

@@ -1402,6 +1402,43 @@ fn let_else_functions_group_with_their_match() {
     assert_eq!(function_groups(&scan(16)).len(), 0);
 }
 
+const PRELUDE_FIXTURE: &str = "tests/fixtures/preludews";
+
+#[test]
+fn owned_string_doctests_group_across_their_spellings() {
+    let report = Echoes::default().run(PRELUDE_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["preludews::Constructed", "preludews::Owned"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(24)
+        .run(PRELUDE_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(25)
+        .run(PRELUDE_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn empty_vector_functions_group_only_under_the_prelude() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(PRELUDE_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["preludews::empty", "preludews::fresh"]];
+    for tokens in [0, 11] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(12)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

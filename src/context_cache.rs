@@ -182,6 +182,9 @@ pub mod alpha {
         let Some(value) = slot else { return 0u32; };
         match value { 0 => 1u32, 1 => 1u32, _ => value }
     }
+    pub fn label() -> String {
+        String::from("sentinel")
+    }
 }
 mod custom {
     macro_rules! vec {

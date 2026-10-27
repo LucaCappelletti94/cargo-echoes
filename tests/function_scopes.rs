@@ -801,3 +801,58 @@ fn an_observing_impl_retains_split_arms_and_let_else() {
         view(&source("match o { Some(v) => { v } _ => { return 0; } } "))
     );
 }
+
+#[test]
+fn owned_strings_and_empty_vectors_match_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "fn f() -> String { \"a\".to_owned() }",
+            "fn f() -> String { String::from(\"a\") }",
+        ),
+        (
+            "fn f() -> Vec<u32> { vec![] }",
+            "fn f() -> Vec<u32> { Vec::new() }",
+        ),
+    ] {
+        assert_eq!(view(written), view(canonical), "{written}");
+    }
+}
+
+#[test]
+fn claimed_prelude_names_keep_the_spelling_in_the_borrowed_view() {
+    for prefix in ["#![no_std]", "use custom::ToOwned;", "use other::*;"] {
+        assert_ne!(
+            view(&format!("{prefix} fn f() -> String {{ \"a\".to_owned() }}")),
+            view(&format!(
+                "{prefix} fn f() -> String {{ \"a\".to_string() }}"
+            ))
+        );
+    }
+    assert_ne!(
+        view("struct Vec; impl Vec { fn new() -> Self { Vec } } fn f() -> Vec { Vec::new() }"),
+        view("struct Vec; impl Vec { fn new() -> Self { Vec } } fn f() -> Vec { vec![] }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_owned_string_spellings() {
+    assert_ne!(
+        failing_form("fn f() -> String { \"a\".to_owned() }"),
+        failing_form("fn f() -> String { \"a\".to_string() }")
+    );
+    assert_ne!(
+        failing_form("fn f() -> Vec<u32> { vec![] }"),
+        failing_form("fn f() -> Vec<u32> { Vec::new() }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_owned_string_spellings() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f() -> String {{ {body} }}\n}}")
+    };
+    assert_ne!(
+        view(&source("\"a\".to_owned()")),
+        view(&source("\"a\".to_string()"))
+    );
+}

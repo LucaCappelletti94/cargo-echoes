@@ -1,0 +1,237 @@
+[
+  {
+    "id": "po_to_owned",
+    "family": "prelude_owned",
+    "a": "fn f()->String{\"abc\".to_owned()} fn main(){let s=f();s.chars().for_each(|c|print!(\"{}\",c));println!(\" {} {}\",s.len(),s.capacity()>=s.len());}",
+    "b": "fn f()->String{\"abc\".to_string()} fn main(){let s=f();s.chars().for_each(|c|print!(\"{}\",c));println!(\" {} {}\",s.len(),s.capacity()>=s.len());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3 true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "po_from",
+    "family": "prelude_owned",
+    "a": "fn f()->String{String::from(\"abc\")} fn main(){let s=f();s.chars().for_each(|c|print!(\"{}\",c));println!(\" {} {}\",s.len(),s.capacity()>=s.len());}",
+    "b": "fn f()->String{\"abc\".to_string()} fn main(){let s=f();s.chars().for_each(|c|print!(\"{}\",c));println!(\" {} {}\",s.len(),s.capacity()>=s.len());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3 true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "po_raw_empty",
+    "family": "prelude_owned",
+    "a": "fn f()->String{r\"\".to_owned()} fn main(){let s=f();s.chars().for_each(|c|print!(\"{}\",c));println!(\" {} {}\",s.len(),s.capacity()>=s.len());}",
+    "b": "fn f()->String{String::from(r\"\")} fn main(){let s=f();s.chars().for_each(|c|print!(\"{}\",c));println!(\" {} {}\",s.len(),s.capacity()>=s.len());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": " 0 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": " 0 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": " 0 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": " 0 true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "pv_empty",
+    "family": "prelude_owned",
+    "a": "fn f()->Vec<u32>{vec![]} fn main(){let mut v=f();println!(\"{} {}\",v.len(),v.capacity());v.push(4);println!(\"{:?}\",v);}",
+    "b": "fn f()->Vec<u32>{Vec::new()} fn main(){let mut v=f();println!(\"{} {}\",v.len(),v.capacity());v.push(4);println!(\"{:?}\",v);}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\n[4]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\n[4]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\n[4]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\n[4]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "po_local_string",
+    "family": "prelude_owned",
+    "a": "struct String; impl String{fn from(_:&str)->u32{7}} fn main(){println!(\"{}\",String::from(\"abc\"));}",
+    "b": "struct String; impl String{fn from(_:&str)->u32{7}} fn main(){println!(\"{}\",\"abc\".to_string());}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "7\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "po_user_trait",
+    "family": "prelude_owned",
+    "a": "trait Owned{fn to_owned(&self)->u32;} impl Owned for str{fn to_owned(&self)->u32{7}} fn main(){println!(\"{}\",\"abc\".to_owned());}",
+    "b": "trait Owned{fn to_owned(&self)->u32;} impl Owned for str{fn to_owned(&self)->u32{7}} fn main(){println!(\"{}\",\"abc\".to_string());}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": [
+            "E0034"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0034"
+          ],
+          "run": "absent"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "pv_local_vec",
+    "family": "prelude_owned",
+    "a": "struct Vec<T>(Option<T>); impl<T> Vec<T>{fn new()->Self{Vec(None)}} fn main(){let v:std::vec::Vec<u32>=vec![];let w:Vec<u32>=Vec::new();println!(\"{} {}\",v.len(),w.0.is_none());}",
+    "b": "struct Vec<T>(Option<T>); impl<T> Vec<T>{fn new()->Self{Vec(None)}} fn main(){let v:std::vec::Vec<u32>=std::vec::Vec::new();let w:Vec<u32>=vec![];println!(\"{} {}\",v.len(),w.0.is_none());}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": [
+            "E0308"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0308"
+          ],
+          "run": "absent"
+        }
+      }
+    }
+  }
+]

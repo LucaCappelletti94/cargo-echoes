@@ -44,6 +44,14 @@ assert_eq!(
     canonical("fn f(o: Option<u32>) -> u32 { match o { Some(v) => { v } _ => { return 0; } } }"),
 );
 assert_eq!(
+    canonical(r#"fn f() -> String { "a".to_owned() }"#),
+    canonical(r#"fn f() -> String { String::from("a") }"#),
+);
+assert_eq!(
+    canonical("fn f() -> Vec<u32> { vec![] }"),
+    canonical("fn f() -> Vec<u32> { Vec::new() }"),
+);
+assert_eq!(
     canonical(r#"fn f() -> &'static str { concat!("a", r"\n") }"#),
     canonical(r#"fn f() -> &'static str { "a\\n" }"#),
 );
@@ -68,7 +76,7 @@ println!("{forms:?}");
 
 `no_std` with `alloc`. It powers [`cargo-echoes`](https://github.com/LucaCappelletti94/cargo-echoes), which finds duplicated doctests.
 
-Equal forms mean approximate duplication, since the normalization cannot see what the compiler resolves, such as inferred types, macro expansions or an enclosing `cfg`. Tail `return` folds require temporary-free values and forwarded control heads, preserving return boundaries for unknown calls, borrows, destructor dependencies and unresolved values in both comparison modes. An `if` ending in `return` before a tail reads as an `if` with the tail as its `else` branch only in compiling mode, outside `async` bodies, with a proven condition and a temporary-free tail. In compiling mode, adjacent `match` arms with the same body join into an or-pattern when no pattern names an identifier, and a `let`-`else` reads as `match` when it matches a local or parameter in a body without items and the rest of the block ends in no temporary. Reflexive equality, comparison with a `bool` literal, `&&` and `||` operand order, literals and repeats, `^` cancellation, identity and absorbing operands such as `x + 0`, `x * 1`, `x | 0` and `x & 0`, operand order of `+`, `*`, `wrapping_add`, `wrapping_mul`, `saturating_add`, `saturating_mul` and `abs_diff`, boolean `match` folding, nested `if` merging into `&&` and compound assignment to a local binding require compiling mode and proven total boolean or fixed-width integer operands, and `concat!` folding requires compiling mode, the built-in macro and string literal arguments. In compiling mode a `let` binding's fixed-width integer annotation moves onto an integer literal initializer as its suffix.
+Equal forms mean approximate duplication, since the normalization cannot see what the compiler resolves, such as inferred types, macro expansions or an enclosing `cfg`. Tail `return` folds require temporary-free values and forwarded control heads, preserving return boundaries for unknown calls, borrows, destructor dependencies and unresolved values in both comparison modes. An `if` ending in `return` before a tail reads as an `if` with the tail as its `else` branch only in compiling mode, outside `async` bodies, with a proven condition and a temporary-free tail. In compiling mode, adjacent `match` arms with the same body join into an or-pattern when no pattern names an identifier, and a `let`-`else` reads as `match` when it matches a local or parameter in a body without items and the rest of the block ends in no temporary. Under the standard prelude, `"…".to_owned()` and `String::from("…")` read as `"…".to_string()` and `vec![]` as `Vec::new()` in compiling mode, unless the crate root carries `no_std`, a module in the chain carries `no_implicit_prelude`, a glob or binding claims `String`, `ToString`, `ToOwned` or `Vec`, or a trait in view declares `to_string` or `to_owned`. Reflexive equality, comparison with a `bool` literal, `&&` and `||` operand order, literals and repeats, `^` cancellation, identity and absorbing operands such as `x + 0`, `x * 1`, `x | 0` and `x & 0`, operand order of `+`, `*`, `wrapping_add`, `wrapping_mul`, `saturating_add`, `saturating_mul` and `abs_diff`, boolean `match` folding, nested `if` merging into `&&` and compound assignment to a local binding require compiling mode and proven total boolean or fixed-width integer operands, and `concat!` folding requires compiling mode, the built-in macro and string literal arguments. In compiling mode a `let` binding's fixed-width integer annotation moves onto an integer literal initializer as its suffix.
 
 Macro input retains significant commas unless lexical resolution proves a supported standard grammar. Enclosing macros and live attributes preserve comma spelling.
 
