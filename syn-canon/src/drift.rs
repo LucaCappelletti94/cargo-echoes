@@ -1119,9 +1119,6 @@ fn elide_lifetimes(sig: &mut syn::Signature, body: Option<&syn::Block>) {
 fn elidable(sig: &syn::Signature, body: Option<&syn::Block>, name: &syn::Ident) -> bool {
     use syn::visit::Visit;
 
-    if name.to_string().starts_with("r#") {
-        return false;
-    }
     let mut bounds = LifetimeUses {
         name,
         count: 0,
