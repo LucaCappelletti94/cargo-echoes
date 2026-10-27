@@ -162,6 +162,14 @@ fn attributed_syntax_keeps_the_spelling() {
 }
 
 #[test]
+fn calls_of_other_callees_keep_their_literal() {
+    equivalent(
+        "fn f() -> usize { (|s: &str| s.len())(\"a\") + \"b\".to_owned().len() }",
+        "fn f() -> usize { (|s: &str| s.len())(\"a\") + \"b\".to_string().len() }",
+    );
+}
+
+#[test]
 fn other_shapes_keep_the_spelling() {
     for (written, canonical) in [
         ("\"a\".into()", "\"a\".to_string()"),
