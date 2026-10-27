@@ -117,8 +117,8 @@ pub(crate) enum Lbl {
     /// A total bitwise or valid shift over proven scalars.
     Op(char, Box<Lbl>, Box<Lbl>, PrimTy),
     /// A flattened bitwise chain: one operator and type, sorted leaves,
-    /// multiplicity retained, literal leaves folded. The `WRAPPING_ADD`
-    /// tag holds the sorted operand pair of one native integer call.
+    /// multiplicity retained, literal leaves folded. The tags of
+    /// `COMMUTATIVE_METHODS` hold the sorted operand pair of one native integer call.
     Flat(char, Vec<Lbl>, PrimTy),
     /// Any other expression, by a kind tag and its ordered children.
     Other(String, Vec<Lbl>),
@@ -1313,7 +1313,12 @@ fn label_binary(
                 } else {
                     op_text(bin.op)
                 };
-                Lbl::Other(tag, vec![left, right])
+                let mut operands = vec![left, right];
+                if bin.attrs.is_empty() && commutative_operands(bin.op, &operands[0], &operands[1])
+                {
+                    operands.sort();
+                }
+                Lbl::Other(tag, operands)
             }
         }
     };
@@ -1322,6 +1327,13 @@ fn label_binary(
         value_sites(&label, &mut sites);
     }
     (label, sites)
+}
+
+/// Whether `op` is `+` or `*` over two proven operands of one fixed-width integer type, whose
+/// order changes neither the value nor whether the operation overflows.
+pub(crate) fn commutative_operands(op: syn::BinOp, left: &Lbl, right: &Lbl) -> bool {
+    matches!(op, syn::BinOp::Add(_) | syn::BinOp::Mul(_))
+        && matches!(scalar_prim(left, right), Some(PrimTy::Int { .. }))
 }
 
 fn value_sites(label: &Lbl, sites: &mut Vec<Site>) {
@@ -1421,7 +1433,7 @@ fn total_helper(
 }
 
 /// The label of a method call, the receiver's sites marked on its storage,
-/// its arguments in operand order. A native integer `wrapping_add` over
+/// its arguments in operand order. A native commutative integer method over
 /// total operands reads both by value as an unordered pair.
 fn label_method(
     renamer: &Renamer,
@@ -1447,13 +1459,13 @@ fn label_method(
         children.push(label);
         sites.extend(a_sites);
     }
-    if wrapping_add_shape(method)
+    if let Some(tag) = commutative_method(method)
         && let [receiver, argument] = children.as_slice()
-        && let Some(prim) = wrapping_add_prim(receiver, argument)
+        && let Some(prim) = commutative_prim(tag, receiver, argument)
     {
-        let argument = children.pop().expect("a wrapping argument");
-        let receiver = children.pop().expect("a wrapping receiver");
-        let label = wrapping_add_label(prim, receiver, argument);
+        let argument = children.pop().expect("a commutative argument");
+        let receiver = children.pop().expect("a commutative receiver");
+        let label = commutative_label(tag, prim, receiver, argument);
         sites.clear();
         value_sites(&label, &mut sites);
         return (label, sites);
@@ -1462,31 +1474,54 @@ fn label_method(
     (Lbl::Other("m".into(), children), sites)
 }
 
-/// The `Flat` tag of a native integer `wrapping_add`.
-const WRAPPING_ADD: char = '⊞';
+/// The commutative inherent integer methods, each with the `Flat` tag of its unordered
+/// operand pair.
+const COMMUTATIVE_METHODS: [(&str, char); 5] = [
+    ("wrapping_add", '⊞'),
+    ("wrapping_mul", '⊠'),
+    ("saturating_add", '⊕'),
+    ("saturating_mul", '⊗'),
+    ("abs_diff", '⊖'),
+];
 
-/// An unattributed one-argument `wrapping_add` call without turbofish.
-pub(crate) fn wrapping_add_shape(method: &syn::ExprMethodCall) -> bool {
-    method.attrs.is_empty()
-        && method.turbofish.is_none()
-        && method.args.len() == 1
-        && method.method == "wrapping_add"
+/// The `Flat` tag of an unattributed one-argument call without turbofish to a commutative
+/// inherent integer method name.
+pub(crate) fn commutative_method(method: &syn::ExprMethodCall) -> Option<char> {
+    if !method.attrs.is_empty() || method.turbofish.is_some() || method.args.len() != 1 {
+        return None;
+    }
+    COMMUTATIVE_METHODS
+        .iter()
+        .find(|(name, _)| method.method == name)
+        .map(|&(_, tag)| tag)
 }
 
-/// The fixed-width integer type of a native `wrapping_add`: a proven receiver
-/// type, whose inherent method resolution precedes every trait method, and an
-/// argument of that type.
-pub(crate) fn wrapping_add_prim(receiver: &Lbl, argument: &Lbl) -> Option<PrimTy> {
+/// The result type of the native method `tag` names: a proven fixed-width integer receiver,
+/// whose inherent method resolution precedes every trait method, and an argument of that
+/// type. `abs_diff` returns the unsigned type of the same width.
+pub(crate) fn commutative_prim(tag: char, receiver: &Lbl, argument: &Lbl) -> Option<PrimTy> {
     let prim = receiver.prim()?;
-    (matches!(prim, PrimTy::Int { .. }) && scalar_prim(receiver, argument) == Some(prim))
-        .then_some(prim)
+    let PrimTy::Int { width, .. } = prim else {
+        return None;
+    };
+    if scalar_prim(receiver, argument) != Some(prim) {
+        return None;
+    }
+    Some(if tag == '⊖' {
+        PrimTy::Int {
+            width,
+            signed: false,
+        }
+    } else {
+        prim
+    })
 }
 
-/// The unordered operand pair of a native `wrapping_add`.
-pub(crate) fn wrapping_add_label(prim: PrimTy, receiver: Lbl, argument: Lbl) -> Lbl {
+/// The unordered operand pair of a native commutative method call.
+pub(crate) fn commutative_label(tag: char, prim: PrimTy, receiver: Lbl, argument: Lbl) -> Lbl {
     let mut operands = vec![receiver, argument];
     operands.sort();
-    Lbl::Flat(WRAPPING_ADD, operands, prim)
+    Lbl::Flat(tag, operands, prim)
 }
 
 /// The label of a reference, its inner sites marked on the referenced

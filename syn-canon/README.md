@@ -24,8 +24,8 @@ assert_eq!(
     canonical("fn f(x: u32) -> u32 { 0u32 }"),
 );
 assert_eq!(
-    canonical("fn f(x: u32, y: u32) -> u32 { x.wrapping_add(y) }"),
-    canonical("fn f(x: u32, y: u32) -> u32 { y.wrapping_add(x) }"),
+    canonical("fn f(x: u32, y: u32) -> u32 { x.wrapping_add(y) * x }"),
+    canonical("fn f(x: u32, y: u32) -> u32 { x * y.wrapping_add(x) }"),
 );
 assert_eq!(
     canonical("fn f(p: bool, x: u32, y: u32) -> u32 { match p { false => y, true => x } }"),
@@ -56,7 +56,7 @@ println!("{forms:?}");
 
 `no_std` with `alloc`. It powers [`cargo-echoes`](https://github.com/LucaCappelletti94/cargo-echoes), which finds duplicated doctests.
 
-Equal forms mean approximate duplication, since the normalization cannot see what the compiler resolves, such as inferred types, macro expansions or an enclosing `cfg`. Tail `return` folds require temporary-free values and forwarded control heads, preserving return boundaries for unknown calls, borrows, destructor dependencies and unresolved values in both comparison modes. Reflexive equality, comparison with a `bool` literal, `&&` and `||` operand order, literals and repeats, `^` cancellation, `wrapping_add` operand order, boolean `match` folding and compound assignment to a local binding require compiling mode and proven total boolean or fixed-width integer values, and `concat!` folding requires compiling mode, the built-in macro and string literal arguments. In compiling mode a `let` binding's fixed-width integer annotation moves onto an integer literal initializer as its suffix.
+Equal forms mean approximate duplication, since the normalization cannot see what the compiler resolves, such as inferred types, macro expansions or an enclosing `cfg`. Tail `return` folds require temporary-free values and forwarded control heads, preserving return boundaries for unknown calls, borrows, destructor dependencies and unresolved values in both comparison modes. Reflexive equality, comparison with a `bool` literal, `&&` and `||` operand order, literals and repeats, `^` cancellation, operand order of `+`, `*`, `wrapping_add`, `wrapping_mul`, `saturating_add`, `saturating_mul` and `abs_diff`, boolean `match` folding and compound assignment to a local binding require compiling mode and proven total boolean or fixed-width integer operands, and `concat!` folding requires compiling mode, the built-in macro and string literal arguments. In compiling mode a `let` binding's fixed-width integer annotation moves onto an integer literal initializer as its suffix.
 
 Macro input retains significant commas unless lexical resolution proves a supported standard grammar. Enclosing macros and live attributes preserve comma spelling.
 

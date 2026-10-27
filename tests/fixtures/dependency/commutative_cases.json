@@ -1,0 +1,1322 @@
+[
+  {
+    "id": "cm_add_u8",
+    "family": "commutative",
+    "a": "fn f(x:u8,y:u8)->u8{x+y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,1u8,0u8),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8,y:u8)->u8{y+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,1u8,0u8),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n8\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n8\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_mul_u8",
+    "family": "commutative",
+    "a": "fn f(x:u8,y:u8)->u8{x*y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,2u8,0u8),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8,y:u8)->u8{y*x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,2u8,0u8),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "254\n15\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "254\n15\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_add_u16",
+    "family": "commutative",
+    "a": "fn f(x:u16,y:u16)->u16{x+y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(65535u16,1u16,0u16),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u16,y:u16)->u16{y+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(65535u16,1u16,0u16),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n8\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n8\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_mul_u16",
+    "family": "commutative",
+    "a": "fn f(x:u16,y:u16)->u16{x*y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(65535u16,2u16,0u16),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u16,y:u16)->u16{y*x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(65535u16,2u16,0u16),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "65534\n15\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "65534\n15\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_add_u32",
+    "family": "commutative",
+    "a": "fn f(x:u32,y:u32)->u32{x+y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(4294967295u32,1u32,0u32),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32,y:u32)->u32{y+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(4294967295u32,1u32,0u32),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n8\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n8\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_mul_u32",
+    "family": "commutative",
+    "a": "fn f(x:u32,y:u32)->u32{x*y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(4294967295u32,2u32,0u32),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32,y:u32)->u32{y*x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(4294967295u32,2u32,0u32),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967294\n15\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967294\n15\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_add_u64",
+    "family": "commutative",
+    "a": "fn f(x:u64,y:u64)->u64{x+y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,1u64,0u64),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u64,y:u64)->u64{y+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,1u64,0u64),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n8\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n8\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_mul_u64",
+    "family": "commutative",
+    "a": "fn f(x:u64,y:u64)->u64{x*y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,2u64,0u64),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u64,y:u64)->u64{y*x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,2u64,0u64),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551614\n15\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551614\n15\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_add_u128",
+    "family": "commutative",
+    "a": "fn f(x:u128,y:u128)->u128{x+y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(340282366920938463463374607431768211455u128,1u128,0u128),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128,y:u128)->u128{y+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(340282366920938463463374607431768211455u128,1u128,0u128),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n8\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n8\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_mul_u128",
+    "family": "commutative",
+    "a": "fn f(x:u128,y:u128)->u128{x*y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(340282366920938463463374607431768211455u128,2u128,0u128),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u128,y:u128)->u128{y*x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(340282366920938463463374607431768211455u128,2u128,0u128),(3,5,0),(0,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "340282366920938463463374607431768211454\n15\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\n0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "340282366920938463463374607431768211454\n15\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_add_i8",
+    "family": "commutative",
+    "a": "fn f(x:i8,y:i8)->i8{x+y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(127i8,1i8,0i8),(3,5,0),(-127,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8,y:i8)->i8{y+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(127i8,1i8,0i8),(3,5,0),(-127,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n8\n-125\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n-125\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128\n8\n-125\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n-125\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_mul_i8",
+    "family": "commutative",
+    "a": "fn f(x:i8,y:i8)->i8{x*y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(127i8,2i8,0i8),(3,5,0),(-127,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8,y:i8)->i8{y*x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(127i8,2i8,0i8),(3,5,0),(-127,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n15\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\npanic Some(\"attempt to multiply with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n15\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\npanic Some(\"attempt to multiply with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_add_i16",
+    "family": "commutative",
+    "a": "fn f(x:i16,y:i16)->i16{x+y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(32767i16,1i16,0i16),(3,5,0),(-32767,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i16,y:i16)->i16{y+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(32767i16,1i16,0i16),(3,5,0),(-32767,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n8\n-32765\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n-32765\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-32768\n8\n-32765\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n-32765\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_mul_i16",
+    "family": "commutative",
+    "a": "fn f(x:i16,y:i16)->i16{x*y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(32767i16,2i16,0i16),(3,5,0),(-32767,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i16,y:i16)->i16{y*x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(32767i16,2i16,0i16),(3,5,0),(-32767,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n15\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\npanic Some(\"attempt to multiply with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n15\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\npanic Some(\"attempt to multiply with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_add_i32",
+    "family": "commutative",
+    "a": "fn f(x:i32,y:i32)->i32{x+y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,1i32,0i32),(3,5,0),(-2147483647,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i32,y:i32)->i32{y+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,1i32,0i32),(3,5,0),(-2147483647,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n8\n-2147483645\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n-2147483645\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648\n8\n-2147483645\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n-2147483645\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_mul_i32",
+    "family": "commutative",
+    "a": "fn f(x:i32,y:i32)->i32{x*y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,2i32,0i32),(3,5,0),(-2147483647,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i32,y:i32)->i32{y*x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,2i32,0i32),(3,5,0),(-2147483647,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n15\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\npanic Some(\"attempt to multiply with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n15\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\npanic Some(\"attempt to multiply with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_add_i64",
+    "family": "commutative",
+    "a": "fn f(x:i64,y:i64)->i64{x+y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(9223372036854775807i64,1i64,0i64),(3,5,0),(-9223372036854775807,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64,y:i64)->i64{y+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(9223372036854775807i64,1i64,0i64),(3,5,0),(-9223372036854775807,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n8\n-9223372036854775805\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n-9223372036854775805\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808\n8\n-9223372036854775805\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n-9223372036854775805\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_mul_i64",
+    "family": "commutative",
+    "a": "fn f(x:i64,y:i64)->i64{x*y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(9223372036854775807i64,2i64,0i64),(3,5,0),(-9223372036854775807,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64,y:i64)->i64{y*x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(9223372036854775807i64,2i64,0i64),(3,5,0),(-9223372036854775807,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n15\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\npanic Some(\"attempt to multiply with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n15\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\npanic Some(\"attempt to multiply with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_add_i128",
+    "family": "commutative",
+    "a": "fn f(x:i128,y:i128)->i128{x+y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(170141183460469231731687303715884105727i128,1i128,0i128),(3,5,0),(-170141183460469231731687303715884105727,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i128,y:i128)->i128{y+x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(170141183460469231731687303715884105727i128,1i128,0i128),(3,5,0),(-170141183460469231731687303715884105727,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n8\n-170141183460469231731687303715884105725\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n-170141183460469231731687303715884105725\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-170141183460469231731687303715884105728\n8\n-170141183460469231731687303715884105725\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n8\n-170141183460469231731687303715884105725\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_mul_i128",
+    "family": "commutative",
+    "a": "fn f(x:i128,y:i128)->i128{x*y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(170141183460469231731687303715884105727i128,2i128,0i128),(3,5,0),(-170141183460469231731687303715884105727,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i128,y:i128)->i128{y*x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(170141183460469231731687303715884105727i128,2i128,0i128),(3,5,0),(-170141183460469231731687303715884105727,2,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n15\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\npanic Some(\"attempt to multiply with overflow\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2\n15\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to multiply with overflow\")\n15\npanic Some(\"attempt to multiply with overflow\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_wrapping_add_u8",
+    "family": "commutative",
+    "a": "fn f(x:u8,y:u8)->u8{x.wrapping_add(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,3u8,0u8),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8,y:u8)->u8{y.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,3u8,0u8),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n16\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n16\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_wrapping_mul_u8",
+    "family": "commutative",
+    "a": "fn f(x:u8,y:u8)->u8{x.wrapping_mul(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,3u8,0u8),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8,y:u8)->u8{y.wrapping_mul(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,3u8,0u8),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "253\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "253\n63\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "253\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "253\n63\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_saturating_add_u8",
+    "family": "commutative",
+    "a": "fn f(x:u8,y:u8)->u8{x.saturating_add(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,3u8,0u8),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8,y:u8)->u8{y.saturating_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,3u8,0u8),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n16\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n16\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_saturating_mul_u8",
+    "family": "commutative",
+    "a": "fn f(x:u8,y:u8)->u8{x.saturating_mul(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,3u8,0u8),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u8,y:u8)->u8{y.saturating_mul(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(255u8,3u8,0u8),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n63\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n63\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_wrapping_add_i32",
+    "family": "commutative",
+    "a": "fn f(x:i32,y:i32)->i32{x.wrapping_add(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,3i32,0i32),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i32,y:i32)->i32{y.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,3i32,0i32),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483646\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483646\n16\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483646\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483646\n16\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_wrapping_mul_i32",
+    "family": "commutative",
+    "a": "fn f(x:i32,y:i32)->i32{x.wrapping_mul(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,3i32,0i32),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i32,y:i32)->i32{y.wrapping_mul(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,3i32,0i32),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483645\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483645\n63\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483645\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483645\n63\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_saturating_add_i32",
+    "family": "commutative",
+    "a": "fn f(x:i32,y:i32)->i32{x.saturating_add(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,3i32,0i32),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i32,y:i32)->i32{y.saturating_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,3i32,0i32),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n16\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n16\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_saturating_mul_i32",
+    "family": "commutative",
+    "a": "fn f(x:i32,y:i32)->i32{x.saturating_mul(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,3i32,0i32),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i32,y:i32)->i32{y.saturating_mul(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,3i32,0i32),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n63\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n63\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_wrapping_add_u64",
+    "family": "commutative",
+    "a": "fn f(x:u64,y:u64)->u64{x.wrapping_add(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,3u64,0u64),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u64,y:u64)->u64{y.wrapping_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,3u64,0u64),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n16\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n16\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_wrapping_mul_u64",
+    "family": "commutative",
+    "a": "fn f(x:u64,y:u64)->u64{x.wrapping_mul(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,3u64,0u64),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u64,y:u64)->u64{y.wrapping_mul(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,3u64,0u64),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551613\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551613\n63\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551613\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551613\n63\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_saturating_add_u64",
+    "family": "commutative",
+    "a": "fn f(x:u64,y:u64)->u64{x.saturating_add(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,3u64,0u64),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u64,y:u64)->u64{y.saturating_add(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,3u64,0u64),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n16\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n16\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_saturating_mul_u64",
+    "family": "commutative",
+    "a": "fn f(x:u64,y:u64)->u64{x.saturating_mul(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,3u64,0u64),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u64,y:u64)->u64{y.saturating_mul(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(18446744073709551615u64,3u64,0u64),(7,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n63\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n63\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551615\n63\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_abs_diff_i8",
+    "family": "commutative",
+    "a": "fn f(x:i8,y:i8)->u8{x.abs_diff(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(127i8,-127,0i8),(3,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i8,y:i8)->u8{y.abs_diff(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(127i8,-127,0i8),(3,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "254\n6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "254\n6\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "254\n6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "254\n6\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_abs_diff_i64",
+    "family": "commutative",
+    "a": "fn f(x:i64,y:i64)->u64{x.abs_diff(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(9223372036854775807i64,-9223372036854775807,0i64),(3,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i64,y:i64)->u64{y.abs_diff(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(9223372036854775807i64,-9223372036854775807,0i64),(3,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551614\n6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551614\n6\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551614\n6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "18446744073709551614\n6\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_abs_diff_u16",
+    "family": "commutative",
+    "a": "fn f(x:u16,y:u16)->u16{x.abs_diff(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(65535u16,0,0u16),(3,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u16,y:u16)->u16{y.abs_diff(x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(65535u16,0,0u16),(3,9,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "65535\n6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "65535\n6\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "65535\n6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "65535\n6\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_nested_u32",
+    "family": "commutative",
+    "a": "fn f(x:u32,y:u32,z:u32)->u32{(x^y)+z} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(4294967295u32,0u32,1u32),(3,5,7)]{let _=z;match std::panic::catch_unwind(||f(x,y,z)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32,y:u32,z:u32)->u32{z+(y^x)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(4294967295u32,0u32,1u32),(3,5,7)]{let _=z;match std::panic::catch_unwind(||f(x,y,z)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n13\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n13\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n13\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n13\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_regrouped_i32",
+    "family": "commutative",
+    "a": "fn f(x:i32,y:i32,z:i32)->i32{(x+y)+z} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,1i32,-1i32),(3,5,7)]{let _=z;match std::panic::catch_unwind(||f(x,y,z)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i32,y:i32,z:i32)->i32{x+(y+z)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,1i32,-1i32),(3,5,7)]{let _=z;match std::panic::catch_unwind(||f(x,y,z)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "profile-dependent",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n15\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "panic Some(\"attempt to add with overflow\")\n15\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n15\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483647\n15\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_reversed_sub_i32",
+    "family": "commutative",
+    "a": "fn f(x:i32,y:i32)->i32{x-y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,1i32,-1i32),(3,5,7)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:i32,y:i32)->i32{y-x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(2147483647i32,1i32,-1i32),(3,5,7)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483646\n-2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2147483646\n-2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483646\n2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483646\n2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_reversed_div_u32",
+    "family": "commutative",
+    "a": "fn f(x:u32,y:u32)->u32{x/y} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(8u32,2u32,0u32),(3,0,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32,y:u32)->u32{y/x} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(8u32,2u32,0u32),(3,0,0)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4\npanic Some(\"attempt to divide by zero\")\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4\npanic Some(\"attempt to divide by zero\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "cm_other_method_u32",
+    "family": "commutative",
+    "a": "fn f(x:u32,y:u32)->u32{x.wrapping_add(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(4294967295u32,1u32,0u32)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "b": "fn f(x:u32,y:u32)->u32{x.saturating_add(y)} fn main(){std::panic::set_hook(Box::new(|_|{}));for (x,y,z) in [(4294967295u32,1u32,0u32)]{let _=z;match std::panic::catch_unwind(||f(x,y)){Ok(v)=>println!(\"{}\",v),Err(e)=>println!(\"panic {:?}\",e.downcast_ref::<&str>())}}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n"
+        }
+      }
+    }
+  }
+]

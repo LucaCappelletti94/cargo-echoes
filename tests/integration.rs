@@ -1199,6 +1199,43 @@ fn let_literal_functions_keep_pointer_sized_annotations_separate() {
     assert_eq!(function_groups(&scan(13)).len(), 0);
 }
 
+const COMMUTATIVE_FIXTURE: &str = "tests/fixtures/commutews";
+
+#[test]
+fn commutative_doctests_group_only_the_reordered_native_operations() {
+    let report = Echoes::default().run(COMMUTATIVE_FIXTURE).unwrap();
+    assert_eq!(report.total, 4);
+    assert_eq!(report.unique, 3);
+    let expected = [vec!["commutews::Reordered", "commutews::Written"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(27)
+        .run(COMMUTATIVE_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(28)
+        .run(COMMUTATIVE_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn commutative_functions_keep_subtraction_order() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(COMMUTATIVE_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["commutews::product", "commutews::reversed_product"]];
+    for tokens in [0, 3] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(4)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

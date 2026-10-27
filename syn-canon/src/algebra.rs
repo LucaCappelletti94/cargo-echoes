@@ -193,6 +193,8 @@ impl Walker<'_, '_> {
                             | syn::BinOp::BitXor(_)
                             | syn::BinOp::And(_)
                             | syn::BinOp::Or(_)
+                            | syn::BinOp::Add(_)
+                            | syn::BinOp::Mul(_)
                     ));
         let left = self.scalar_in_place(&mut binary.left, total_calls);
         let right = self.scalar_in_place(&mut binary.right, total_calls);
@@ -268,7 +270,12 @@ impl Walker<'_, '_> {
                     Some(Lbl::Op(tag, Box::new(left), Box::new(right), prim)),
                 )
             }
-            None => (syn::Expr::Binary(binary), None),
+            None => {
+                if schedule::commutative_operands(binary.op, &left, &right) && right < left {
+                    core::mem::swap(&mut binary.left, &mut binary.right);
+                }
+                (syn::Expr::Binary(binary), None)
+            }
         }
     }
 
@@ -300,8 +307,8 @@ impl Walker<'_, '_> {
                 self.branch(conditional(r#match), total_calls)
             }
             syn::Expr::Group(group) => self.scalar(*group.expr, total_calls),
-            syn::Expr::MethodCall(mut method) if self.native_wrapping_add(&method) => {
-                let label = self.wrapping_add(&mut method);
+            syn::Expr::MethodCall(mut method) if self.native_commutative(&method) => {
+                let label = self.commutative(&mut method);
                 (syn::Expr::MethodCall(method), label)
             }
             expr @ syn::Expr::Call(_) if total_calls => {
@@ -490,10 +497,10 @@ impl Walker<'_, '_> {
         }
     }
 
-    /// Whether `method` is `wrapping_add` on a proven fixed-width integer receiver,
-    /// which inherent resolution binds to the native by-value method.
-    fn native_wrapping_add(&self, method: &syn::ExprMethodCall) -> bool {
-        if !schedule::wrapping_add_shape(method) {
+    /// Whether `method` is a commutative inherent method on a proven fixed-width integer
+    /// receiver, which inherent resolution binds to the native by-value method.
+    fn native_commutative(&self, method: &syn::ExprMethodCall) -> bool {
+        if schedule::commutative_method(method).is_none() {
             return false;
         }
         let mut locals = 0;
@@ -508,17 +515,18 @@ impl Walker<'_, '_> {
         matches!(receiver.prim(), Some(PrimTy::Int { .. }))
     }
 
-    /// The label of a native `wrapping_add`, its operands put in label order,
-    /// a literal whose type the receiver infers staying the argument.
-    fn wrapping_add(&self, method: &mut syn::ExprMethodCall) -> Option<Lbl> {
+    /// The label of a native commutative method call, its operands put in label order, a
+    /// literal whose type the receiver infers staying the argument.
+    fn commutative(&self, method: &mut syn::ExprMethodCall) -> Option<Lbl> {
+        let tag = schedule::commutative_method(method)?;
         let receiver = self.scalar_in_place(&mut method.receiver, true);
         let argument = self.scalar_in_place(&mut method.args[0], true);
         let (receiver, argument) = (receiver?, argument?);
-        let prim = schedule::wrapping_add_prim(&receiver, &argument)?;
+        let prim = schedule::commutative_prim(tag, &receiver, &argument)?;
         if argument < receiver && argument.prim().is_some() {
             core::mem::swap(&mut *method.receiver, &mut method.args[0]);
         }
-        Some(schedule::wrapping_add_label(prim, receiver, argument))
+        Some(schedule::commutative_label(tag, prim, receiver, argument))
     }
 
     /// Whether `r#match` is a boolean match its conditional form proves.
@@ -600,8 +608,8 @@ impl VisitMut for Walker<'_, '_> {
                 self.visit_expr_mut(&mut raw.expr);
                 self.dedup = dedup;
             }
-            syn::Expr::MethodCall(method) if self.native_wrapping_add(method) => {
-                self.wrapping_add(method);
+            syn::Expr::MethodCall(method) if self.native_commutative(method) => {
+                self.commutative(method);
             }
             syn::Expr::MethodCall(method) => {
                 let dedup = core::mem::replace(&mut self.dedup, false);

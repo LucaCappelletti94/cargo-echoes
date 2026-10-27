@@ -165,6 +165,9 @@ pub mod alpha {
         let start: u32 = 1;
         start
     }
+    pub fn scaled(value: u32, other: u32) -> u32 {
+        other.saturating_mul(value) * value
+    }
 }
 mod custom {
     macro_rules! vec {
