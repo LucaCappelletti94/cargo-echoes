@@ -9,7 +9,9 @@ use syn::visit::{self, Visit};
 use syn::visit_mut::{self, VisitMut};
 
 use crate::alpha::{Env, Renamer};
-use crate::schedule::{self, BitwiseOp, BlockFacts, Equality, Lbl, Port, TotalBinary, Value};
+use crate::schedule::{
+    self, BitwiseOp, BlockFacts, Equality, Identity, Lbl, Port, TotalBinary, Value,
+};
 use crate::scope::PrimTy;
 
 struct Bound {
@@ -221,6 +223,16 @@ impl Walker<'_, '_> {
             };
             return (syn::Expr::Assign(assign), None);
         }
+        self.labeled_binary(binary, left, right)
+    }
+
+    /// The reduction of a binary operation whose operands both carry labels.
+    fn labeled_binary(
+        &self,
+        mut binary: syn::ExprBinary,
+        left: Lbl,
+        right: Lbl,
+    ) -> (syn::Expr, Option<Lbl>) {
         if self.dedup
             && let Some(equality) = schedule::equality(binary.op, &left, &right)
         {
@@ -251,6 +263,16 @@ impl Walker<'_, '_> {
                 self.dedup,
             );
             return (expr, Some(label));
+        }
+        if self.dedup
+            && let Some(identity) = schedule::arithmetic_identity(binary.op, &left, &right)
+        {
+            let expr = match identity {
+                Identity::Left => *binary.left,
+                Identity::Right => *binary.right,
+                Identity::Zero(prim) => crate::constants::literal_expr(prim, 0, binary.span()),
+            };
+            return (expr, Some(schedule::identity_label(identity, left, right)));
         }
         match schedule::total_binary(binary.op, &left, &right) {
             Some(TotalBinary::Flat(op, prim)) => {
@@ -307,9 +329,8 @@ impl Walker<'_, '_> {
                 self.branch(conditional(r#match), total_calls)
             }
             syn::Expr::Group(group) => self.scalar(*group.expr, total_calls),
-            syn::Expr::MethodCall(mut method) if self.native_commutative(&method) => {
-                let label = self.commutative(&mut method);
-                (syn::Expr::MethodCall(method), label)
+            syn::Expr::MethodCall(method) if self.native_commutative(&method) => {
+                self.commutative(method)
             }
             expr @ syn::Expr::Call(_) if total_calls => {
                 let mut locals = 0;
@@ -347,14 +368,15 @@ impl Walker<'_, '_> {
             }
         }
         fold_literals(op, prim, &mut pieces, span);
-        if self.dedup && op == BitwiseOp::Xor {
-            pieces.retain(|piece| piece.0.literal_bits() != Some(0));
-            if pieces.is_empty() {
-                return (
-                    crate::constants::literal_expr(prim, 0, span),
-                    schedule::literal_label(prim, 0),
-                );
-            }
+        if self.dedup
+            && let Some(value) = schedule::reduce_literal_leaves(op, prim, &mut pieces, |piece| {
+                piece.0.literal_bits()
+            })
+        {
+            return (
+                crate::constants::literal_expr(prim, value, span),
+                schedule::literal_label(prim, value),
+            );
         }
         if pieces.len() == 1 {
             let (label, expr) = pieces.pop().expect("a single operand");
@@ -515,18 +537,32 @@ impl Walker<'_, '_> {
         matches!(receiver.prim(), Some(PrimTy::Int { .. }))
     }
 
-    /// The label of a native commutative method call, its operands put in label order, a
-    /// literal whose type the receiver infers staying the argument.
-    fn commutative(&self, method: &mut syn::ExprMethodCall) -> Option<Lbl> {
-        let tag = schedule::commutative_method(method)?;
+    /// The value of a native commutative method call: its operands put in label order, a
+    /// literal whose type the receiver infers staying the argument, or the other operand when
+    /// one operand is the method's identity.
+    fn commutative(&self, mut method: syn::ExprMethodCall) -> (syn::Expr, Option<Lbl>) {
+        let tag = schedule::commutative_method(&method).expect("a native commutative method");
         let receiver = self.scalar_in_place(&mut method.receiver, true);
         let argument = self.scalar_in_place(&mut method.args[0], true);
-        let (receiver, argument) = (receiver?, argument?);
-        let prim = schedule::commutative_prim(tag, &receiver, &argument)?;
+        let (Some(receiver), Some(argument)) = (receiver, argument) else {
+            return (syn::Expr::MethodCall(method), None);
+        };
+        let Some(prim) = schedule::commutative_prim(tag, &receiver, &argument) else {
+            return (syn::Expr::MethodCall(method), None);
+        };
+        let unit = schedule::method_identity(tag);
+        if self.dedup && unit.is_some() && argument.literal_bits() == unit {
+            return (*method.receiver, Some(receiver));
+        }
+        if self.dedup && unit.is_some() && receiver.literal_bits() == unit {
+            let argument_expr = method.args.pop().expect("one argument");
+            return (argument_expr, Some(argument));
+        }
         if argument < receiver && argument.prim().is_some() {
             core::mem::swap(&mut *method.receiver, &mut method.args[0]);
         }
-        Some(schedule::commutative_label(tag, prim, receiver, argument))
+        let label = schedule::commutative_label(tag, prim, receiver, argument);
+        (syn::Expr::MethodCall(method), Some(label))
     }
 
     /// Whether `r#match` is a boolean match its conditional form proves.
@@ -609,7 +645,8 @@ impl VisitMut for Walker<'_, '_> {
                 self.dedup = dedup;
             }
             syn::Expr::MethodCall(method) if self.native_commutative(method) => {
-                self.commutative(method);
+                let owned = core::mem::replace(expr, empty_expr());
+                *expr = self.scalar(owned, false).0;
             }
             syn::Expr::MethodCall(method) => {
                 let dedup = core::mem::replace(&mut self.dedup, false);
