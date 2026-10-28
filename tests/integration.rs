@@ -1637,6 +1637,43 @@ fn reordered_variant_arms_group_their_functions() {
     assert_eq!(function_groups(&scan(12)).len(), 0);
 }
 
+const DISCARD_FIXTURE: &str = "tests/fixtures/discardws";
+
+#[test]
+fn discarded_call_doctests_group_with_their_statements() {
+    let report = Echoes::default().run(DISCARD_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["discardws::Bound", "discardws::Dropped"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(21)
+        .run(DISCARD_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(22)
+        .run(DISCARD_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn discarded_call_functions_group_with_their_statements() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(DISCARD_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["discardws::shorten", "discardws::trim"]];
+    for tokens in [0, 8] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(9)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

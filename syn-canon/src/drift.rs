@@ -227,6 +227,9 @@ impl VisitMut for Drift<'_> {
             false,
         ));
         syn::visit_mut::visit_block_mut(self, block);
+        if self.compiles {
+            discard_call_bindings(&mut block.stmts);
+        }
         self.std_scopes.pop();
     }
 
@@ -1217,6 +1220,32 @@ fn drop_empty_stmts(stmts: &mut Vec<syn::Stmt>) {
             syn::Stmt::Expr(syn::Expr::Verbatim(v), Some(_)) if v.is_empty()
         )
     });
+}
+
+/// Read `let _ = e;` as `e;` when `e` is an unattributed call, method call or `.await` bound by
+/// an unattributed, unannotated wildcard. The value of `e` drops at the end of either statement,
+/// while a place initializer would move under the statement and not under the `let`.
+fn discard_call_bindings(stmts: &mut [syn::Stmt]) {
+    for stmt in stmts {
+        if let syn::Stmt::Local(local) = stmt
+            && local.attrs.is_empty()
+            && matches!(&local.pat, syn::Pat::Wild(wild) if wild.attrs.is_empty())
+            && let Some(init) = &mut local.init
+            && init.diverge.is_none()
+            && matches!(
+                init.expr.as_ref(),
+                syn::Expr::Call(_) | syn::Expr::MethodCall(_) | syn::Expr::Await(_)
+            )
+            && expr_attrs(&init.expr).is_empty()
+        {
+            let semi = local.semi_token;
+            let expr = core::mem::replace(
+                init.expr.as_mut(),
+                syn::Expr::Verbatim(proc_macro2::TokenStream::new()),
+            );
+            *stmt = syn::Stmt::Expr(expr, Some(semi));
+        }
+    }
 }
 
 /// Give every statement macro but the last one a semicolon, which the
