@@ -100,7 +100,9 @@ pub(crate) fn normalize_expr(
     }
 }
 
-pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr) {
+/// Unwrap a body block holding one value, a deferred closure or `async` block, or with `places`
+/// a parameter, closure input or local binding, which the block moves out like the bare body.
+pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr, places: bool) {
     let syn::Expr::Block(block) = body else {
         return;
     };
@@ -119,7 +121,9 @@ pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr) {
     let deferred = matches!(expr, syn::Expr::Closure(_) | syn::Expr::Async(_))
         && crate::drift::expr_attrs(expr).is_empty();
     if !schedule::expression_within_bounds(expr)
-        || !(deferred || proof.value(expr, &renamer.frame_env()))
+        || !(deferred
+            || (places && renamer.names_place(expr))
+            || proof.value(expr, &renamer.frame_env()))
     {
         return;
     }

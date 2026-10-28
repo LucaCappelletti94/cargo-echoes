@@ -7,6 +7,7 @@ extern crate std;
 
 mod algebra;
 mod alpha;
+mod arms;
 mod blocks;
 mod const_items;
 mod constants;

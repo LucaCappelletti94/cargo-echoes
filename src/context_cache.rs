@@ -203,6 +203,10 @@ pub mod alpha {
         for value in values { if *value == 0 { continue; } epsilon(*value); }
         epsilon(0u32);
     }
+    pub fn ranked(value: Option<u32>, digit: u8) -> u32 {
+        let first = if let Some(found) = value { found } else { 0 };
+        match digit { 2 => first, 0 => 1, 1 => first, _ => 9 }
+    }
 }
 mod custom {
     macro_rules! vec {

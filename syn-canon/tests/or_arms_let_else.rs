@@ -110,16 +110,12 @@ fn other_arms_stay_apart() {
             "match x { 0 | 1 => y, _ => x }",
         ),
         (
-            "match x { 0 => y, 2 => x, 1 => y, _ => x }",
-            "match x { 0 | 1 => y, 2 => x, _ => x }",
+            "match x { 0 => y, 2..=5 => x, 1 => y, _ => x }",
+            "match x { 0 | 1 => y, 2..=5 => x, _ => x }",
         ),
         (
             "match x { 0 => y, 1 => x, _ => x }",
             "match x { 0 | 1 => y, _ => x }",
-        ),
-        (
-            "match Some(x) { None => y, Some(0) => y, _ => x }",
-            "match Some(x) { None | Some(0) => y, _ => x }",
         ),
     ] {
         separate(&function(split), &function(joined));

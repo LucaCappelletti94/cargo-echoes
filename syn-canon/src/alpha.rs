@@ -1378,6 +1378,67 @@ impl<'env> Renamer<'env> {
             })
     }
 
+    /// Whether the standard prelude is active, no glob import may shadow a name and no binding
+    /// claims any of `names`.
+    pub(crate) fn prelude_names(&self, names: &[&str]) -> bool {
+        self.prelude
+            && !self.glob_uncertain()
+            && names
+                .iter()
+                .all(|name| self.lookup(&[Ns::Value, Ns::Type], name).is_none())
+    }
+
+    /// The origin of the binding `name` resolves to in the value namespace.
+    pub(crate) fn value_origin(&self, name: &str) -> Option<Origin> {
+        self.lookup(&[Ns::Value], name)
+            .map(|resolved| resolved.origin)
+    }
+
+    /// The variants of the enum `name` resolves to in the type namespace, when a scope in view
+    /// declares that enum.
+    pub(crate) fn enum_variants(&self, name: &str) -> Option<&[String]> {
+        let inherited: &'env [Frame] = self.inherited.frames;
+        self.frames
+            .iter()
+            .rev()
+            .chain(self.self_frame.as_ref())
+            .chain(self.generics)
+            .chain(self.seed)
+            .chain(inherited)
+            .find_map(|frame| {
+                frame
+                    .lookup(Ns::Type, name)
+                    .map(|binding| frame.variants(binding))
+            })
+            .flatten()
+    }
+
+    /// Whether `expr` names a parameter, closure input or local binding, a place that creates no
+    /// temporary.
+    pub(crate) fn names_place(&self, expr: &syn::Expr) -> bool {
+        let syn::Expr::Path(path) = expr else {
+            return false;
+        };
+        path.attrs.is_empty()
+            && path.qself.is_none()
+            && path.path.get_ident().is_some_and(|ident| {
+                matches!(
+                    self.value_origin(&crate::scope::ident_name(ident)),
+                    Some(Origin::Parameter | Origin::Let | Origin::Closure)
+                )
+            })
+    }
+
+    /// Whether the match arm readings may run: compiling source whose bindings resolve, outside
+    /// observed code and macro-reached scopes.
+    pub(crate) fn arms_allowed(&self) -> bool {
+        (self.compiles || self.analysis)
+            && !self.observed
+            && !self.tail_blocked
+            && self.macro_origins.is_none()
+            && !self.scopes.iter().any(|scope| scope.frozen)
+    }
+
     /// The proven primitive type of a declared type, when the declaration
     /// establishes one through fully known local definitions.
     pub(crate) fn param_prim(&self, ty: &syn::Type) -> Option<PrimTy> {
@@ -2494,6 +2555,9 @@ impl<'env> Renamer<'env> {
         visit_fn_inputs(self, sig.inputs.iter_mut());
         syn::visit_mut::visit_return_type_mut(self, &mut sig.output);
         if let Some(body) = body {
+            if self.arms_allowed() {
+                crate::arms::normalize(self, body);
+            }
             self.normalize_return_body(body, sig.asyncness.is_none());
             self.visit_block_mut(body);
         }
@@ -2958,6 +3022,13 @@ fn prebind(renamer: &mut Renamer<'_>, items: &[&syn::Item]) {
             Origin::Item
         };
         let binding = renamer.bind_proven(ns, &name, origin, prim);
+        if let syn::Item::Enum(item) = item {
+            renamer
+                .frames
+                .last_mut()
+                .expect("a scope frame")
+                .set_variants(&name, item);
+        }
         if let syn::Item::Struct(item) = item
             && !matches!(item.fields, syn::Fields::Named(_))
         {
@@ -3738,7 +3809,7 @@ impl VisitMut for Renamer<'_> {
                 self.compiles,
                 closure.asyncness.is_none(),
             );
-            crate::tails::unwrap(self, &mut closure.body);
+            crate::tails::unwrap(self, &mut closure.body, false);
         }
         syn::visit_mut::visit_expr_mut(self, &mut closure.body);
         self.fold_concat(&mut closure.body);
@@ -3761,7 +3832,7 @@ impl VisitMut for Renamer<'_> {
         }
         self.bind_pat(&mut arm.pat);
         if self.tails_allowed() && arm.attrs.is_empty() {
-            crate::tails::unwrap(self, &mut arm.body);
+            crate::tails::unwrap(self, &mut arm.body, self.compiles);
         }
         syn::visit_mut::visit_expr_mut(self, &mut arm.body);
         self.fold_concat(&mut arm.body);

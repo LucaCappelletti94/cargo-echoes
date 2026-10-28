@@ -1511,6 +1511,9 @@ fn seed_scope<'a>(
             item_seed(item, items, prim_fallback && outer.is_none())
         {
             bind_item_ident(&mut frame, path, ns, ident, origin, prim, &mut next_id);
+            if let syn::Item::Enum(item) = item {
+                frame.set_variants(&ident_name(&item.ident), item);
+            }
             if let syn::Item::Struct(item) = item
                 && !matches!(item.fields, syn::Fields::Named(_))
             {

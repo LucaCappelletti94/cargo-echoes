@@ -1130,3 +1130,66 @@ fn an_observing_impl_retains_guard_clauses() {
         view(&source("if !p { a(); }"))
     );
 }
+
+#[test]
+fn match_arm_readings_hold_in_the_borrowed_view() {
+    for (written, read) in [
+        (
+            "fn f(o: Option<u32>) -> u32 { if let Some(v) = o { v } else { 0 } }",
+            "fn f(o: Option<u32>) -> u32 { match o { None => 0, Some(v) => v } }",
+        ),
+        (
+            "fn f(x: u32) -> u32 { match x { 2 => 7, 0 => 1, 1 => 7, _ => 3 } }",
+            "fn f(x: u32) -> u32 { match x { 0 => 1, 1 | 2 => 7, _ => 3 } }",
+        ),
+        (
+            "enum E { A, B } fn f(e: E) -> u32 { match e { E::B => 1, E::A => 0 } }",
+            "enum E { A, B } fn f(e: E) -> u32 { match e { E::A => 0, E::B => 1 } }",
+        ),
+    ] {
+        assert_eq!(view(written), view(read), "{written}");
+    }
+}
+
+#[test]
+fn module_names_keep_arm_spellings_in_the_borrowed_view() {
+    for (written, read) in [
+        (
+            "use crate::E::A as None; enum E { A, B } fn f(o: Option<u32>) -> u32 { match o { Some(v) => v, None => 0 } }",
+            "use crate::E::A as None; enum E { A, B } fn f(o: Option<u32>) -> u32 { match o { Some(v) => v, _ => 0 } }",
+        ),
+        (
+            "mod E { pub const A: u32 = 1; pub const B: u32 = 1; } fn f(x: u32) -> u32 { match x { E::B => 1, E::A => 0, _ => 2 } }",
+            "mod E { pub const A: u32 = 1; pub const B: u32 = 1; } fn f(x: u32) -> u32 { match x { E::A => 0, E::B => 1, _ => 2 } }",
+        ),
+        (
+            "static S: Option<u32> = None; fn f() -> u32 { if let Some(v) = S { v } else { 0 } }",
+            "static S: Option<u32> = None; fn f() -> u32 { match S { Some(v) => v, _ => 0 } }",
+        ),
+    ] {
+        assert_ne!(view(written), view(read), "{written}");
+    }
+}
+
+#[test]
+fn the_failure_mode_retains_match_arm_spellings() {
+    assert_ne!(
+        failing_form("fn f(o: Option<u32>) -> u32 { if let Some(v) = o { v } else { 0 } }"),
+        failing_form("fn f(o: Option<u32>) -> u32 { match o { None => 0, Some(v) => v } }")
+    );
+    assert_ne!(
+        failing_form("fn f(x: u32) -> u32 { match x { 1 => 7, 0 => 1, _ => 3 } }"),
+        failing_form("fn f(x: u32) -> u32 { match x { 0 => 1, 1 => 7, _ => 3 } }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_match_arm_spellings() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f(x: u32) -> u32 {{ {body} }}\n}}")
+    };
+    assert_ne!(
+        view(&source("match x { 1 => 7, 0 => 1, _ => 3 }")),
+        view(&source("match x { 0 => 1, 1 => 7, _ => 3 }"))
+    );
+}
