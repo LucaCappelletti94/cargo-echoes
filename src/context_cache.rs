@@ -222,6 +222,10 @@ pub mod alpha {
         for value in values.iter() { sum += value; }
         if values.len() == 0 { 1 } else { sum }
     }
+    pub fn worded(value: u32) -> String {
+        println!("{} {}", "value", value);
+        if value == 0 { String::from("") } else { format!("set") }
+    }
 }
 mod custom {
     macro_rules! vec {

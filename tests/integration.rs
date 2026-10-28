@@ -1779,6 +1779,43 @@ fn length_test_functions_group_with_their_emptiness_tests() {
     assert_eq!(function_groups(&scan(8)).len(), 0);
 }
 
+const STRINGS_FIXTURE: &str = "tests/fixtures/stringsws";
+
+#[test]
+fn literal_format_argument_doctests_group_with_their_inlined_strings() {
+    let report = Echoes::default().run(STRINGS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["stringsws::Arguments", "stringsws::Inlined"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(18)
+        .run(STRINGS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(19)
+        .run(STRINGS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn empty_string_functions_group_with_string_new() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(STRINGS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["stringsws::clear", "stringsws::reset"]];
+    for tokens in [0, 1] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(2)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

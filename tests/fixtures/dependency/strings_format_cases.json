@@ -1,0 +1,266 @@
+[
+  {
+    "id": "sf_empty_to_string",
+    "family": "strings_format",
+    "a": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(\"\".to_string());}",
+    "b": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(String::new());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\" 0 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\" 0 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\" 0 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\" 0 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "sf_empty_from",
+    "family": "strings_format",
+    "a": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(String::from(\"\"));}",
+    "b": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(String::new());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\" 0 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\" 0 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\" 0 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\" 0 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "sf_format_literal",
+    "family": "strings_format",
+    "a": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(format!(\"abc\"));}",
+    "b": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(\"abc\".to_string());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"abc\" 3 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"abc\" 3 3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"abc\" 3 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"abc\" 3 3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "sf_format_braces",
+    "family": "strings_format",
+    "a": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(format!(\"a{{b}}\"));}",
+    "b": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(\"a{b}\".to_string());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a{b}\" 4 4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a{b}\" 4 4\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a{b}\" 4 4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a{b}\" 4 4\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "sf_format_inline",
+    "family": "strings_format",
+    "a": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(format!(\"<{}>\", \"x{y\"));}",
+    "b": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(\"<x{y>\".to_string());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"<x{y>\" 5 5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"<x{y>\" 5 5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"<x{y>\" 5 5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"<x{y>\" 5 5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "sf_println_inline",
+    "family": "strings_format",
+    "a": "fn main(){let n=3;println!(\"{} {} {}\",\"a}\",n,\"z\");}",
+    "b": "fn main(){let n=3;println!(\"a}} {n} z\");}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a} 3 z\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a} 3 z\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a} 3 z\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a} 3 z\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "sf_format_capture",
+    "family": "strings_format",
+    "a": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(format!(\"{}\", 5));}",
+    "b": "fn show(s:String){println!(\"{:?} {} {}\",s,s.len(),s.capacity());} fn main(){show(5.to_string());}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"5\" 1 1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"5\" 1 1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"5\" 1 10\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"5\" 1 10\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "sf_debug_literal",
+    "family": "strings_format",
+    "a": "fn main(){println!(\"{:?}\",\"hi\");}",
+    "b": "fn main(){println!(\"hi\");}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"hi\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"hi\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "hi\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "hi\n"
+        }
+      }
+    }
+  }
+]

@@ -1,11 +1,14 @@
 //! Owned string literals and empty vectors under the standard prelude.
 //!
 //! With the prelude active, `"…".to_owned()` and `String::from("…")` build the same `String` as
-//! `"…".to_string()`, and `vec![]` expands to `Vec::new()`. A string literal receiver resolves
-//! `to_string` and `to_owned` at its first candidate step, where a user trait method would make
-//! the call ambiguous, so compiling source reaches the standard methods.
+//! `"…".to_string()`, the empty literal the same as `String::new()`, a standard `format!` of a
+//! literal without placeholders the same as its text, and `vec![]` expands to `Vec::new()`. A
+//! string literal receiver resolves `to_string` and `to_owned` at its first candidate step, where
+//! a user trait method would make the call ambiguous, so compiling source reaches the standard
+//! methods.
 
 use alloc::boxed::Box;
+use alloc::string::String;
 use alloc::vec::Vec;
 use syn::visit_mut::VisitMut;
 
@@ -138,31 +141,97 @@ impl Fold<'_, '_> {
                     && call.mac.tokens.is_empty()
                     && self.renamer.standard_vec(&call.mac.path) =>
             {
-                *expr = syn::Expr::Call(syn::ExprCall {
+                *expr = new_call("Vec");
+            }
+            syn::Expr::Macro(call)
+                if self.strings
+                    && call.attrs.is_empty()
+                    && self.renamer.standard_format(&call.mac.path)
+                    && let Some(text) = literal_format(&call.mac.tokens) =>
+            {
+                *expr = syn::Expr::MethodCall(syn::ExprMethodCall {
                     attrs: Vec::new(),
-                    func: Box::new(syn::Expr::Path(syn::ExprPath {
+                    receiver: Box::new(syn::Expr::Lit(syn::ExprLit {
                         attrs: Vec::new(),
-                        qself: None,
-                        path: syn::Path {
-                            leading_colon: None,
-                            segments: ["Vec", "new"]
-                                .into_iter()
-                                .map(|name| {
-                                    syn::PathSegment::from(syn::Ident::new(
-                                        name,
-                                        proc_macro2::Span::call_site(),
-                                    ))
-                                })
-                                .collect(),
-                        },
+                        lit: syn::Lit::Str(syn::LitStr::new(&text, call.mac.bang_token.span)),
                     })),
+                    dot_token: syn::token::Dot::default(),
+                    method: syn::Ident::new("to_string", proc_macro2::Span::call_site()),
+                    turbofish: None,
                     paren_token: syn::token::Paren::default(),
                     args: syn::punctuated::Punctuated::new(),
                 });
             }
             _ => {}
         }
+        if self.strings
+            && let syn::Expr::MethodCall(call) = expr
+            && call.attrs.is_empty()
+            && call.turbofish.is_none()
+            && call.args.is_empty()
+            && call.method == "to_string"
+            && matches!(call.receiver.as_ref(), syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(text), .. }) if text.value().is_empty())
+            && string_literal(&call.receiver)
+        {
+            *expr = new_call("String");
+        }
     }
+}
+
+/// The call `head::new()`.
+fn new_call(head: &str) -> syn::Expr {
+    syn::Expr::Call(syn::ExprCall {
+        attrs: Vec::new(),
+        func: Box::new(syn::Expr::Path(syn::ExprPath {
+            attrs: Vec::new(),
+            qself: None,
+            path: syn::Path {
+                leading_colon: None,
+                segments: [head, "new"]
+                    .into_iter()
+                    .map(|name| {
+                        syn::PathSegment::from(syn::Ident::new(
+                            name,
+                            proc_macro2::Span::call_site(),
+                        ))
+                    })
+                    .collect(),
+            },
+        })),
+        paren_token: syn::token::Paren::default(),
+        args: syn::punctuated::Punctuated::new(),
+    })
+}
+
+/// The text a format string of `tokens` writes when they hold that unsuffixed string literal
+/// alone, an optional trailing comma aside, and it holds no placeholder.
+fn literal_format(tokens: &proc_macro2::TokenStream) -> Option<String> {
+    use syn::parse::Parser;
+
+    let parser = syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated;
+    let args = parser.parse2(tokens.clone()).ok()?;
+    let [
+        syn::Expr::Lit(syn::ExprLit {
+            attrs,
+            lit: syn::Lit::Str(format),
+        }),
+    ] = args.iter().collect::<Vec<_>>()[..]
+    else {
+        return None;
+    };
+    if !attrs.is_empty() || !format.suffix().is_empty() {
+        return None;
+    }
+    let value = format.value();
+    let mut text = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(c) = chars.next() {
+        if matches!(c, '{' | '}') && chars.next() != Some(c) {
+            return None;
+        }
+        text.push(c);
+    }
+    Some(text)
 }
 
 impl VisitMut for Fold<'_, '_> {
