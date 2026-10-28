@@ -1,0 +1,200 @@
+[
+  {
+    "id": "gc_unit_return",
+    "family": "guard_clauses",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(p:bool){let _a=D(\"a\");if p{println!(\"then\");return;}let _b=D(\"b\");println!(\"rest\");} fn main(){f(false);f(true);}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(p:bool){let _a=D(\"a\");if p{println!(\"then\");}else{let _b=D(\"b\");println!(\"rest\");}} fn main(){f(false);f(true);}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "rest\ndrop b\ndrop a\nthen\ndrop a\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "rest\ndrop b\ndrop a\nthen\ndrop a\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "rest\ndrop b\ndrop a\nthen\ndrop a\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "rest\ndrop b\ndrop a\nthen\ndrop a\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "gc_nested_return",
+    "family": "guard_clauses",
+    "a": "fn f(p:bool,q:bool){if p{return;}if q{println!(\"q\");return;}println!(\"rest\");} fn main(){for p in [false,true]{for q in [false,true]{f(p,q);}}}",
+    "b": "fn f(p:bool,q:bool){if !p{if q{println!(\"q\");}else{println!(\"rest\");}}} fn main(){for p in [false,true]{for q in [false,true]{f(p,q);}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "rest\nq\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "rest\nq\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "rest\nq\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "rest\nq\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "gc_continue",
+    "family": "guard_clauses",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn main(){for x in [0u32,1,2]{let _l=D(\"l\");if x==1{println!(\"skip\");continue;}let _m=D(\"m\");println!(\"{}\",x);}}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn main(){for x in [0u32,1,2]{let _l=D(\"l\");if x==1{println!(\"skip\");}else{let _m=D(\"m\");println!(\"{}\",x);}}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\ndrop m\ndrop l\nskip\ndrop l\n2\ndrop m\ndrop l\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\ndrop m\ndrop l\nskip\ndrop l\n2\ndrop m\ndrop l\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\ndrop m\ndrop l\nskip\ndrop l\n2\ndrop m\ndrop l\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\ndrop m\ndrop l\nskip\ndrop l\n2\ndrop m\ndrop l\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "gc_loop_while",
+    "family": "guard_clauses",
+    "a": "fn main(){let mut i=3u32;loop{if i==0{break;}i-=1;println!(\"{}\",i);}println!(\"end {}\",i);}",
+    "b": "fn main(){let mut i=3u32;while !(i==0){i-=1;println!(\"{}\",i);}println!(\"end {}\",i);}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n0\nend 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n0\nend 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n0\nend 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2\n1\n0\nend 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "gc_labelled_continue",
+    "family": "guard_clauses",
+    "a": "fn main(){'o: for x in [0u32,1,2]{for y in [0u32,1]{if y==1{continue 'o;}println!(\"{} {}\",x,y);}println!(\"after {}\",x);}}",
+    "b": "fn main(){'o: for x in [0u32,1,2]{for y in [0u32,1]{if y!=1{println!(\"{} {}\",x,y);}}println!(\"after {}\",x);}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\n1 0\n2 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\n1 0\n2 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\nafter 0\n1 0\nafter 1\n2 0\nafter 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\nafter 0\n1 0\nafter 1\n2 0\nafter 2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "gc_non_tail_block",
+    "family": "guard_clauses",
+    "a": "fn f(p:bool){{if p{return;}println!(\"a\");}println!(\"b\");} fn main(){f(false);f(true);}",
+    "b": "fn f(p:bool){{if !p{println!(\"a\");}}println!(\"b\");} fn main(){f(false);f(true);}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\nb\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\nb\n"
+        }
+      }
+    }
+  }
+]

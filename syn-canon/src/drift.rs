@@ -311,11 +311,33 @@ impl VisitMut for Drift<'_> {
                 ret.expr = None;
             }
             match expr {
-                syn::Expr::Closure(closure) => closure.inputs.iter_mut().for_each(drop_binding_mut),
-                syn::Expr::ForLoop(for_loop) => drop_binding_mut(&mut for_loop.pat),
+                syn::Expr::Closure(closure) => {
+                    closure.inputs.iter_mut().for_each(drop_binding_mut);
+                    if closure.asyncness.is_none()
+                        && let syn::Expr::Block(body) = closure.body.as_mut()
+                        && body.attrs.is_empty()
+                        && body.label.is_none()
+                    {
+                        guard_clauses(&mut body.block.stmts, &returns);
+                    }
+                }
+                syn::Expr::ForLoop(for_loop) => {
+                    drop_binding_mut(&mut for_loop.pat);
+                    let label = for_loop.label.as_ref().map(|label| &label.name);
+                    guard_clauses(&mut for_loop.body.stmts, &|stmt| continues(stmt, label));
+                }
+                syn::Expr::While(while_loop) => {
+                    let label = while_loop.label.as_ref().map(|label| &label.name);
+                    guard_clauses(&mut while_loop.body.stmts, &|stmt| continues(stmt, label));
+                }
+                syn::Expr::Loop(plain) => {
+                    let label = plain.label.as_ref().map(|label| &label.name);
+                    guard_clauses(&mut plain.body.stmts, &|stmt| continues(stmt, label));
+                }
                 syn::Expr::Let(expr_let) => drop_binding_mut(&mut expr_let.pat),
                 _ => {}
             }
+            loop_as_while(expr);
         }
         fold_signed_zero(expr);
         if self.compiles {
@@ -568,6 +590,9 @@ impl VisitMut for Drift<'_> {
         syn::visit_mut::visit_item_fn_mut(self, node);
         if self.compiles {
             elide_lifetimes(&mut node.sig, Some(&node.block));
+            if node.sig.asyncness.is_none() {
+                guard_clauses(&mut node.block.stmts, &returns);
+            }
         }
     }
 
@@ -575,6 +600,9 @@ impl VisitMut for Drift<'_> {
         syn::visit_mut::visit_impl_item_fn_mut(self, node);
         if self.compiles {
             elide_lifetimes(&mut node.sig, Some(&node.block));
+            if node.sig.asyncness.is_none() {
+                guard_clauses(&mut node.block.stmts, &returns);
+            }
         }
     }
 
@@ -582,6 +610,11 @@ impl VisitMut for Drift<'_> {
         syn::visit_mut::visit_trait_item_fn_mut(self, node);
         if self.compiles {
             elide_lifetimes(&mut node.sig, node.default.as_ref());
+            if node.sig.asyncness.is_none()
+                && let Some(body) = &mut node.default
+            {
+                guard_clauses(&mut body.stmts, &returns);
+            }
         }
     }
 
@@ -942,6 +975,164 @@ fn collapse_else_if(expr_if: &mut syn::ExprIf) {
     if let Some(syn::Stmt::Expr(inner, None)) = block.block.stmts.pop() {
         **otherwise = inner;
     }
+}
+
+/// Read the first `if p { S; jump }` of `stmts` whose rest `R` ends in a statement and declares
+/// no item as `if p { S } else { R }`, then the guards of `S` and `R`. In a unit body the jump is
+/// `return;`, and in a loop body a `continue` of that loop, so both forms run `S` or `R` and then
+/// leave the block. The rest keeps the locals and the temporary scopes of its statements.
+fn guard_clauses(stmts: &mut Vec<syn::Stmt>, jump: &dyn Fn(&syn::Stmt) -> bool) {
+    let Some(index) = (0..stmts.len())
+        .find(|&index| guard(&mut stmts[index], jump).is_some() && settled(&stmts[index + 1..]))
+    else {
+        return;
+    };
+    let mut rest = stmts.split_off(index + 1);
+    guard_clauses(&mut rest, jump);
+    let (branch, semi) = stmts
+        .last_mut()
+        .and_then(|stmt| guard(stmt, jump))
+        .expect("the guard at the found index");
+    branch.then_branch.stmts.pop();
+    guard_clauses(&mut branch.then_branch.stmts, jump);
+    *semi = None;
+    if branch.then_branch.stmts.is_empty() {
+        negate_condition(&mut branch.cond);
+        branch.then_branch.stmts = rest;
+        return;
+    }
+    branch.else_branch = Some((
+        syn::token::Else::default(),
+        Box::new(syn::Expr::Block(syn::ExprBlock {
+            attrs: Vec::new(),
+            label: None,
+            block: syn::Block {
+                brace_token: syn::token::Brace::default(),
+                stmts: rest,
+            },
+        })),
+    ));
+    collapse_else_if(branch);
+}
+
+/// Replace `cond` by its negation, unwrapping an unattributed `!`.
+fn negate_condition(cond: &mut syn::Expr) {
+    let inner = core::mem::replace(cond, syn::Expr::Verbatim(TokenStream::new()));
+    *cond = match inner {
+        syn::Expr::Unary(unary)
+            if unary.attrs.is_empty() && matches!(unary.op, syn::UnOp::Not(_)) =>
+        {
+            *unary.expr
+        }
+        inner => syn::Expr::Unary(syn::ExprUnary {
+            attrs: Vec::new(),
+            op: syn::UnOp::Not(syn::token::Not::default()),
+            expr: Box::new(inner),
+        }),
+    };
+}
+
+/// The `if` of `stmt` and its semicolon when `stmt` is an unattributed `if` without `else` and
+/// without a `let` condition whose block ends in `jump`.
+fn guard<'a>(
+    stmt: &'a mut syn::Stmt,
+    jump: &dyn Fn(&syn::Stmt) -> bool,
+) -> Option<(&'a mut syn::ExprIf, &'a mut Option<syn::token::Semi>)> {
+    match stmt {
+        syn::Stmt::Expr(syn::Expr::If(branch), semi)
+            if branch.attrs.is_empty()
+                && branch.else_branch.is_none()
+                && !binds(&branch.cond)
+                && branch.then_branch.stmts.last().is_some_and(jump) =>
+        {
+            Some((branch, semi))
+        }
+        _ => None,
+    }
+}
+
+/// Whether a condition holds a `let`, alone or in an `&&` chain.
+fn binds(cond: &syn::Expr) -> bool {
+    match cond {
+        syn::Expr::Let(_) => true,
+        syn::Expr::Binary(binary) if matches!(binary.op, syn::BinOp::And(_)) => {
+            binds(&binary.left) || binds(&binary.right)
+        }
+        _ => false,
+    }
+}
+
+/// Whether the statements after a guard exist, end in a statement and declare no item, so
+/// moving them into an `else` block changes neither a tail temporary nor a name in view.
+fn settled(rest: &[syn::Stmt]) -> bool {
+    rest.last().is_some_and(|last| match last {
+        syn::Stmt::Expr(_, semi) => semi.is_some(),
+        syn::Stmt::Macro(mac) => mac.semi_token.is_some(),
+        _ => true,
+    }) && !rest.iter().any(|stmt| matches!(stmt, syn::Stmt::Item(_)))
+}
+
+/// Whether `stmt` is an unattributed `return` without a value.
+fn returns(stmt: &syn::Stmt) -> bool {
+    matches!(stmt, syn::Stmt::Expr(syn::Expr::Return(ret), _) if ret.attrs.is_empty() && ret.expr.is_none())
+}
+
+/// Whether `stmt` is an unattributed `continue` of the loop labelled `label`.
+fn continues(stmt: &syn::Stmt, label: Option<&syn::Lifetime>) -> bool {
+    matches!(
+        stmt,
+        syn::Stmt::Expr(syn::Expr::Continue(jump), _)
+            if jump.attrs.is_empty()
+                && jump.label.as_ref().is_none_or(|name| Some(name) == label)
+    )
+}
+
+/// Read `loop { if p { break; } R }` as `while !p { R }` when the `break` leaves that loop
+/// without a value and `R` declares no item. Both forms test `p` before each run of `R`.
+fn loop_as_while(expr: &mut syn::Expr) {
+    let syn::Expr::Loop(plain) = expr else {
+        return;
+    };
+    let label = plain.label.as_ref().map(|label| &label.name);
+    let breaks = |stmt: &syn::Stmt| {
+        matches!(
+            stmt,
+            syn::Stmt::Expr(syn::Expr::Break(jump), _)
+                if jump.attrs.is_empty()
+                    && jump.expr.is_none()
+                    && jump.label.as_ref().is_none_or(|name| Some(name) == label)
+        )
+    };
+    let Some((first, rest)) = plain.body.stmts.split_first_mut() else {
+        return;
+    };
+    if rest.iter().any(|stmt| matches!(stmt, syn::Stmt::Item(_))) {
+        return;
+    }
+    let Some((branch, _)) =
+        guard(first, &breaks).filter(|(branch, _)| branch.then_branch.stmts.len() == 1)
+    else {
+        return;
+    };
+    let cond = core::mem::replace(
+        &mut branch.cond,
+        Box::new(syn::Expr::Verbatim(TokenStream::new())),
+    );
+    plain.body.stmts.remove(0);
+    *expr = syn::Expr::While(syn::ExprWhile {
+        attrs: core::mem::take(&mut plain.attrs),
+        label: plain.label.take(),
+        while_token: syn::token::While::default(),
+        cond: Box::new(syn::Expr::Unary(syn::ExprUnary {
+            attrs: Vec::new(),
+            op: syn::UnOp::Not(syn::token::Not::default()),
+            expr: cond,
+        })),
+        body: syn::Block {
+            brace_token: syn::token::Brace::default(),
+            stmts: core::mem::take(&mut plain.body.stmts),
+        },
+    });
 }
 
 /// Adjacent unattributed arms whose patterns bind nothing and whose bodies spell the same tokens

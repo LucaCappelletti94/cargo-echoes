@@ -1575,6 +1575,37 @@ fn constructor_return_functions_group_with_their_tails() {
     assert_eq!(function_groups(&scan(7)).len(), 0);
 }
 
+const GUARD_FIXTURE: &str = "tests/fixtures/guardws";
+
+#[test]
+fn guard_clause_doctests_group_with_their_conditionals() {
+    let report = Echoes::default().run(GUARD_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["guardws::Guarded", "guardws::Nested"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default().min_tokens(22).run(GUARD_FIXTURE).unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default().min_tokens(23).run(GUARD_FIXTURE).unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn breaking_loop_functions_group_with_their_while_loops() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(GUARD_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["guardws::drain", "guardws::wait"]];
+    for tokens in [0, 13] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(14)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

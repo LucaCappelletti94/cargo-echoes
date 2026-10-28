@@ -1071,3 +1071,62 @@ fn an_observing_impl_retains_constructor_returns() {
     };
     assert_ne!(view(&source("return Ok(());")), view(&source("Ok(())")));
 }
+
+#[test]
+fn guard_clauses_read_as_conditionals_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "fn f(p: bool) { if p { return; } a(); }",
+            "fn f(p: bool) { if !p { a(); } }",
+        ),
+        (
+            "fn f(p: bool) { for _ in [0u8] { if p { continue; } a(); } }",
+            "fn f(p: bool) { for _ in [0u8] { if !p { a(); } } }",
+        ),
+        (
+            "fn f(p: bool) { loop { if p { break; } a(); } }",
+            "fn f(p: bool) { while !p { a(); } }",
+        ),
+    ] {
+        assert_eq!(view(written), view(canonical), "{written}");
+    }
+}
+
+#[test]
+fn guards_before_items_or_tails_keep_their_jump_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "fn f(p: bool) { if p { return; } fn b() {} b(); }",
+            "fn f(p: bool) { if !p { fn b() {} b(); } }",
+        ),
+        (
+            "fn f(p: bool) { if p { return; } for _ in [0u8] { a(); } }",
+            "fn f(p: bool) { if !p { for _ in [0u8] { a(); } } }",
+        ),
+    ] {
+        assert_ne!(view(written), view(canonical), "{written}");
+    }
+}
+
+#[test]
+fn the_failure_mode_retains_guard_clauses() {
+    assert_ne!(
+        failing_form("fn f(p: bool) { if p { return; } a(); }"),
+        failing_form("fn f(p: bool) { if !p { a(); } }")
+    );
+    assert_ne!(
+        failing_form("fn f(p: bool) { loop { if p { break; } a(); } }"),
+        failing_form("fn f(p: bool) { while !p { a(); } }")
+    );
+}
+
+#[test]
+fn an_observing_impl_retains_guard_clauses() {
+    let source = |body: &str| {
+        format!("struct S;\n#[observe]\nimpl S {{\n    fn f(p: bool) {{ {body} }}\n}}")
+    };
+    assert_ne!(
+        view(&source("if p { return; } a();")),
+        view(&source("if !p { a(); }"))
+    );
+}
