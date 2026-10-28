@@ -1382,6 +1382,18 @@ impl<'env> Renamer<'env> {
         self.name_prim(&crate::scope::ident_name(ident))
     }
 
+    /// Whether `ident` names the primitive `isize`, or `usize` for `Some(false)`, with no
+    /// binding claiming the name.
+    pub(crate) fn pointer_sized(&self, ident: &syn::Ident) -> Option<bool> {
+        let name = crate::scope::ident_name(ident);
+        let signed = match name.as_str() {
+            "usize" => false,
+            "isize" => true,
+            _ => return None,
+        };
+        (self.prim_fallback && self.type_unclaimed(&name)).then_some(signed)
+    }
+
     /// Whether the standard prelude is active and no binding claims the trait `name`, so its
     /// associated functions resolve to the standard trait.
     pub(crate) fn prelude_trait(&self, name: &str) -> bool {

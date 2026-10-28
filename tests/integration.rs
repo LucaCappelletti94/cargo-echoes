@@ -1853,6 +1853,43 @@ fn reordered_impl_trait_argument_functions_group() {
     assert_eq!(function_groups(&scan(7)).len(), 0);
 }
 
+const CAST_LIMIT_FIXTURE: &str = "tests/fixtures/castlimitws";
+
+#[test]
+fn power_of_two_and_limit_doctests_group_with_their_shifts() {
+    let report = Echoes::default().run(CAST_LIMIT_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["castlimitws::Divided", "castlimitws::Shifted"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(35)
+        .run(CAST_LIMIT_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(36)
+        .run(CAST_LIMIT_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn signed_parity_functions_group_with_their_low_bit_test() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(CAST_LIMIT_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["castlimitws::is_even", "castlimitws::low_bit_clear"]];
+    for tokens in [0, 5] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(6)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

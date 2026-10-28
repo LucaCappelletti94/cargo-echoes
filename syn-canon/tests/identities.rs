@@ -127,7 +127,6 @@ fn effects_partial_values_and_other_constants_stay() {
         ("read() - read()", "0u32"),
         ("x / 0", "x"),
         ("0 / x", "0u32"),
-        ("x % 1", "0u32"),
         ("x * 2", "x"),
         ("x - 1 + 1", "x"),
         ("x.abs_diff(0)", "x"),

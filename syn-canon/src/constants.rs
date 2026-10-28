@@ -431,6 +431,99 @@ fn evaluate(expr: &syn::Expr, ty: FixedInt, depth: usize) -> Option<Integer> {
     }
 }
 
+/// The suffixed literal a byte literal, a cast of a literal or a primitive limit spells: `b'a'`
+/// reads as `97u8`, an unsuffixed integer literal cast to a proven integer type as that type's
+/// literal, which the cast gives the literal anyway, an ASCII character or byte cast to one as
+/// its code, and `u8::MAX` or `i32::MIN` as the value. A pointer-sized target takes values every
+/// pointer width holds.
+fn literal_form(renamer: &Renamer<'_>, expr: &syn::Expr) -> Option<syn::Expr> {
+    let span = expr.span();
+    match expr {
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Byte(byte),
+            ..
+        }) if byte.suffix().is_empty() => Some(literal_expr(
+            PrimTy::Int {
+                width: IntWidth::W8,
+                signed: false,
+            },
+            u128::from(byte.value()),
+            span,
+        )),
+        syn::Expr::Cast(cast) => {
+            let syn::Expr::Lit(syn::ExprLit { attrs, lit }) = &*cast.expr else {
+                return None;
+            };
+            let value = match lit {
+                syn::Lit::Int(int) if attrs.is_empty() && int.suffix().is_empty() => {
+                    int.base10_parse::<u128>().ok()?
+                }
+                syn::Lit::Char(c)
+                    if attrs.is_empty() && c.suffix().is_empty() && c.value().is_ascii() =>
+                {
+                    u128::from(u32::from(c.value()))
+                }
+                syn::Lit::Byte(byte)
+                    if attrs.is_empty() && byte.suffix().is_empty() && byte.value().is_ascii() =>
+                {
+                    u128::from(byte.value())
+                }
+                _ => return None,
+            };
+            let syn::Type::Path(path) = &*cast.ty else {
+                return None;
+            };
+            let name = path.path.get_ident().filter(|_| path.qself.is_none())?;
+            if let Some(signed) = renamer.pointer_sized(name) {
+                let limit = if signed {
+                    i16::MAX.unsigned_abs()
+                } else {
+                    u16::MAX
+                };
+                if value > u128::from(limit) {
+                    return None;
+                }
+                let suffix = if signed { "isize" } else { "usize" };
+                return Some(syn::Expr::Lit(syn::ExprLit {
+                    attrs: Vec::new(),
+                    lit: syn::Lit::Int(syn::LitInt::new(&format!("{value}{suffix}"), span)),
+                }));
+            }
+            let ty = integer_type(renamer.type_name_prim(name)?)?;
+            let model = Integer { ty, bits: 0 };
+            let value = if ty.signed {
+                model.checked_signed(i128::try_from(value).ok()?)
+            } else {
+                model.checked_unsigned(value)
+            }?;
+            Some(value.expression(span))
+        }
+        syn::Expr::Path(path) if path.qself.is_none() && path.path.leading_colon.is_none() => {
+            let mut segments = path.path.segments.iter();
+            let (Some(ty), Some(limit), None) = (segments.next(), segments.next(), segments.next())
+            else {
+                return None;
+            };
+            if !ty.arguments.is_none() || !limit.arguments.is_none() {
+                return None;
+            }
+            let prim @ PrimTy::Int { width, signed } = renamer.type_name_prim(&ty.ident)? else {
+                return None;
+            };
+            let all = u128::MAX >> (128 - width.bits());
+            let bits = if limit.ident == "MAX" {
+                if signed { all >> 1 } else { all }
+            } else if limit.ident == "MIN" {
+                if signed { 1 << (width.bits() - 1) } else { 0 }
+            } else {
+                return None;
+            };
+            Some(literal_expr(prim, bits, span))
+        }
+        _ => None,
+    }
+}
+
 /// Fold the literal arithmetic of `expr`, whose declared type is `expected` when
 /// `declared`, an unproven declared type keeping type-free folds out of its root.
 pub(crate) fn normalize_expr(
@@ -472,6 +565,10 @@ struct Normalizer<'a, 'env> {
 impl VisitMut for Normalizer<'_, '_> {
     fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
         if self.depth >= MAX_DEPTH || !crate::drift::expr_attrs(expr).is_empty() {
+            return;
+        }
+        if let Some(literal) = literal_form(self.renamer, expr) {
+            *expr = literal;
             return;
         }
         if closed(expr, 0) {

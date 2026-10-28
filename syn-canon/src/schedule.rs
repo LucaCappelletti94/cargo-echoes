@@ -1002,6 +1002,7 @@ pub(crate) fn arithmetic_identity(op: syn::BinOp, left: &Lbl, right: &Lbl) -> Op
     let identity = match op {
         syn::BinOp::Add(_) | syn::BinOp::Sub(_) => 0,
         syn::BinOp::Mul(_) | syn::BinOp::Div(_) => 1,
+        syn::BinOp::Rem(_) => return is(right, 1).then_some(Identity::Zero(prim)),
         _ => return None,
     };
     let commutes = matches!(op, syn::BinOp::Add(_) | syn::BinOp::Mul(_));
@@ -1467,19 +1468,42 @@ fn binary_label(
     right: Lbl,
     mut sites: Vec<Site>,
 ) -> (Lbl, Vec<Site>) {
-    let label = if bin.attrs.is_empty()
-        && let Some(reduced) = equality_label(bin.op, &left, &right)
-    {
+    let label = binary_value(bin.op, bin.attrs.is_empty(), left, right);
+    if label.prim().is_some() {
+        sites.clear();
+        value_sites(&label, &mut sites);
+    }
+    (label, sites)
+}
+
+/// The label of the binary operation `op` over its operand labels, `plain` when the operation
+/// carries no attribute.
+fn binary_value(op: syn::BinOp, plain: bool, left: Lbl, right: Lbl) -> Lbl {
+    if plain && let Some((op, value)) = power_of_two(op, &left, &right) {
+        return binary_value(op, true, left, Lbl::Int(value, None));
+    }
+    if plain && matches!(op, syn::BinOp::Eq(_) | syn::BinOp::Ne(_)) {
+        let zero = |label: &Lbl| matches!(label, Lbl::Int(0, _));
+        if zero(&right)
+            && let Some(parity) = parity_operand(&left)
+        {
+            return binary_value(op, true, parity, right);
+        }
+        if zero(&left)
+            && let Some(parity) = parity_operand(&right)
+        {
+            return binary_value(op, true, left, parity);
+        }
+    }
+    if plain && let Some(reduced) = equality_label(op, &left, &right) {
         reduced
-    } else if bin.attrs.is_empty()
-        && let Some(identity) = arithmetic_identity(bin.op, &left, &right)
-    {
+    } else if plain && let Some(identity) = arithmetic_identity(op, &left, &right) {
         identity_label(identity, left, right)
     } else {
-        match total_binary(bin.op, &left, &right) {
+        match total_binary(op, &left, &right) {
             Some(TotalBinary::Ordered {
                 tag: '∧' | '∨', ..
-            }) if !bin.attrs.is_empty() => Lbl::Other(op_text(bin.op), vec![left, right]),
+            }) if !plain => Lbl::Other(op_text(op), vec![left, right]),
             Some(TotalBinary::Ordered {
                 tag: tag @ ('∧' | '∨'),
                 ..
@@ -1500,25 +1524,66 @@ fn binary_label(
                 flat_label(op, prim, leaves)
             }
             None => {
-                let tag = if is_assign_op(bin.op) {
+                let tag = if is_assign_op(op) {
                     "ao".into()
                 } else {
-                    op_text(bin.op)
+                    op_text(op)
                 };
                 let mut operands = vec![left, right];
-                if bin.attrs.is_empty() && commutative_operands(bin.op, &operands[0], &operands[1])
-                {
+                if plain && commutative_operands(op, &operands[0], &operands[1]) {
                     operands.sort();
                 }
                 Lbl::Other(tag, operands)
             }
         }
-    };
-    if label.prim().is_some() {
-        sites.clear();
-        value_sites(&label, &mut sites);
     }
-    (label, sites)
+}
+
+/// The bit operation an unsigned division or remainder by a power of two reads as, with the
+/// value of its new right operand: `x / 2^k` as `x >> k` and `x % 2^k` as `x & (2^k - 1)`.
+/// Unsigned operands round both alike, and neither side can overflow or divide by zero.
+pub(crate) fn power_of_two(op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<(syn::BinOp, u128)> {
+    let prim @ PrimTy::Int { signed: false, .. } = left.prim()? else {
+        return None;
+    };
+    let Lbl::Int(divisor, ty) = right else {
+        return None;
+    };
+    if ty.is_some_and(|ty| ty != prim)
+        || *divisor < 2
+        || !divisor.is_power_of_two()
+        || *divisor > all_ones(prim)
+    {
+        return None;
+    }
+    match op {
+        syn::BinOp::Div(_) => Some((
+            syn::BinOp::Shr(syn::token::Shr::default()),
+            u128::from(divisor.trailing_zeros()),
+        )),
+        syn::BinOp::Rem(_) => Some((syn::BinOp::BitAnd(syn::token::And::default()), divisor - 1)),
+        _ => None,
+    }
+}
+
+/// The label of `x & 1` for the label of `x % 2` over a proven fixed-width integer, which
+/// compares with zero alike whatever the sign of `x`.
+fn parity_operand(label: &Lbl) -> Option<Lbl> {
+    let Lbl::Other(tag, operands) = label else {
+        return None;
+    };
+    let [operand, Lbl::Int(2, _)] = operands.as_slice() else {
+        return None;
+    };
+    if tag != "%" || !matches!(operand.prim(), Some(PrimTy::Int { .. })) {
+        return None;
+    }
+    Some(binary_value(
+        syn::BinOp::BitAnd(syn::token::And::default()),
+        true,
+        operand.clone(),
+        Lbl::Int(1, None),
+    ))
 }
 
 /// Whether `op` is `+` or `*` over two proven operands of one fixed-width integer type, whose
@@ -1659,7 +1724,10 @@ fn label_method(
 ) -> (Lbl, Vec<Site>) {
     let (receiver, receiver_sites) =
         label_expr(renamer, env, &method.receiver, consumer, locals, orders);
-    if clone_call(method) && receiver.prim().is_some() && renamer.clone_free() {
+    if (clone_call(method) && renamer.clone_free()
+        || unit_power(method) && matches!(receiver.prim(), Some(PrimTy::Int { .. })))
+        && receiver.prim().is_some()
+    {
         return (receiver, receiver_sites);
     }
     let mut sites: Vec<_> = receiver_sites
@@ -1796,6 +1864,12 @@ fn label_unary(
             return (label, sites);
         }
     }
+    if let Some(inner) = double_not(unary) {
+        let (label, sites) = label_expr(renamer, env, inner, consumer, locals, orders);
+        if matches!(label.prim(), Some(PrimTy::Int { .. })) {
+            return (label, sites);
+        }
+    }
     let (inner, sites) = label_expr(renamer, env, &unary.expr, consumer, locals, orders);
     let label = if matches!(unary.op, syn::UnOp::Not(_))
         && unary.attrs.is_empty()
@@ -1806,6 +1880,38 @@ fn label_unary(
         Lbl::Other("u".into(), vec![inner])
     };
     (label, sites)
+}
+
+/// The operand of an unattributed `!!e`, which a proven fixed-width integer `e` reads as. An
+/// `e` that is itself a negation leaves the pair to the inner one, so each level labels once.
+pub(crate) fn double_not(unary: &syn::ExprUnary) -> Option<&syn::Expr> {
+    match &*unary.expr {
+        syn::Expr::Unary(inner)
+            if matches!(unary.op, syn::UnOp::Not(_))
+                && matches!(inner.op, syn::UnOp::Not(_))
+                && unary.attrs.is_empty()
+                && inner.attrs.is_empty()
+                && !matches!(&*inner.expr, syn::Expr::Unary(innermost) if matches!(innermost.op, syn::UnOp::Not(_))) =>
+        {
+            Some(&inner.expr)
+        }
+        _ => None,
+    }
+}
+
+/// Whether `method` is an unattributed `pow(1)` without turbofish, the inherent integer method
+/// that returns a proven fixed-width integer receiver unchanged.
+pub(crate) fn unit_power(method: &syn::ExprMethodCall) -> bool {
+    method.attrs.is_empty()
+        && method.turbofish.is_none()
+        && method.method == "pow"
+        && matches!(
+            method.args.first().filter(|_| method.args.len() == 1),
+            Some(syn::Expr::Lit(syn::ExprLit { attrs, lit: syn::Lit::Int(exponent) }))
+                if attrs.is_empty()
+                    && matches!(exponent.suffix(), "" | "u32")
+                    && exponent.base10_parse::<u32>().ok() == Some(1)
+        )
 }
 
 /// The operand of an unattributed shared borrow `&e`.
