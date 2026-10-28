@@ -497,7 +497,22 @@ impl VisitMut for Normalizer<'_, '_> {
         let expected = self.expected.take();
         let type_free = core::mem::replace(&mut self.type_free, true);
         self.depth += 1;
-        visit_mut::visit_expr_mut(self, expr);
+        if let syn::Expr::If(branch) = expr
+            && expected.is_some()
+            && let Some((_, otherwise)) = &mut branch.else_branch
+        {
+            self.visit_expr_mut(&mut branch.cond);
+            self.tail_block(&mut branch.then_branch, expected);
+            self.expected = expected;
+            self.visit_expr_mut(otherwise);
+        } else if let syn::Expr::Block(block) = expr
+            && expected.is_some()
+            && block.label.is_none()
+        {
+            self.tail_block(&mut block.block, expected);
+        } else {
+            visit_mut::visit_expr_mut(self, expr);
+        }
         self.depth -= 1;
         self.expected = expected;
         self.type_free = type_free;
@@ -563,6 +578,19 @@ impl VisitMut for Normalizer<'_, '_> {
     fn visit_item_mut(&mut self, _: &mut syn::Item) {}
     fn visit_macro_mut(&mut self, _: &mut syn::Macro) {}
     fn visit_attribute_mut(&mut self, _: &mut syn::Attribute) {}
+}
+
+impl Normalizer<'_, '_> {
+    /// Visit `block` with its tail expression expecting `expected`, the type of the block's
+    /// value, which an unsuffixed integer literal tail then takes.
+    fn tail_block(&mut self, block: &mut syn::Block, expected: Option<FixedInt>) {
+        self.visit_block_mut(block);
+        if let Some(syn::Stmt::Expr(tail, None)) = block.stmts.last_mut() {
+            self.expected = expected;
+            self.visit_expr_mut(tail);
+            self.expected = None;
+        }
+    }
 }
 
 /// Drop the annotation of a `let` binding one identifier whose initializer is an integer

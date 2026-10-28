@@ -189,8 +189,8 @@ fn unresolved_and_external_callees_keep_call_order() {
         "fn f(x:u32)->(u32,u32){let b=missing(x^1u32);let a=missing(x);(a,b)}",
     );
     ordered(
-        "fn f(x:u32)->(u32,u32){let a=core::cmp::max(x,7u32);let b=core::cmp::max(x^1u32,9u32);(a,b)}",
-        "fn f(x:u32)->(u32,u32){let b=core::cmp::max(x^1u32,9u32);let a=core::cmp::max(x,7u32);(a,b)}",
+        "fn f(x:u32)->(u32,u32){let a=core::hint::black_box(x);let b=core::hint::black_box(x^1u32);(a,b)}",
+        "fn f(x:u32)->(u32,u32){let b=core::hint::black_box(x^1u32);let a=core::hint::black_box(x);(a,b)}",
     );
 }
 

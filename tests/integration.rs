@@ -1711,6 +1711,43 @@ fn inclusive_bound_functions_group_with_their_strict_bounds() {
     assert_eq!(function_groups(&scan(4)).len(), 0);
 }
 
+const CHOICE_FIXTURE: &str = "tests/fixtures/choicews";
+
+#[test]
+fn integer_choice_doctests_group_with_their_casts_and_maxima() {
+    let report = Echoes::default().run(CHOICE_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["choicews::Branched", "choicews::Folded"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(33)
+        .run(CHOICE_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(34)
+        .run(CHOICE_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn conditional_maximum_functions_group_with_std_max() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(CHOICE_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["choicews::ceiling", "choicews::larger"]];
+    for tokens in [0, 4] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(5)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {
