@@ -226,6 +226,13 @@ pub mod alpha {
         println!("{} {}", "value", value);
         if value == 0 { String::from("") } else { format!("set") }
     }
+    pub fn boxed(value: u32) -> Box<dyn core::fmt::Debug + Send + Sync> {
+        Box::new(value)
+    }
+    pub struct Held<'a>(pub &'a u32);
+    impl<'a> Held<'a> {
+        pub fn get(&self) -> u32 { *self.0 }
+    }
 }
 mod custom {
     macro_rules! vec {

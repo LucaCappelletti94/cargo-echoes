@@ -1325,3 +1325,35 @@ fn the_failure_mode_retains_literal_formatting_arguments() {
         failing_form("fn f() { println!(\"a\"); }")
     );
 }
+
+#[test]
+fn bounds_outside_where_clauses_sort_in_the_borrowed_view() {
+    assert_eq!(
+        view("fn f(x: Box<dyn Sync + Send>, y: impl Debug + Clone) {}"),
+        view("fn f(x: Box<dyn Send + Sync>, y: impl Clone + Debug) {}")
+    );
+    assert_eq!(
+        view(
+            "struct S<'a>(&'a u8);\nimpl<'a> S<'a> {\n    fn f(&self) -> Box<dyn Sync + Send> { Box::new(*self.0) }\n}"
+        ),
+        view(
+            "struct S<'a>(&'a u8);\nimpl S<'_> {\n    fn f(&self) -> Box<dyn Send + Sync> { Box::new(*self.0) }\n}"
+        )
+    );
+    assert_ne!(
+        view("fn f(x: Box<dyn Send + Fn()>) {}"),
+        view("fn f(x: Box<dyn Fn() + Send>) {}")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_bound_order_and_impl_lifetimes() {
+    assert_ne!(
+        failing_form("fn f(x: Box<dyn Sync + Send>) {}"),
+        failing_form("fn f(x: Box<dyn Send + Sync>) {}")
+    );
+    assert_ne!(
+        failing_form("struct S<'a>(&'a u8); impl<'a> S<'a> {}"),
+        failing_form("struct S<'a>(&'a u8); impl S<'_> {}")
+    );
+}
