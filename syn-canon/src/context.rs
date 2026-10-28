@@ -109,6 +109,8 @@ pub struct SourceContext<'a> {
     owned_methods: bool,
     /// No trait of the crate declares a method named `clone`.
     clone_method: bool,
+    /// No trait of the crate declares a collection method the collection readings rely on.
+    collection_method: bool,
 }
 
 /// A function view selected from a source context.
@@ -165,6 +167,9 @@ impl FunctionView<'_> {
                 clone_free: self.ctx.modules[self.entry.module.0].prelude
                     && self.ctx.modules[self.entry.module.0].standard_imports
                     && self.ctx.clone_method,
+                collection_free: self.ctx.modules[self.entry.module.0].prelude
+                    && self.ctx.modules[self.entry.module.0].standard_imports
+                    && self.ctx.collection_method,
                 self_owner,
                 helper_table: Some(&self.ctx.helpers),
                 helper_module: &self.entry.helper_module,
@@ -270,6 +275,9 @@ impl<'a> SourceContext<'a> {
         let clone_method = !files
             .iter()
             .any(|(_, file)| declares_trait_method(&file.items, &["clone"]));
+        let collection_method = !files
+            .iter()
+            .any(|(_, file)| declares_trait_method(&file.items, &alpha::COLLECTION_METHODS));
         Self {
             modules,
             decls,
@@ -277,6 +285,7 @@ impl<'a> SourceContext<'a> {
             helpers,
             owned_methods,
             clone_method,
+            collection_method,
         }
     }
 

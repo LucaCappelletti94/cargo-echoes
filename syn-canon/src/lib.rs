@@ -9,6 +9,7 @@ mod algebra;
 mod alpha;
 mod arms;
 mod blocks;
+mod collections;
 mod const_items;
 mod constants;
 mod context;
@@ -97,6 +98,7 @@ fn canonical(file: syn::File, compiles: bool) -> CanonicalForm {
             prelude,
             owned_methods,
             clone_free: true,
+            collection_free: true,
             helper_table: None,
             helper_module: &[],
             helper_blocked: false,
