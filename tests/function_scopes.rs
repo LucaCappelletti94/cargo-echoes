@@ -1420,3 +1420,28 @@ fn the_failure_mode_retains_literal_disjunction_spellings() {
         failing_form("fn f(x: u32) -> bool { x == 1 || x == 2 }")
     );
 }
+
+#[test]
+fn return_types_type_literal_tails_in_the_borrowed_view() {
+    for (written, canonical) in [
+        ("fn f() -> u32 { 2 + 3 }", "fn f() -> u32 { 5u32 }"),
+        (
+            "fn f(p: bool) -> u8 { if p { return 7; } 9 }",
+            "fn f(p: bool) -> u8 { if p { return 7u8; } 9u8 }",
+        ),
+    ] {
+        assert_eq!(view(written), view(canonical), "{written}");
+    }
+    assert_ne!(
+        view("fn f() -> impl Copy { 5 }"),
+        view("fn f() -> impl Copy { 5u32 }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_untyped_literal_tails() {
+    assert_ne!(
+        failing_form("fn f() -> u32 { 5 }"),
+        failing_form("fn f() -> u32 { 5u32 }")
+    );
+}

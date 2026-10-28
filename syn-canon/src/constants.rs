@@ -535,6 +535,7 @@ pub(crate) fn normalize_expr(
     Normalizer {
         renamer,
         expected: expected.and_then(integer_type),
+        returns: None,
         type_free: !declared,
         contextual: true,
         depth: 0,
@@ -542,20 +543,30 @@ pub(crate) fn normalize_expr(
     .visit_expr_mut(expr);
 }
 
+/// Fold the literal arithmetic of `block`. A function body whose declared return type is a
+/// proven fixed-width integer types its tail and its `return` values by it.
 pub(crate) fn normalize_block(renamer: &Renamer<'_>, block: &mut syn::Block) {
-    Normalizer {
+    let returns = renamer.body_return(block).and_then(integer_type);
+    let mut normalizer = Normalizer {
         renamer,
         expected: None,
+        returns,
         type_free: true,
         contextual: true,
         depth: 0,
+    };
+    if returns.is_some() {
+        normalizer.tail_block(block, returns);
+    } else {
+        normalizer.visit_block_mut(block);
     }
-    .visit_block_mut(block);
 }
 
 struct Normalizer<'a, 'env> {
     renamer: &'a Renamer<'env>,
     expected: Option<FixedInt>,
+    /// The type of the enclosing function's `return` values, outside closures and async blocks.
+    returns: Option<FixedInt>,
     /// Whether a closed expression here may fold to a value every integer type reads alike.
     type_free: bool,
     contextual: bool,
@@ -607,6 +618,16 @@ impl VisitMut for Normalizer<'_, '_> {
             && block.label.is_none()
         {
             self.tail_block(&mut block.block, expected);
+        } else if let syn::Expr::Return(r#return) = expr
+            && let Some(value) = &mut r#return.expr
+            && self.returns.is_some()
+        {
+            self.expected = self.returns;
+            self.visit_expr_mut(value);
+        } else if matches!(expr, syn::Expr::Closure(_) | syn::Expr::Async(_)) {
+            let returns = self.returns.take();
+            visit_mut::visit_expr_mut(self, expr);
+            self.returns = returns;
         } else {
             visit_mut::visit_expr_mut(self, expr);
         }
