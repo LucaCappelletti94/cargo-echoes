@@ -1229,3 +1229,31 @@ fn an_observing_impl_retains_discarded_call_bindings() {
     };
     assert_ne!(view(&source("let _ = v.pop();")), view(&source("v.pop();")));
 }
+
+#[test]
+fn adjacent_literal_comparisons_read_as_strict_in_the_borrowed_view() {
+    assert_eq!(
+        view("fn f(x: u32, y: i8) -> bool { x >= 1 && y <= 5 }"),
+        view("fn f(x: u32, y: i8) -> bool { x != 0 && y < 6 }")
+    );
+    for (written, read) in [
+        (
+            "fn f(y: i8) -> bool { y > 0 }",
+            "fn f(y: i8) -> bool { y != 0 }",
+        ),
+        (
+            "fn f(z: u8) -> bool { z <= 255 }",
+            "fn f(z: u8) -> bool { z < 256 }",
+        ),
+    ] {
+        assert_ne!(view(written), view(read), "{written}");
+    }
+}
+
+#[test]
+fn the_failure_mode_retains_inclusive_comparisons() {
+    assert_ne!(
+        failing_form("fn f(x: u32) -> bool { x >= 1 }"),
+        failing_form("fn f(x: u32) -> bool { x != 0 }")
+    );
+}
