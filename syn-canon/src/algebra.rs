@@ -227,6 +227,10 @@ impl Walker<'_, '_> {
         {
             return self.labeled_binary(binary, left, right);
         }
+        if self.dedup && matches!(binary.op, syn::BinOp::Eq(_) | syn::BinOp::Ne(_)) {
+            self.parity(&mut binary.left, &binary.right, total_calls);
+            self.parity(&mut binary.right, &binary.left, total_calls);
+        }
         let left = self.scalar_in_place(&mut binary.left, total_calls);
         let right = self.scalar_in_place(&mut binary.right, total_calls);
         let (Some(left), Some(right)) = (left, right) else {
@@ -253,6 +257,28 @@ impl Walker<'_, '_> {
             return (syn::Expr::Assign(assign), None);
         }
         self.labeled_binary(binary, left, right)
+    }
+
+    /// Spell `x % 2` as `x & 1` when `x` is a proven fixed-width integer and `other`, the
+    /// operand it compares with, is the literal zero. Either remainder sign meets zero alike.
+    fn parity(&self, side: &mut syn::Expr, other: &syn::Expr, total_calls: bool) {
+        let syn::Expr::Binary(remainder) = side else {
+            return;
+        };
+        if literal_value(other) != Some(0)
+            || !remainder.attrs.is_empty()
+            || !matches!(remainder.op, syn::BinOp::Rem(_))
+            || literal_value(&remainder.right) != Some(2)
+        {
+            return;
+        }
+        if let Some(PrimTy::Int { .. }) = self
+            .scalar_in_place(&mut remainder.left, total_calls)
+            .and_then(|label| label.prim())
+        {
+            remainder.op = syn::BinOp::BitAnd(syn::token::And::default());
+            *remainder.right = unsuffixed(1, remainder.right.span());
+        }
     }
 
     /// The labels of the referents of `&a == &b` or `&a != &b`, both proven primitives, with
@@ -337,6 +363,13 @@ impl Walker<'_, '_> {
             };
             return (expr, Some(schedule::identity_label(identity, left, right)));
         }
+        if self.dedup
+            && let Some((op, value)) = schedule::power_of_two(binary.op, &left, &right)
+        {
+            binary.op = op;
+            *binary.right = unsuffixed(value, binary.right.span());
+            return self.labeled_binary(binary, left, Lbl::Int(value, None));
+        }
         match schedule::total_binary(binary.op, &left, &right) {
             Some(TotalBinary::Flat(op, prim)) => {
                 let (expr, label) = self.flat(binary, op, prim, left, right);
@@ -374,6 +407,16 @@ impl Walker<'_, '_> {
         match expr {
             syn::Expr::Binary(binary) => self.binary(binary, total_calls),
             syn::Expr::Unary(mut unary) if self.dedup && matches!(unary.op, syn::UnOp::Not(_)) => {
+                if schedule::double_not(&unary).is_some()
+                    && let syn::Expr::Unary(negated) = unary.expr.as_mut()
+                    && let Some(label) = self.scalar_in_place(&mut negated.expr, total_calls)
+                    && matches!(label.prim(), Some(PrimTy::Int { .. }))
+                {
+                    return (
+                        core::mem::replace(&mut *negated.expr, empty_expr()),
+                        Some(label),
+                    );
+                }
                 if let Some(inner) = self.scalar_in_place(&mut unary.expr, total_calls)
                     && inner.prim() == Some(PrimTy::Bool)
                 {
@@ -427,10 +470,18 @@ impl Walker<'_, '_> {
                 self.commutative(method)
             }
             syn::Expr::MethodCall(mut method)
-                if self.dedup && schedule::clone_call(&method) && self.renamer.clone_free() =>
+                if self.dedup
+                    && (schedule::clone_call(&method) && self.renamer.clone_free()
+                        || schedule::unit_power(&method)) =>
             {
+                let power = schedule::unit_power(&method);
                 match self.scalar_in_place(&mut method.receiver, total_calls) {
-                    Some(label) if label.prim().is_some() => (*method.receiver, Some(label)),
+                    Some(label)
+                        if !power && label.prim().is_some()
+                            || matches!(label.prim(), Some(PrimTy::Int { .. })) =>
+                    {
+                        (*method.receiver, Some(label))
+                    }
                     _ => (syn::Expr::MethodCall(method), None),
                 }
             }
@@ -890,7 +941,9 @@ impl VisitMut for Walker<'_, '_> {
             }
             syn::Expr::MethodCall(method)
                 if self.native_commutative(method)
-                    || self.dedup && schedule::clone_call(method) && self.renamer.clone_free() =>
+                    || self.dedup
+                        && (schedule::clone_call(method) && self.renamer.clone_free()
+                            || schedule::unit_power(method)) =>
             {
                 let owned = core::mem::replace(expr, empty_expr());
                 *expr = self.scalar(owned, false).0;
@@ -1190,4 +1243,23 @@ fn emit(
         op,
         right: Box::new(right),
     })
+}
+
+/// The unsuffixed integer literal `value`.
+fn unsuffixed(value: u128, span: proc_macro2::Span) -> syn::Expr {
+    syn::Expr::Lit(syn::ExprLit {
+        attrs: Vec::new(),
+        lit: syn::Lit::Int(syn::LitInt::new(&value.to_string(), span)),
+    })
+}
+
+/// The value of an unattributed integer literal.
+fn literal_value(expr: &syn::Expr) -> Option<u128> {
+    match expr {
+        syn::Expr::Lit(syn::ExprLit {
+            attrs,
+            lit: syn::Lit::Int(literal),
+        }) if attrs.is_empty() => literal.base10_parse().ok(),
+        _ => None,
+    }
 }

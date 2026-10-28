@@ -233,6 +233,9 @@ pub mod alpha {
     impl<'a> Held<'a> {
         pub fn get(&self) -> u32 { *self.0 }
     }
+    pub fn bucket(id: u32) -> u32 {
+        (id / 16 % 8) as u32 + (b'a' as u32) - u8::MAX as u32
+    }
 }
 mod custom {
     macro_rules! vec {

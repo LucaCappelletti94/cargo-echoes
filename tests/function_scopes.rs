@@ -1357,3 +1357,38 @@ fn the_failure_mode_retains_bound_order_and_impl_lifetimes() {
         failing_form("struct S<'a>(&'a u8); impl S<'_> {}")
     );
 }
+
+#[test]
+fn literal_casts_limits_and_power_of_two_arithmetic_read_alike_in_the_borrowed_view() {
+    for (written, canonical) in [
+        ("fn f() -> u64 { 5 as u64 }", "fn f() -> u64 { 5u64 }"),
+        ("fn f() -> u8 { u8::MAX }", "fn f() -> u8 { 255u8 }"),
+        ("fn f() -> u8 { b'a' }", "fn f() -> u8 { 97u8 }"),
+        (
+            "fn f(x: u32) -> u32 { x / 8 }",
+            "fn f(x: u32) -> u32 { x >> 3 }",
+        ),
+        (
+            "fn f(x: i32) -> bool { x % 2 == 0 }",
+            "fn f(x: i32) -> bool { x & 1 == 0 }",
+        ),
+    ] {
+        assert_eq!(view(written), view(canonical), "{written}");
+    }
+    assert_ne!(
+        view("fn f(x: i32) -> i32 { x / 2 }"),
+        view("fn f(x: i32) -> i32 { x >> 1 }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_literal_casts_and_power_of_two_arithmetic() {
+    assert_ne!(
+        failing_form("fn f() -> u64 { 5 as u64 }"),
+        failing_form("fn f() -> u64 { 5u64 }")
+    );
+    assert_ne!(
+        failing_form("fn f(x: u32) -> u32 { x / 8 }"),
+        failing_form("fn f(x: u32) -> u32 { x >> 3 }")
+    );
+}

@@ -73,7 +73,6 @@ fn boolean_inherited_negative_fixtures() {
 #[test]
 fn boolean_adjacent_proof_rejections() {
     for (left, right) in [
-        ("fn f(a: u8) { !!a }", "fn f(a: u8) { a }"),
         ("fn f(a: Custom) { !!a }", "fn f(a: Custom) { a }"),
         (
             "fn f() { if read(&D) { true } else { false } }",
