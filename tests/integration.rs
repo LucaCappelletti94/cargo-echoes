@@ -1674,6 +1674,43 @@ fn discarded_call_functions_group_with_their_statements() {
     assert_eq!(function_groups(&scan(9)).len(), 0);
 }
 
+const BOUNDS_FIXTURE: &str = "tests/fixtures/boundsws";
+
+#[test]
+fn inclusive_bound_doctests_group_with_their_strict_bounds() {
+    let report = Echoes::default().run(BOUNDS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["boundsws::Inclusive", "boundsws::Strict"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(23)
+        .run(BOUNDS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(24)
+        .run(BOUNDS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn inclusive_bound_functions_group_with_their_strict_bounds() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(BOUNDS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["boundsws::adult", "boundsws::grown"]];
+    for tokens in [0, 3] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(4)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

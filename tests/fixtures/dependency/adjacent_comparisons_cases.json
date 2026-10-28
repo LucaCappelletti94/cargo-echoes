@@ -1,0 +1,233 @@
+[
+  {
+    "id": "ac_upper_u8",
+    "family": "adjacent_comparisons",
+    "a": "fn f(x:u8)->bool{x<=254} fn main(){for x in [0u8,1u8,253u8,254u8,255u8]{println!(\"{} {}\",x,f(x));}}",
+    "b": "fn f(x:u8)->bool{x<255} fn main(){for x in [0u8,1u8,253u8,254u8,255u8]{println!(\"{} {}\",x,f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 true\n1 true\n253 true\n254 true\n255 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 true\n1 true\n253 true\n254 true\n255 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 true\n1 true\n253 true\n254 true\n255 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 true\n1 true\n253 true\n254 true\n255 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_lower_i8",
+    "family": "adjacent_comparisons",
+    "a": "fn f(x:i8)->bool{x>=-127i8} fn main(){for x in [-128i8,-127i8,-1i8,0i8,127i8]{println!(\"{} {}\",x,f(x));}}",
+    "b": "fn f(x:i8)->bool{x>-128i8} fn main(){for x in [-128i8,-127i8,-1i8,0i8,127i8]{println!(\"{} {}\",x,f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128 false\n-127 true\n-1 true\n0 true\n127 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128 false\n-127 true\n-1 true\n0 true\n127 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128 false\n-127 true\n-1 true\n0 true\n127 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128 false\n-127 true\n-1 true\n0 true\n127 true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_lower_i32",
+    "family": "adjacent_comparisons",
+    "a": "fn f(x:i32)->bool{x>=-3i32} fn main(){for x in [-2147483648i32,-4i32,-3i32,0i32,2147483647i32]{println!(\"{} {}\",x,f(x));}}",
+    "b": "fn f(x:i32)->bool{x>-4i32} fn main(){for x in [-2147483648i32,-4i32,-3i32,0i32,2147483647i32]{println!(\"{} {}\",x,f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 false\n-4 false\n-3 true\n0 true\n2147483647 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 false\n-4 false\n-3 true\n0 true\n2147483647 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 false\n-4 false\n-3 true\n0 true\n2147483647 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 false\n-4 false\n-3 true\n0 true\n2147483647 true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_unsigned_nonzero",
+    "family": "adjacent_comparisons",
+    "a": "fn f(x:u32)->bool{x>=1} fn main(){for x in [0u32,1u32,4294967295u32]{println!(\"{} {}\",x,f(x));}}",
+    "b": "fn f(x:u32)->bool{x!=0} fn main(){for x in [0u32,1u32,4294967295u32]{println!(\"{} {}\",x,f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n4294967295 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n4294967295 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n4294967295 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n4294967295 true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_unsigned_zero",
+    "family": "adjacent_comparisons",
+    "a": "fn f(x:u64)->bool{x<=0} fn main(){for x in [0u64,1u64,18446744073709551615u64]{println!(\"{} {}\",x,f(x));}}",
+    "b": "fn f(x:u64)->bool{x==0} fn main(){for x in [0u64,1u64,18446744073709551615u64]{println!(\"{} {}\",x,f(x));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 true\n1 false\n18446744073709551615 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 true\n1 false\n18446744073709551615 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 true\n1 false\n18446744073709551615 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 true\n1 false\n18446744073709551615 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_signed_zero",
+    "family": "adjacent_comparisons",
+    "a": "fn f(x:i32)->bool{x>0} fn main(){for x in [-1i32,0i32,1i32]{println!(\"{} {}\",x,f(x));}}",
+    "b": "fn f(x:i32)->bool{x!=0} fn main(){for x in [-1i32,0i32,1i32]{println!(\"{} {}\",x,f(x));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1 false\n0 false\n1 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1 false\n0 false\n1 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1 true\n0 false\n1 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-1 true\n0 false\n1 true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_upper_boundary",
+    "family": "adjacent_comparisons",
+    "a": "fn f(x:u8)->bool{x<=255} fn main(){for x in [254u8,255u8]{println!(\"{} {}\",x,f(x));}}",
+    "b": "fn f(x:u8)->bool{x<255} fn main(){for x in [254u8,255u8]{println!(\"{} {}\",x,f(x));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "254 true\n255 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "254 true\n255 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "254 true\n255 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "254 true\n255 false\n"
+        }
+      }
+    }
+  }
+]

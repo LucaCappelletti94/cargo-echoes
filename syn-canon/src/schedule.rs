@@ -602,32 +602,13 @@ impl BitwiseOp {
     }
 }
 
-/// The comparison emitted after exchanging operands.
-#[derive(Clone, Copy)]
-pub(crate) enum ReversedComparison {
-    Lt,
-    Le,
-    Eq,
-    Ne,
-}
-
-impl ReversedComparison {
-    pub(crate) fn bin_op(self) -> syn::BinOp {
-        match self {
-            Self::Lt => syn::BinOp::Lt(syn::token::Lt::default()),
-            Self::Le => syn::BinOp::Le(syn::token::Le::default()),
-            Self::Eq => syn::BinOp::Eq(syn::token::EqEq::default()),
-            Self::Ne => syn::BinOp::Ne(syn::token::Ne::default()),
-        }
-    }
-}
-
 /// The total form of a binary operation over proven scalars.
 pub(crate) enum TotalBinary {
-    /// Kept in operand order, a valid shift or an oriented comparison.
+    /// Kept in operand order, a valid shift or an oriented comparison whose operands exchange
+    /// when `reverse` holds.
     Ordered {
         tag: char,
-        reverse: Option<ReversedComparison>,
+        reverse: bool,
         prim: PrimTy,
     },
     /// An unordered bitwise chain of `&`, `|` or `^`.
@@ -651,7 +632,7 @@ pub(crate) fn total_binary(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Optio
                             syn::BinOp::Shl(_) => '«',
                             _ => '»',
                         },
-                        reverse: None,
+                        reverse: false,
                         prim,
                     })
                 }
@@ -680,14 +661,14 @@ fn scalar_prim(left: &Lbl, right: &Lbl) -> Option<PrimTy> {
 fn comparison(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<TotalBinary> {
     let prim = scalar_prim(left, right)?;
     let (tag, reverse) = match bin_op {
-        syn::BinOp::Eq(_) => ('=', (right < left).then_some(ReversedComparison::Eq)),
-        syn::BinOp::Ne(_) => ('!', (right < left).then_some(ReversedComparison::Ne)),
-        syn::BinOp::Lt(_) => ('<', None),
-        syn::BinOp::Le(_) => ('≤', None),
-        syn::BinOp::Gt(_) => ('<', Some(ReversedComparison::Lt)),
-        syn::BinOp::Ge(_) => ('≤', Some(ReversedComparison::Le)),
-        syn::BinOp::And(_) if prim == PrimTy::Bool => ('∧', None),
-        syn::BinOp::Or(_) if prim == PrimTy::Bool => ('∨', None),
+        syn::BinOp::Eq(_) => ('=', right < left),
+        syn::BinOp::Ne(_) => ('!', right < left),
+        syn::BinOp::Lt(_) => ('<', false),
+        syn::BinOp::Le(_) => ('≤', false),
+        syn::BinOp::Gt(_) => ('<', true),
+        syn::BinOp::Ge(_) => ('≤', true),
+        syn::BinOp::And(_) if prim == PrimTy::Bool => ('∧', false),
+        syn::BinOp::Or(_) if prim == PrimTy::Bool => ('∨', false),
         _ => return None,
     };
     Some(TotalBinary::Ordered {
@@ -695,6 +676,74 @@ fn comparison(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<TotalBinary
         reverse,
         prim: PrimTy::Bool,
     })
+}
+
+/// The canonical spelling of the comparison `lo tag hi` with exactly one integer literal operand.
+/// An inclusive bound reads as the strict bound past the adjacent literal when that literal stays
+/// in the operand type, and over unsigned operands `0 < x` reads as `0 != x` and `x < 1` as
+/// `0 == x`. Integers are totally ordered, so each reading keeps the truth value for every `x`.
+pub(crate) fn adjacent(tag: char, lo: Lbl, hi: Lbl) -> (char, Lbl, Lbl) {
+    let Some(PrimTy::Int { width, signed }) = scalar_prim(&lo, &hi) else {
+        return (tag, lo, hi);
+    };
+    let literal = |label: &Lbl| matches!(label, Lbl::Int(..));
+    let (tag, lo, hi) = match (tag, lo, hi) {
+        ('≤', lo, Lbl::Int(bits, suffix)) if !literal(&lo) => {
+            match adjacent_literal(bits, suffix, width, signed, true) {
+                Some(next) => ('<', lo, Lbl::Int(next, suffix)),
+                None => ('≤', lo, Lbl::Int(bits, suffix)),
+            }
+        }
+        ('≤', Lbl::Int(bits, suffix), hi) if !literal(&hi) => {
+            match adjacent_literal(bits, suffix, width, signed, false) {
+                Some(previous) => ('<', Lbl::Int(previous, suffix), hi),
+                None => ('≤', Lbl::Int(bits, suffix), hi),
+            }
+        }
+        other => other,
+    };
+    if signed {
+        return (tag, lo, hi);
+    }
+    match (tag, lo, hi) {
+        ('<', Lbl::Int(0, suffix), hi) if !literal(&hi) => ('!', Lbl::Int(0, suffix), hi),
+        ('<', lo, Lbl::Int(1, suffix)) if !literal(&lo) => ('=', Lbl::Int(0, suffix), lo),
+        other => other,
+    }
+}
+
+/// The literal one past `bits` when `up`, one before otherwise, when it stays in the type of
+/// `width` and `signed`. An unsuffixed literal stays non-negative, which is all it can spell.
+fn adjacent_literal(
+    bits: u128,
+    suffix: Option<PrimTy>,
+    width: crate::scope::IntWidth,
+    signed: bool,
+    up: bool,
+) -> Option<u128> {
+    let shift = 128 - width.bits();
+    let mask = u128::MAX >> shift;
+    if !signed {
+        return if up {
+            (bits < mask).then_some(bits + 1)
+        } else {
+            bits.checked_sub(1)
+        };
+    }
+    let value = if suffix.is_some() {
+        (bits << shift).cast_signed() >> shift
+    } else {
+        i128::try_from(bits).ok()?
+    };
+    let max = (mask >> 1).cast_signed();
+    let next = if up { value + 1 } else { value - 1 };
+    if next > max || next < -max - 1 {
+        return None;
+    }
+    if suffix.is_none() {
+        return u128::try_from(next).ok();
+    }
+    Some(next.cast_unsigned() & mask)
 }
 
 /// Negate a total boolean label, a comparison of integers or booleans turning into its
@@ -706,17 +755,37 @@ pub(crate) fn not_label(operand: Lbl) -> Lbl {
         Lbl::Op(tag @ ('∧' | '∨'), left, right, _) => {
             logical_label(dual(tag), not_label(*left), not_label(*right))
         }
-        Lbl::Op('<', left, right, prim) => Lbl::Op('≤', right, left, prim),
-        Lbl::Op('≤', left, right, prim) => Lbl::Op('<', right, left, prim),
-        Lbl::Op('=', left, right, prim) => Lbl::Op('!', left, right, prim),
-        Lbl::Op('!', left, right, prim) => Lbl::Op('=', left, right, prim),
+        Lbl::Op(tag @ ('<' | '≤' | '=' | '!'), left, right, prim) => {
+            let (tag, lo, hi) = complement(tag, *left, *right);
+            Lbl::Op(tag, Box::new(lo), Box::new(hi), prim)
+        }
         other => Lbl::Not(Box::new(other)),
     }
 }
 
-/// The complement of a `<=` or `!=` condition, which an `if` tests with its branches exchanged.
+/// The complement of the comparison `left tag right` in its canonical spelling.
+pub(crate) fn complement(tag: char, left: Lbl, right: Lbl) -> (char, Lbl, Lbl) {
+    match tag {
+        '<' => adjacent('≤', right, left),
+        '≤' => adjacent('<', right, left),
+        '=' => ('!', left, right),
+        _ => ('=', left, right),
+    }
+}
+
+/// The complement of a `<=` or `!=` condition, or of a strict comparison with its literal on
+/// the left whose complement is strict, which an `if` tests with its branches exchanged.
 pub(crate) fn positive_condition(cond: &Lbl) -> Option<Lbl> {
-    matches!(cond, Lbl::Op('≤' | '!', ..)).then(|| not_label(cond.clone()))
+    match cond {
+        Lbl::Op('≤' | '!', ..) => Some(not_label(cond.clone())),
+        Lbl::Op('<', lo, hi, _)
+            if matches!(**lo, Lbl::Int(..)) && !matches!(**hi, Lbl::Int(..)) =>
+        {
+            let complement = not_label(cond.clone());
+            matches!(complement, Lbl::Op('<', ..)).then_some(complement)
+        }
+        _ => None,
+    }
 }
 
 /// The label tag of `&&` or `||`.
@@ -1416,11 +1485,12 @@ fn binary_label(
                 ..
             }) => logical_label(tag, left, right),
             Some(TotalBinary::Ordered { tag, reverse, prim }) => {
-                let (lo, hi) = if reverse.is_some() {
+                let (lo, hi) = if reverse {
                     (right, left)
                 } else {
                     (left, right)
                 };
+                let (tag, lo, hi) = adjacent(tag, lo, hi);
                 Lbl::Op(tag, Box::new(lo), Box::new(hi), prim)
             }
             Some(TotalBinary::Flat(op, prim)) => {

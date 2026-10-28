@@ -343,17 +343,20 @@ impl Walker<'_, '_> {
                 (expr, Some(label))
             }
             Some(TotalBinary::Ordered { tag, reverse, prim }) => {
-                let (left, right) = if let Some(reverse) = reverse {
-                    core::mem::swap(&mut binary.left, &mut binary.right);
-                    binary.op = reverse.bin_op();
-                    (right, left)
+                if matches!(tag, '«' | '»') {
+                    return (
+                        syn::Expr::Binary(binary),
+                        Some(Lbl::Op(tag, Box::new(left), Box::new(right), prim)),
+                    );
+                }
+                let (lo, hi) = if reverse {
+                    (right.clone(), left.clone())
                 } else {
-                    (left, right)
+                    (left.clone(), right.clone())
                 };
-                (
-                    syn::Expr::Binary(binary),
-                    Some(Lbl::Op(tag, Box::new(left), Box::new(right), prim)),
-                )
+                let (tag, lo, hi) = schedule::adjacent(tag, lo, hi);
+                let expr = comparison_tokens(binary, [&left, &right], tag, [&lo, &hi]);
+                (expr, Some(Lbl::Op(tag, Box::new(lo), Box::new(hi), prim)))
             }
             None => {
                 if schedule::commutative_operands(binary.op, &left, &right) && right < left {
@@ -939,6 +942,44 @@ fn logical(
     (expr, label)
 }
 
+/// The tokens of `lo tag hi` over the operands of `binary`, labeled `operands`. An integer
+/// literal takes the spelling of its label, and every other operand moves to the place its label
+/// holds in `target`.
+fn comparison_tokens(
+    mut binary: syn::ExprBinary,
+    operands: [&Lbl; 2],
+    tag: char,
+    target: [&Lbl; 2],
+) -> syn::Expr {
+    let span = binary.span();
+    let mut exprs = [
+        Some(core::mem::replace(&mut *binary.left, empty_expr())),
+        Some(core::mem::replace(&mut *binary.right, empty_expr())),
+    ];
+    let mut place = |label: &Lbl| match label {
+        Lbl::Int(bits, Some(prim)) => crate::constants::literal_expr(*prim, *bits, span),
+        Lbl::Int(bits, None) => syn::Expr::Lit(syn::ExprLit {
+            attrs: Vec::new(),
+            lit: syn::Lit::Int(syn::LitInt::new(&bits.to_string(), span)),
+        }),
+        _ => {
+            let index = (0..2)
+                .find(|&index| exprs[index].is_some() && operands[index] == label)
+                .expect("a comparison operand keeps its label");
+            exprs[index].take().expect("an operand placed once")
+        }
+    };
+    *binary.left = place(target[0]);
+    *binary.right = place(target[1]);
+    binary.op = match tag {
+        '<' => syn::BinOp::Lt(syn::token::Lt::default()),
+        '≤' => syn::BinOp::Le(syn::token::Le::default()),
+        '=' => syn::BinOp::Eq(syn::token::EqEq::default()),
+        _ => syn::BinOp::Ne(syn::token::Ne::default()),
+    };
+    syn::Expr::Binary(binary)
+}
+
 fn negate(expr: syn::Expr, label: Lbl) -> (syn::Expr, Lbl) {
     let span = expr.span();
     match (expr, label) {
@@ -948,18 +989,10 @@ fn negate(expr: syn::Expr, label: Lbl) -> (syn::Expr, Lbl) {
             let right = negate(*binary.right, *right);
             logical(schedule::dual(tag), left, right, false)
         }
-        (syn::Expr::Binary(mut binary), label @ Lbl::Op('<' | '≤' | '=' | '!', ..)) => {
-            let complement = schedule::not_label(label);
-            binary.op = match &complement {
-                Lbl::Op('<', ..) => syn::BinOp::Lt(syn::token::Lt::default()),
-                Lbl::Op('≤', ..) => syn::BinOp::Le(syn::token::Le::default()),
-                Lbl::Op('=', ..) => syn::BinOp::Eq(syn::token::EqEq::default()),
-                _ => syn::BinOp::Ne(syn::token::Ne::default()),
-            };
-            if matches!(complement, Lbl::Op('<' | '≤', ..)) {
-                core::mem::swap(&mut binary.left, &mut binary.right);
-            }
-            (syn::Expr::Binary(binary), complement)
+        (syn::Expr::Binary(binary), Lbl::Op(tag @ ('<' | '≤' | '=' | '!'), left, right, prim)) => {
+            let (tag, lo, hi) = schedule::complement(tag, (*left).clone(), (*right).clone());
+            let expr = comparison_tokens(binary, [&left, &right], tag, [&lo, &hi]);
+            (expr, Lbl::Op(tag, Box::new(lo), Box::new(hi), prim))
         }
         (_, Lbl::Bool(value)) => (
             syn::Expr::Lit(syn::ExprLit {

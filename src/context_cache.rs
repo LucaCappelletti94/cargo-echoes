@@ -210,6 +210,9 @@ pub mod alpha {
     pub fn trimmed(values: &mut Vec<u32>) {
         let _ = values.pop();
     }
+    pub fn bounded(value: u32) -> bool {
+        value >= 1 && value <= 9
+    }
 }
 mod custom {
     macro_rules! vec {

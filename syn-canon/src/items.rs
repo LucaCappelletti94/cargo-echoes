@@ -1513,7 +1513,7 @@ impl<'a> Observations<'a> {
                     ..
                 } => crate::schedule::logical_label(tag, left, right),
                 crate::schedule::TotalBinary::Ordered { tag, reverse, prim } => {
-                    let (left, right) = if reverse.is_some() {
+                    let (left, right) = if reverse {
                         (right, left)
                     } else {
                         (left, right)
