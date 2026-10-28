@@ -400,9 +400,21 @@ impl Walker<'_, '_> {
         }
     }
 
+    /// The comparison chain a `matches!` call or a range `contains` call tests, when the pass
+    /// may rewrite proven values.
+    fn disjunction(&self, expr: &syn::Expr) -> Option<syn::Expr> {
+        if !self.dedup || !matches!(expr, syn::Expr::Macro(_) | syn::Expr::MethodCall(_)) {
+            return None;
+        }
+        crate::disjunctions::expansion(self.renamer, &self.env, expr)
+    }
+
     fn scalar(&self, expr: syn::Expr, total_calls: bool) -> (syn::Expr, Option<Lbl>) {
         if !crate::drift::expr_attrs(&expr).is_empty() {
             return (expr, None);
+        }
+        if let Some(chain) = self.disjunction(&expr) {
+            return self.scalar(chain, total_calls);
         }
         match expr {
             syn::Expr::Binary(binary) => self.binary(binary, total_calls),
@@ -904,6 +916,10 @@ fn branch_block(body: syn::Expr) -> syn::Block {
 impl VisitMut for Walker<'_, '_> {
     fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
         if !crate::drift::expr_attrs(expr).is_empty() {
+            return;
+        }
+        if let Some(chain) = self.disjunction(expr) {
+            *expr = self.scalar(chain, false).0;
             return;
         }
         match expr {

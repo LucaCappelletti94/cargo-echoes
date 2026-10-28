@@ -1265,8 +1265,9 @@ impl<'env> Renamer<'env> {
     }
 
     /// Whether the standard collection methods `iter`, `iter_mut`, `into_iter`, `len` and
-    /// `is_empty` answer their calls: the standard prelude is active, every import in view comes
-    /// from the standard library and no trait in view declares one of those names.
+    /// `is_empty`, and the inherent `contains` of the standard ranges, answer their calls: the
+    /// standard prelude is active, every import in view comes from the standard library and no
+    /// trait in view declares one of those names.
     pub(crate) fn collection_free(&self) -> bool {
         self.prelude && self.collection_free
     }
@@ -1289,6 +1290,16 @@ impl<'env> Renamer<'env> {
             self.standard_name(path, false),
             Some(crate::macros::MacroResolution::Macro(
                 crate::macros::MacroGrammar::Vector
+            ))
+        )
+    }
+
+    /// Whether `path` names the standard `matches!` macro.
+    pub(crate) fn standard_matches(&self, path: &syn::Path) -> bool {
+        matches!(
+            self.standard_name(path, false),
+            Some(crate::macros::MacroResolution::Macro(
+                crate::macros::MacroGrammar::Matches
             ))
         )
     }
@@ -2861,8 +2872,14 @@ fn clone_free_file(file: &syn::File) -> bool {
 }
 
 /// The trait method names the collection readings rely on.
-pub(crate) const COLLECTION_METHODS: [&str; 5] =
-    ["iter", "iter_mut", "into_iter", "len", "is_empty"];
+pub(crate) const COLLECTION_METHODS: [&str; 6] = [
+    "iter",
+    "iter_mut",
+    "into_iter",
+    "len",
+    "is_empty",
+    "contains",
+];
 
 /// Whether a file, bodies included, imports only from the standard library and declares no
 /// trait method a collection reading relies on.

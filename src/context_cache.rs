@@ -236,6 +236,9 @@ pub mod alpha {
     pub fn bucket(id: u32) -> u32 {
         (id / 16 % 8) as u32 + (b'a' as u32) - u8::MAX as u32
     }
+    pub fn small(value: u32) -> bool {
+        matches!(value, 1 | 3..=5) || (7..=9).contains(&value)
+    }
 }
 mod custom {
     macro_rules! vec {

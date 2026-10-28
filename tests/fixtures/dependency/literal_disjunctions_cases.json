@@ -1,0 +1,398 @@
+[
+  {
+    "id": "dj_or_u32",
+    "family": "literal_disjunctions",
+    "a": "fn main(){let v:[u32;5]=[0,1,2,3,u32::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{matches!(x,1|2)}",
+    "b": "fn main(){let v:[u32;5]=[0,1,2,3,u32::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{x==1||x==2}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 true\n3 false\n4294967295 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 true\n3 false\n4294967295 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 true\n3 false\n4294967295 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 true\n3 false\n4294967295 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dj_range_closed_u8",
+    "family": "literal_disjunctions",
+    "a": "fn main(){let v:[u8;5]=[0,1,5,6,u8::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u8)->bool{matches!(x,1..=5)}",
+    "b": "fn main(){let v:[u8;5]=[0,1,5,6,u8::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u8)->bool{x>=1&&x<=5}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n5 true\n6 false\n255 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n5 true\n6 false\n255 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n5 true\n6 false\n255 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n5 true\n6 false\n255 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dj_range_open_i64",
+    "family": "literal_disjunctions",
+    "a": "fn main(){let v:[i64;6]=[i64::MIN,2,3,6,7,i64::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:i64)->bool{matches!(x,3..7)}",
+    "b": "fn main(){let v:[i64;6]=[i64::MIN,2,3,6,7,i64::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:i64)->bool{x>=3&&x<7}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808 false\n2 false\n3 true\n6 true\n7 false\n9223372036854775807 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808 false\n2 false\n3 true\n6 true\n7 false\n9223372036854775807 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808 false\n2 false\n3 true\n6 true\n7 false\n9223372036854775807 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-9223372036854775808 false\n2 false\n3 true\n6 true\n7 false\n9223372036854775807 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dj_range_from_u16",
+    "family": "literal_disjunctions",
+    "a": "fn main(){let v:[u16;4]=[0,9,10,u16::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u16)->bool{matches!(x,10..)}",
+    "b": "fn main(){let v:[u16;4]=[0,9,10,u16::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u16)->bool{x>=10}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n9 false\n10 true\n65535 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n9 false\n10 true\n65535 true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n9 false\n10 true\n65535 true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n9 false\n10 true\n65535 true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dj_range_to_i8",
+    "family": "literal_disjunctions",
+    "a": "fn main(){let v:[i8;4]=[i8::MIN,4,5,i8::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:i8)->bool{(..=4).contains(&x)}",
+    "b": "fn main(){let v:[i8;4]=[i8::MIN,4,5,i8::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:i8)->bool{x<=4}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128 true\n4 true\n5 false\n127 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128 true\n4 true\n5 false\n127 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128 true\n4 true\n5 false\n127 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-128 true\n4 true\n5 false\n127 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dj_mixed_u32",
+    "family": "literal_disjunctions",
+    "a": "fn main(){let v:[u32;6]=[0,1,2,3,5,6];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{matches!(x,1|3..=5)}",
+    "b": "fn main(){let v:[u32;6]=[0,1,2,3,5,6];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{x==1||x>=3&&x<=5}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 false\n3 true\n5 true\n6 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 false\n3 true\n5 true\n6 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 false\n3 true\n5 true\n6 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 false\n3 true\n5 true\n6 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dj_negative_i32",
+    "family": "literal_disjunctions",
+    "a": "fn main(){let v:[i32;5]=[i32::MIN,-1,0,1,i32::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:i32)->bool{matches!(x,-1|1)}",
+    "b": "fn main(){let v:[i32;5]=[i32::MIN,-1,0,1,i32::MAX];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:i32)->bool{x==-1||x==1}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 false\n-1 true\n0 false\n1 true\n2147483647 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 false\n-1 true\n0 false\n1 true\n2147483647 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 false\n-1 true\n0 false\n1 true\n2147483647 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 false\n-1 true\n0 false\n1 true\n2147483647 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dj_contains_closed",
+    "family": "literal_disjunctions",
+    "a": "fn main(){let v:[u32;4]=[0,1,5,6];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{(1..=5).contains(&x)}",
+    "b": "fn main(){let v:[u32;4]=[0,1,5,6];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{x>=1&&x<=5}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n5 true\n6 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n5 true\n6 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n5 true\n6 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n5 true\n6 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dj_contains_open",
+    "family": "literal_disjunctions",
+    "a": "fn main(){let v:[u32;4]=[0,1,4,5];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{(1..5).contains(&x)}",
+    "b": "fn main(){let v:[u32;4]=[0,1,4,5];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{matches!(x,1..5)}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n4 true\n5 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n4 true\n5 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n4 true\n5 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n4 true\n5 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dj_chain_reversed",
+    "family": "literal_disjunctions",
+    "a": "fn main(){let v:[u32;4]=[0,1,2,3];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{x==2||x==1}",
+    "b": "fn main(){let v:[u32;4]=[0,1,2,3];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{matches!(x,1|2)}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 true\n3 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 true\n3 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 true\n3 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 false\n1 true\n2 true\n3 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dj_guard",
+    "family": "literal_disjunctions",
+    "a": "fn main(){let v:[u32;3]=[1,2,3];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{matches!(x,1|2 if x>1)}",
+    "b": "fn main(){let v:[u32;3]=[1,2,3];for x in v{println!(\"{} {}\",x,f(std::hint::black_box(x)));}} fn f(x:u32)->bool{x==1||x==2}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 false\n2 true\n3 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 false\n2 true\n3 false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 true\n2 true\n3 false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 true\n2 true\n3 false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dj_call_scrutinee",
+    "family": "literal_disjunctions",
+    "a": "use std::cell::Cell; thread_local!{static N:Cell<u32>=Cell::new(0);} fn next()->u32{N.with(|n|{n.set(n.get()+1);n.get()})} fn main(){let a=matches!(next(),2|3);println!(\"{} {}\",a,next());}",
+    "b": "use std::cell::Cell; thread_local!{static N:Cell<u32>=Cell::new(0);} fn next()->u32{N.with(|n|{n.set(n.get()+1);n.get()})} fn main(){let a=next()==2||next()==3;println!(\"{} {}\",a,next());}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 3\n"
+        }
+      }
+    }
+  }
+]

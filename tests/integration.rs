@@ -1890,6 +1890,43 @@ fn signed_parity_functions_group_with_their_low_bit_test() {
     assert_eq!(function_groups(&scan(6)).len(), 0);
 }
 
+const DISJUNCTIONS_FIXTURE: &str = "tests/fixtures/disjunctionsws";
+
+#[test]
+fn matched_and_contained_doctests_group_with_their_chains() {
+    let report = Echoes::default().run(DISJUNCTIONS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["disjunctionsws::Chained", "disjunctionsws::Matched"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(48)
+        .run(DISJUNCTIONS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(49)
+        .run(DISJUNCTIONS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn literal_chain_functions_group_with_matches() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(DISJUNCTIONS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["disjunctionsws::rest", "disjunctionsws::weekend"]];
+    for tokens in [0, 7] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(8)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

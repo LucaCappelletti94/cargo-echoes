@@ -1392,3 +1392,31 @@ fn the_failure_mode_retains_literal_casts_and_power_of_two_arithmetic() {
         failing_form("fn f(x: u32) -> u32 { x >> 3 }")
     );
 }
+
+#[test]
+fn literal_disjunctions_read_as_one_chain_in_the_borrowed_view() {
+    for (written, canonical) in [
+        (
+            "fn f(x: u32) -> bool { matches!(x, 2 | 1) }",
+            "fn f(x: u32) -> bool { x == 1 || x == 2 }",
+        ),
+        (
+            "fn f(x: u8) -> bool { (1..=5).contains(&x) }",
+            "fn f(x: u8) -> bool { x >= 1 && x <= 5 }",
+        ),
+    ] {
+        assert_eq!(view(written), view(canonical), "{written}");
+    }
+    assert_ne!(
+        view("fn f(x: u32) -> bool { matches!(x, 1 | 2 if x > 1) }"),
+        view("fn f(x: u32) -> bool { x == 1 || x == 2 }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_literal_disjunction_spellings() {
+    assert_ne!(
+        failing_form("fn f(x: u32) -> bool { matches!(x, 1 | 2) }"),
+        failing_form("fn f(x: u32) -> bool { x == 1 || x == 2 }")
+    );
+}
