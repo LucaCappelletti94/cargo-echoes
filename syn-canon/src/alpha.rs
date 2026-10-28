@@ -1556,6 +1556,15 @@ impl<'env> Renamer<'env> {
         })
     }
 
+    /// Whether `path` names the standard `format!` macro. Only file passes fold through the
+    /// prelude, so the file pass's shadowing proof applies.
+    pub(crate) fn standard_format(&self, path: &syn::Path) -> bool {
+        path.segments
+            .last()
+            .is_some_and(|leaf| leaf.ident == "format")
+            && self.std_format_path(path, Self::format_shadowed)
+    }
+
     fn standard_unbound(&self, name: &str) -> bool {
         let bit = crate::drift::std_name_bit(name);
         self.frames

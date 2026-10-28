@@ -1301,3 +1301,27 @@ fn the_failure_mode_retains_collection_spellings() {
         failing_form("fn f(v: &[u32]) -> bool { v.is_empty() }")
     );
 }
+
+#[test]
+fn literal_strings_and_formatting_arguments_read_alike_in_the_borrowed_view() {
+    assert_eq!(
+        view("fn f(n: u32) -> String { println!(\"{} {}\", \"a\", n); format!(\"x\") }"),
+        view("fn f(n: u32) -> String { println!(\"a {n}\"); \"x\".to_string() }")
+    );
+    assert_eq!(
+        view("fn f() -> String { \"\".to_owned() }"),
+        view("fn f() -> String { String::new() }")
+    );
+    assert_ne!(
+        view("fn f() { println!(\"{:?}\", \"a\"); }"),
+        view("fn f() { println!(\"a\"); }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_literal_formatting_arguments() {
+    assert_ne!(
+        failing_form("fn f() { println!(\"{}\", \"a\"); }"),
+        failing_form("fn f() { println!(\"a\"); }")
+    );
+}
