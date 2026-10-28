@@ -146,21 +146,22 @@ impl Fold<'_, '_> {
             syn::Expr::Macro(call)
                 if self.strings
                     && call.attrs.is_empty()
-                    && self.renamer.standard_format(&call.mac.path)
-                    && let Some(text) = literal_format(&call.mac.tokens) =>
+                    && self.renamer.standard_format(&call.mac.path) =>
             {
-                *expr = syn::Expr::MethodCall(syn::ExprMethodCall {
-                    attrs: Vec::new(),
-                    receiver: Box::new(syn::Expr::Lit(syn::ExprLit {
+                if let Some(text) = literal_format(&call.mac.tokens) {
+                    *expr = syn::Expr::MethodCall(syn::ExprMethodCall {
                         attrs: Vec::new(),
-                        lit: syn::Lit::Str(syn::LitStr::new(&text, call.mac.bang_token.span)),
-                    })),
-                    dot_token: syn::token::Dot::default(),
-                    method: syn::Ident::new("to_string", proc_macro2::Span::call_site()),
-                    turbofish: None,
-                    paren_token: syn::token::Paren::default(),
-                    args: syn::punctuated::Punctuated::new(),
-                });
+                        receiver: Box::new(syn::Expr::Lit(syn::ExprLit {
+                            attrs: Vec::new(),
+                            lit: syn::Lit::Str(syn::LitStr::new(&text, call.mac.bang_token.span)),
+                        })),
+                        dot_token: syn::token::Dot::default(),
+                        method: syn::Ident::new("to_string", proc_macro2::Span::call_site()),
+                        turbofish: None,
+                        paren_token: syn::token::Paren::default(),
+                        args: syn::punctuated::Punctuated::new(),
+                    });
+                }
             }
             _ => {}
         }
