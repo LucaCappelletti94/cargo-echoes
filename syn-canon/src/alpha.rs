@@ -54,6 +54,9 @@ pub(crate) struct Options<'a> {
     /// Every import in view comes from the standard library and no trait in view declares a
     /// `clone` method.
     pub(crate) clone_free: bool,
+    /// Every import in view comes from the standard library and no trait in view declares a
+    /// method named `iter`, `iter_mut`, `into_iter`, `len` or `is_empty`.
+    pub(crate) collection_free: bool,
     /// The source context's helper summary table, when one is indexed.
     pub(crate) helper_table: Option<&'a crate::helpers::HelperTable>,
     pub(crate) helper_module: &'a [String],
@@ -339,6 +342,9 @@ pub(crate) struct Renamer<'env> {
     /// Every import in view comes from the standard library and no trait in view declares a
     /// `clone` method.
     clone_free: bool,
+    /// Every import in view comes from the standard library and no trait in view declares a
+    /// collection method the iteration and emptiness readings rely on.
+    collection_free: bool,
     /// An enclosing block of the current item already read its owned strings and empty vectors.
     prelude_folded: bool,
     /// The inline modules around the traversal, whose frames stay on the stack.
@@ -400,6 +406,7 @@ impl<'env> Renamer<'env> {
             prelude: false,
             owned_methods: false,
             clone_free: false,
+            collection_free: false,
             prelude_folded: false,
             inline_depth: 0,
             observed: false,
@@ -456,6 +463,7 @@ impl<'env> Renamer<'env> {
         renamer.prelude = options.prelude;
         renamer.owned_methods = options.owned_methods;
         renamer.clone_free = options.clone_free;
+        renamer.collection_free = options.collection_free;
         renamer.observed = options.observed;
         renamer.tail_blocked = options.enclosing_observed;
         renamer.seed = options.seed;
@@ -1254,6 +1262,25 @@ impl<'env> Renamer<'env> {
     /// declares a `clone` method.
     pub(crate) fn clone_free(&self) -> bool {
         self.prelude && self.clone_free
+    }
+
+    /// Whether the standard collection methods `iter`, `iter_mut`, `into_iter`, `len` and
+    /// `is_empty` answer their calls: the standard prelude is active, every import in view comes
+    /// from the standard library and no trait in view declares one of those names.
+    pub(crate) fn collection_free(&self) -> bool {
+        self.prelude && self.collection_free
+    }
+
+    /// Whether the collection readings may run: compiling source with the standard collection
+    /// methods in view, outside observed code and macro-reached scopes.
+    fn collections_allowed(&self) -> bool {
+        (self.compiles || self.analysis)
+            && self.collection_free()
+            && !self.observed
+            && !self.tail_blocked
+            && self.macro_origins.is_none()
+            && !self.glob_uncertain()
+            && !self.scopes.iter().any(|scope| scope.frozen)
     }
 
     /// Whether `path` names the standard `vec!` macro.
@@ -2591,6 +2618,9 @@ impl<'env> Renamer<'env> {
             if self.arms_allowed() {
                 crate::arms::normalize(self, body);
             }
+            if self.collections_allowed() {
+                crate::collections::normalize(self, sig, body);
+            }
             self.normalize_return_body(body, sig.asyncness.is_none());
             self.visit_block_mut(body);
         }
@@ -2786,6 +2816,7 @@ pub(crate) fn normalize_file(
 ) -> ReferenceFacts {
     let mut renamer = Renamer::seeded(options, compiles);
     renamer.clone_free &= clone_free_file(file);
+    renamer.collection_free &= collection_free_file(file);
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
 }
@@ -2795,6 +2826,7 @@ pub(crate) fn normalize_file(
 pub(crate) fn analyze_file(file: &mut syn::File, options: Options<'_>) -> ReferenceFacts {
     let mut renamer = Renamer::seeded(options, false);
     renamer.clone_free &= clone_free_file(file);
+    renamer.collection_free &= collection_free_file(file);
     renamer.analysis = true;
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
@@ -2805,6 +2837,17 @@ pub(crate) fn analyze_file(file: &mut syn::File, options: Options<'_>) -> Refere
 fn clone_free_file(file: &syn::File) -> bool {
     crate::context::standard_imports(&file.items)
         && !crate::context::declares_trait_method(&file.items, &["clone"])
+}
+
+/// The trait method names the collection readings rely on.
+pub(crate) const COLLECTION_METHODS: [&str; 5] =
+    ["iter", "iter_mut", "into_iter", "len", "is_empty"];
+
+/// Whether a file, bodies included, imports only from the standard library and declares no
+/// trait method a collection reading relies on.
+fn collection_free_file(file: &syn::File) -> bool {
+    crate::context::standard_imports(&file.items)
+        && !crate::context::declares_trait_method(&file.items, &COLLECTION_METHODS)
 }
 
 /// True for an ident pattern that names a unit struct, variant, or

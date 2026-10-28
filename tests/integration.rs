@@ -1748,6 +1748,37 @@ fn conditional_maximum_functions_group_with_std_max() {
     assert_eq!(function_groups(&scan(5)).len(), 0);
 }
 
+const ITER_FIXTURE: &str = "tests/fixtures/iterws";
+
+#[test]
+fn iterated_doctests_group_with_their_borrowed_loops() {
+    let report = Echoes::default().run(ITER_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["iterws::Borrowed", "iterws::Iterated"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default().min_tokens(26).run(ITER_FIXTURE).unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default().min_tokens(27).run(ITER_FIXTURE).unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn length_test_functions_group_with_their_emptiness_tests() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(ITER_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["iterws::blank", "iterws::unset"]];
+    for tokens in [0, 7] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(8)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

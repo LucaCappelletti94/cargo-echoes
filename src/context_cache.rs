@@ -217,6 +217,11 @@ pub mod alpha {
         let bit: u32 = if flag { 1 } else { 0 };
         bit + std::cmp::max(value, other)
     }
+    pub fn summed(values: &[u32]) -> u32 {
+        let mut sum = 0;
+        for value in values.iter() { sum += value; }
+        if values.len() == 0 { 1 } else { sum }
+    }
 }
 mod custom {
     macro_rules! vec {

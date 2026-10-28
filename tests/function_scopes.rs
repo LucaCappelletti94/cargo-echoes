@@ -1281,3 +1281,23 @@ fn the_failure_mode_retains_integer_choices() {
         failing_form("fn f(x: u32, y: u32) -> u32 { y.max(x) }")
     );
 }
+
+#[test]
+fn collection_readings_hold_in_the_borrowed_view() {
+    assert_eq!(
+        view("fn f(v: &[u32]) -> bool { for x in v.iter() { g(x); } v.len() == 0 }"),
+        view("fn f(v: &[u32]) -> bool { for x in v { g(x); } v.is_empty() }")
+    );
+    assert_ne!(
+        view("trait Size { fn len(&self) -> usize; } fn f(v: &[u32]) -> bool { v.len() == 0 }"),
+        view("trait Size { fn len(&self) -> usize; } fn f(v: &[u32]) -> bool { v.is_empty() }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_collection_spellings() {
+    assert_ne!(
+        failing_form("fn f(v: &[u32]) -> bool { v.len() == 0 }"),
+        failing_form("fn f(v: &[u32]) -> bool { v.is_empty() }")
+    );
+}

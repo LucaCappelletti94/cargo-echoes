@@ -1,0 +1,200 @@
+[
+  {
+    "id": "ci_iter_vec",
+    "family": "collection_iteration",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(v:Vec<D>){for x in v.iter(){println!(\"{}\",x.0);}println!(\"end\");} fn main(){f(vec![D(\"a\"),D(\"b\")]);}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(v:Vec<D>){for x in &v{println!(\"{}\",x.0);}println!(\"end\");} fn main(){f(vec![D(\"a\"),D(\"b\")]);}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\nend\ndrop a\ndrop b\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\nend\ndrop a\ndrop b\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\nend\ndrop a\ndrop b\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\nend\ndrop a\ndrop b\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ci_iter_slice",
+    "family": "collection_iteration",
+    "a": "fn f(v:&[u32])->u32{let mut s=0;for x in v.iter(){s+=x;}s} fn main(){println!(\"{}\",f(&[1,2,3]));}",
+    "b": "fn f(v:&[u32])->u32{let mut s=0;for x in v{s+=x;}s} fn main(){println!(\"{}\",f(&[1,2,3]));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ci_iter_mut",
+    "family": "collection_iteration",
+    "a": "fn f(mut v:Vec<u32>)->Vec<u32>{for x in v.iter_mut(){*x*=2;}v} fn main(){println!(\"{:?}\",f(vec![1,2]));}",
+    "b": "fn f(mut v:Vec<u32>)->Vec<u32>{for x in &mut v{*x*=2;}v} fn main(){println!(\"{:?}\",f(vec![1,2]));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[2, 4]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[2, 4]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[2, 4]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[2, 4]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ci_into_iter",
+    "family": "collection_iteration",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(v:Vec<D>){for x in v.into_iter(){println!(\"{}\",x.0);}println!(\"end\");} fn main(){f(vec![D(\"a\"),D(\"b\")]);}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(v:Vec<D>){for x in v{println!(\"{}\",x.0);}println!(\"end\");} fn main(){f(vec![D(\"a\"),D(\"b\")]);}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\ndrop a\nb\ndrop b\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\ndrop a\nb\ndrop b\nend\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\ndrop a\nb\ndrop b\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\ndrop a\nb\ndrop b\nend\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ci_empty",
+    "family": "collection_iteration",
+    "a": "fn f(v:&[u32],s:&str)->(bool,bool,bool){(v.len()==0,s.len()>0,v.len()<1)} fn main(){println!(\"{:?} {:?}\",f(&[],\"\"),f(&[1],\"x\"));}",
+    "b": "fn f(v:&[u32],s:&str)->(bool,bool,bool){(v.is_empty(),!s.is_empty(),v.is_empty())} fn main(){println!(\"{:?} {:?}\",f(&[],\"\"),f(&[1],\"x\"));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(true, false, true) (false, true, false)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(true, false, true) (false, true, false)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(true, false, true) (false, true, false)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(true, false, true) (false, true, false)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ci_iter_against_consuming_loop",
+    "family": "collection_iteration",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(v:Vec<D>){for x in v.iter(){println!(\"{}\",x.0);}println!(\"end\");} fn main(){f(vec![D(\"a\"),D(\"b\")]);}",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(v:Vec<D>){for x in v{println!(\"{}\",x.0);}println!(\"end\");} fn main(){f(vec![D(\"a\"),D(\"b\")]);}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\nend\ndrop a\ndrop b\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nb\nend\ndrop a\ndrop b\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\ndrop a\nb\ndrop b\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\ndrop a\nb\ndrop b\nend\n"
+        }
+      }
+    }
+  }
+]
