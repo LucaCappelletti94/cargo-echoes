@@ -1316,6 +1316,11 @@ pub(crate) fn label_expr(
     locals: &mut usize,
     orders: Option<&RefCell<FieldOrders>>,
 ) -> (Lbl, Vec<Site>) {
+    if matches!(expr, syn::Expr::Macro(_) | syn::Expr::MethodCall(_))
+        && let Some(chain) = crate::disjunctions::expansion(renamer, env, expr)
+    {
+        return label_expr(renamer, env, &chain, consumer, locals, orders);
+    }
     match expr {
         syn::Expr::Lit(lit) => (label_lit(&lit.lit), Vec::new()),
         syn::Expr::Path(path) if path.qself.is_none() => label_path(env, &path.path),
