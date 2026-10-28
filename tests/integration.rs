@@ -1816,6 +1816,43 @@ fn empty_string_functions_group_with_string_new() {
     assert_eq!(function_groups(&scan(2)).len(), 0);
 }
 
+const BOUNDS_IMPL_FIXTURE: &str = "tests/fixtures/boundsimplws";
+
+#[test]
+fn impl_lifetime_and_bound_order_doctests_group_apart_from_a_tied_lifetime() {
+    let report = Echoes::default().run(BOUNDS_IMPL_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["boundsimplws::Anonymous", "boundsimplws::Named"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(51)
+        .run(BOUNDS_IMPL_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(52)
+        .run(BOUNDS_IMPL_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn reordered_impl_trait_argument_functions_group() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(BOUNDS_IMPL_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["boundsimplws::ordered", "boundsimplws::reversed"]];
+    for tokens in [0, 6] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(7)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

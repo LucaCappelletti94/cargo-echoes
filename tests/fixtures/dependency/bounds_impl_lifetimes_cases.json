@@ -1,0 +1,435 @@
+[
+  {
+    "id": "bi_dyn_order",
+    "family": "bounds_impl_lifetimes",
+    "a": "fn f(x:Box<dyn Sync+Send>)->usize{std::mem::size_of_val(&x)} fn g(x:&(dyn std::fmt::Debug+Send))->String{format!(\"{:?}\",x)} fn main(){let b:Box<dyn Sync+Send>=Box::new(5u8);println!(\"{} {}\",f(b),g(&7u8));}",
+    "b": "fn f(x:Box<dyn Send+Sync>)->usize{std::mem::size_of_val(&x)} fn g(x:&(dyn Send+std::fmt::Debug))->String{format!(\"{:?}\",x)} fn main(){let b:Box<dyn Send+Sync>=Box::new(5u8);println!(\"{} {}\",f(b),g(&7u8));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "16 7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "16 7\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "16 7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "16 7\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "bi_dyn_lifetime",
+    "family": "bounds_impl_lifetimes",
+    "a": "fn f<'a>(x:&'a u8)->Box<dyn std::fmt::Debug+'a+Send>{Box::new(x)} fn main(){let v=3u8;println!(\"{:?}\",f(&v));}",
+    "b": "fn f<'a>(x:&'a u8)->Box<dyn 'a+std::fmt::Debug+Send>{Box::new(x)} fn main(){let v=3u8;println!(\"{:?}\",f(&v));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "bi_impl_arg",
+    "family": "bounds_impl_lifetimes",
+    "a": "use std::fmt::Debug; fn f(x:impl Debug+Clone)->String{format!(\"{:?}\",x.clone())} fn main(){println!(\"{}\",f(vec![1,2]));}",
+    "b": "use std::fmt::Debug; fn f(x:impl Clone+Debug)->String{format!(\"{:?}\",x.clone())} fn main(){println!(\"{}\",f(vec![1,2]));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1, 2]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1, 2]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1, 2]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1, 2]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "bi_impl_return",
+    "family": "bounds_impl_lifetimes",
+    "a": "use std::fmt::Debug; fn f()->impl Debug+Clone+Send{(1u8,'x')} fn main(){let v=f();println!(\"{:?} {:?}\",v.clone(),v);}",
+    "b": "use std::fmt::Debug; fn f()->impl Clone+Debug+Send{(1u8,'x')} fn main(){let v=f();println!(\"{:?} {:?}\",v.clone(),v);}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(1, 'x') (1, 'x')\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(1, 'x') (1, 'x')\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(1, 'x') (1, 'x')\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(1, 'x') (1, 'x')\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "bi_supertraits",
+    "family": "bounds_impl_lifetimes",
+    "a": "use std::fmt::Debug; trait T:Debug+Clone{fn twice(&self)->String{format!(\"{:?}{:?}\",self.clone(),self)}} impl T for u8{} fn main(){println!(\"{}\",4u8.twice());}",
+    "b": "use std::fmt::Debug; trait T:Clone+Debug{fn twice(&self)->String{format!(\"{:?}{:?}\",self.clone(),self)}} impl T for u8{} fn main(){println!(\"{}\",4u8.twice());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "44\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "44\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "44\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "44\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "bi_assoc_bounds",
+    "family": "bounds_impl_lifetimes",
+    "a": "use std::fmt::Debug; trait T{type A:Debug+Default;fn a()->Self::A{Default::default()}} impl T for u8{type A=String;} fn main(){println!(\"{:?}\",<u8 as T>::a());}",
+    "b": "use std::fmt::Debug; trait T{type A:Default+Debug;fn a()->Self::A{Default::default()}} impl T for u8{type A=String;} fn main(){println!(\"{:?}\",<u8 as T>::a());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\"\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\"\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"\"\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "bi_assoc_constraint",
+    "family": "bounds_impl_lifetimes",
+    "a": "use std::fmt::Debug; fn f(x:impl Iterator<Item:Debug+Clone>)->String{x.map(|v|format!(\"{:?}\",v.clone())).collect()} fn main(){println!(\"{}\",f([1,2,3].into_iter()));}",
+    "b": "use std::fmt::Debug; fn f(x:impl Iterator<Item:Clone+Debug>)->String{x.map(|v|format!(\"{:?}\",v.clone())).collect()} fn main(){println!(\"{}\",f([1,2,3].into_iter()));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "123\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "123\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "123\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "123\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "il_inherent",
+    "family": "bounds_impl_lifetimes",
+    "a": "struct S<'a>(&'a u8); impl<'a> S<'a>{fn get(&self)->u8{*self.0}} fn main(){let v=9u8;println!(\"{}\",S(&v).get());}",
+    "b": "struct S<'a>(&'a u8); impl S<'_>{fn get(&self)->u8{*self.0}} fn main(){let v=9u8;println!(\"{}\",S(&v).get());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "il_trait_ref",
+    "family": "bounds_impl_lifetimes",
+    "a": "struct S(usize); impl<'a> From<&'a str> for S{fn from(s:&str)->S{S(s.len())}} fn main(){let s:S=\"abcd\".into();println!(\"{}\",s.0);}",
+    "b": "struct S(usize); impl From<&str> for S{fn from(s:&str)->S{S(s.len())}} fn main(){let s:S=\"abcd\".into();println!(\"{}\",s.0);}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "il_reference_self",
+    "family": "bounds_impl_lifetimes",
+    "a": "trait T{fn v(&self)->u8;} impl<'a> T for &'a u8{fn v(&self)->u8{**self+1}} fn main(){let x=4u8;println!(\"{}\",(&x).v());}",
+    "b": "trait T{fn v(&self)->u8;} impl T for &u8{fn v(&self)->u8{**self+1}} fn main(){let x=4u8;println!(\"{}\",(&x).v());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "il_with_type",
+    "family": "bounds_impl_lifetimes",
+    "a": "struct S<'a,U>(&'a U); impl<'a,U:Clone> S<'a,U>{fn get(&self)->U{self.0.clone()}} fn main(){let v=vec![1];println!(\"{:?}\",S(&v).get());}",
+    "b": "struct S<'a,U>(&'a U); impl<U:Clone> S<'_,U>{fn get(&self)->U{self.0.clone()}} fn main(){let v=vec![1];println!(\"{:?}\",S(&v).get());}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "il_item_names",
+    "family": "bounds_impl_lifetimes",
+    "a": "struct S<'a>(&'a u8); impl<'a> S<'a>{fn get(&self)->&'a u8{self.0}} fn main(){let v=9u8;let r;{let s=S(&v);r=s.get();}println!(\"{}\",r);}",
+    "b": "struct S<'a>(&'a u8); impl S<'_>{fn get(&self)->&u8{self.0}} fn main(){let v=9u8;let r;{let s=S(&v);r=s.get();}println!(\"{}\",r);}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "9\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": [
+            "E0597"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0597"
+          ],
+          "run": "absent"
+        }
+      }
+    }
+  },
+  {
+    "id": "il_fn_pointer",
+    "family": "bounds_impl_lifetimes",
+    "a": "trait T{fn n(&self)->u8{1}} impl<'a> T for fn(&'a u8){} fn h(_:&u8){} fn main(){let p:fn(&u8)=h;println!(\"{}\",p.n());}",
+    "b": "trait T{fn n(&self)->u8{1}} impl T for fn(&u8){} fn h(_:&u8){} fn main(){let p:fn(&u8)=h;println!(\"{}\",p.n());}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": [
+            "E0599"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0599"
+          ],
+          "run": "absent"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        }
+      }
+    }
+  }
+]

@@ -159,6 +159,8 @@ struct Drift<'a> {
     file_rebound: u64,
     /// The std name bindings of the scopes around the current node, innermost last.
     std_scopes: Vec<StdScope>,
+    /// The generic parameters in scope, outermost first, each a lifetime or not with its name.
+    generic_names: Vec<(bool, String)>,
     helpers: Option<&'a mut crate::helpers::HelperSyntax>,
 }
 
@@ -481,6 +483,13 @@ impl VisitMut for Drift<'_> {
             self.observed().visit_generics_mut(generics);
             return;
         }
+        for param in &generics.params {
+            self.generic_names.push(match param {
+                syn::GenericParam::Type(param) => (false, param.ident.to_string()),
+                syn::GenericParam::Const(param) => (false, param.ident.to_string()),
+                syn::GenericParam::Lifetime(param) => (true, param.lifetime.ident.to_string()),
+            });
+        }
         syn::visit_mut::visit_generics_mut(self, generics);
         bounds_to_where(generics);
         generics.params.pop_punct();
@@ -498,13 +507,14 @@ impl VisitMut for Drift<'_> {
             }
         }
         if self.compiles {
-            sort_bounds(generics);
+            sort_bounds(generics, &self.generic_names);
         }
     }
 
     fn visit_item_trait_mut(&mut self, node: &mut syn::ItemTrait) {
         syn::visit_mut::visit_item_trait_mut(self, node);
         drop_trailing_plus(&mut node.supertraits);
+        self.sort_bound_list(&mut node.supertraits);
     }
 
     fn visit_item_trait_alias_mut(&mut self, node: &mut syn::ItemTraitAlias) {
@@ -523,21 +533,25 @@ impl VisitMut for Drift<'_> {
     fn visit_trait_item_type_mut(&mut self, node: &mut syn::TraitItemType) {
         syn::visit_mut::visit_trait_item_type_mut(self, node);
         drop_trailing_plus(&mut node.bounds);
+        self.sort_bound_list(&mut node.bounds);
     }
 
     fn visit_type_impl_trait_mut(&mut self, node: &mut syn::TypeImplTrait) {
         syn::visit_mut::visit_type_impl_trait_mut(self, node);
         drop_trailing_plus(&mut node.bounds);
+        self.sort_bound_list(&mut node.bounds);
     }
 
     fn visit_type_trait_object_mut(&mut self, node: &mut syn::TypeTraitObject) {
         syn::visit_mut::visit_type_trait_object_mut(self, node);
         drop_trailing_plus(&mut node.bounds);
+        self.sort_bound_list(&mut node.bounds);
     }
 
     fn visit_constraint_mut(&mut self, node: &mut syn::Constraint) {
         syn::visit_mut::visit_constraint_mut(self, node);
         drop_trailing_plus(&mut node.bounds);
+        self.sort_bound_list(&mut node.bounds);
     }
 
     fn visit_type_reference_mut(&mut self, node: &mut syn::TypeReference) {
@@ -560,6 +574,9 @@ impl VisitMut for Drift<'_> {
     fn visit_item_impl_mut(&mut self, node: &mut syn::ItemImpl) {
         for attr in &mut node.attrs {
             self.visit_attribute_mut(attr);
+        }
+        if self.compiles {
+            elide_impl_lifetimes(node);
         }
         self.visit_generics_mut(&mut node.generics);
         let outer = core::mem::replace(&mut self.in_impl_header, true);
@@ -649,7 +666,9 @@ impl VisitMut for Drift<'_> {
         if let Some(attrs) = item_attrs(item) {
             strip_inert_attrs(attrs);
         }
+        let depth = self.generic_names.len();
         syn::visit_mut::visit_item_mut(self, item);
+        self.generic_names.truncate(depth);
     }
 
     fn visit_impl_item_mut(&mut self, item: &mut syn::ImplItem) {
@@ -665,7 +684,9 @@ impl VisitMut for Drift<'_> {
             return;
         }
         strip_inert_attrs(attrs);
+        let depth = self.generic_names.len();
         syn::visit_mut::visit_impl_item_mut(self, item);
+        self.generic_names.truncate(depth);
     }
 
     fn visit_trait_item_mut(&mut self, item: &mut syn::TraitItem) {
@@ -681,7 +702,9 @@ impl VisitMut for Drift<'_> {
             return;
         }
         strip_inert_attrs(attrs);
+        let depth = self.generic_names.len();
         syn::visit_mut::visit_trait_item_mut(self, item);
+        self.generic_names.truncate(depth);
     }
 
     fn visit_foreign_item_mut(&mut self, item: &mut syn::ForeignItem) {
@@ -696,7 +719,9 @@ impl VisitMut for Drift<'_> {
             self.observed().visit_foreign_item_mut(item);
             return;
         }
+        let depth = self.generic_names.len();
         syn::visit_mut::visit_foreign_item_mut(self, item);
+        self.generic_names.truncate(depth);
     }
 
     fn visit_field_mut(&mut self, field: &mut syn::Field) {
@@ -801,6 +826,16 @@ impl Drift<'_> {
                 supers: 0,
             }]),
             ..Drift::default()
+        }
+    }
+
+    /// Sort a bound list outside a `where` clause by the `where` clause key, when compiling.
+    fn sort_bound_list(
+        &self,
+        bounds: &mut syn::punctuated::Punctuated<syn::TypeParamBound, syn::Token![+]>,
+    ) {
+        if self.compiles {
+            sort_bound_slice(bounds, &self.generic_names);
         }
     }
 
@@ -1457,6 +1492,150 @@ fn elide(sig: &mut syn::Signature, name: &syn::Ident) {
     }
 }
 
+/// Write each lifetime parameter of an impl that the header names once, as a path argument or
+/// a reference lifetime outside function pointers, trait objects and `impl Trait`,
+/// and that no bound, `where` predicate or item names, as `'_` in that position and drop the
+/// parameter. Each `'_` of an impl header is a fresh parameter of its own.
+fn elide_impl_lifetimes(node: &mut syn::ItemImpl) {
+    use syn::visit::Visit;
+
+    let candidates: Vec<syn::Ident> = node
+        .generics
+        .params
+        .iter()
+        .filter_map(|param| match param {
+            syn::GenericParam::Lifetime(param)
+                if param.attrs.is_empty() && param.bounds.is_empty() =>
+            {
+                Some(param.lifetime.ident.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    for name in candidates {
+        let mut bounds = LifetimeUses {
+            name: &name,
+            count: 0,
+            opaque: false,
+        };
+        for param in &node.generics.params {
+            if !matches!(param, syn::GenericParam::Lifetime(param) if param.lifetime.ident == name)
+            {
+                bounds.visit_generic_param(param);
+            }
+        }
+        if let Some(clause) = &node.generics.where_clause {
+            bounds.visit_where_clause(clause);
+        }
+        let mut mentions = BodyMentions {
+            name: &name,
+            found: false,
+        };
+        for item in &node.items {
+            mentions.visit_impl_item(item);
+        }
+        let mut header = HeaderUses {
+            name: &name,
+            uses: 0,
+            other: false,
+            depth: 0,
+        };
+        if let Some((path, _)) = &node.trait_ {
+            header.visit_path(path);
+        }
+        header.visit_type(&node.self_ty);
+        if bounds.opaque || bounds.count != 0 || mentions.found || header.other || header.uses != 1
+        {
+            continue;
+        }
+        let mut anonymize = Anonymize(&name);
+        if let Some((path, _)) = &mut node.trait_ {
+            anonymize.visit_path_mut(path);
+        }
+        anonymize.visit_type_mut(&mut node.self_ty);
+        node.generics.params = core::mem::take(&mut node.generics.params)
+            .into_iter()
+            .filter(|param| {
+                !matches!(param, syn::GenericParam::Lifetime(param) if param.lifetime.ident == name)
+            })
+            .collect();
+        if node.generics.params.is_empty() {
+            node.generics.lt_token = None;
+            node.generics.gt_token = None;
+        }
+    }
+}
+
+/// Spells the lifetime `'name` as `'_`.
+struct Anonymize<'a>(&'a syn::Ident);
+
+impl VisitMut for Anonymize<'_> {
+    fn visit_lifetime_mut(&mut self, lifetime: &mut syn::Lifetime) {
+        if lifetime.ident == *self.0 {
+            lifetime.ident = syn::Ident::new("_", lifetime.ident.span());
+        }
+    }
+}
+
+/// The uses of one lifetime in an impl header: `uses` counts path arguments and reference
+/// lifetimes outside the constructs that give `'_` another meaning, and `other` records any
+/// other use or a macro the header holds.
+struct HeaderUses<'a> {
+    name: &'a syn::Ident,
+    uses: usize,
+    other: bool,
+    /// Enclosing function pointers, trait objects and `impl Trait`.
+    depth: usize,
+}
+
+impl HeaderUses<'_> {
+    fn count(&mut self, lifetime: &syn::Lifetime) {
+        if lifetime.ident == *self.name {
+            if self.depth == 0 {
+                self.uses += 1;
+            } else {
+                self.other = true;
+            }
+        }
+    }
+}
+
+impl<'ast> syn::visit::Visit<'ast> for HeaderUses<'_> {
+    fn visit_type_reference(&mut self, reference: &'ast syn::TypeReference) {
+        if let Some(lifetime) = &reference.lifetime {
+            self.count(lifetime);
+        }
+        self.visit_type(&reference.elem);
+    }
+
+    fn visit_generic_argument(&mut self, argument: &'ast syn::GenericArgument) {
+        match argument {
+            syn::GenericArgument::Lifetime(lifetime) => self.count(lifetime),
+            _ => syn::visit::visit_generic_argument(self, argument),
+        }
+    }
+
+    fn visit_lifetime(&mut self, lifetime: &'ast syn::Lifetime) {
+        self.other |= lifetime.ident == *self.name;
+    }
+
+    fn visit_type(&mut self, ty: &'ast syn::Type) {
+        match ty {
+            syn::Type::FnPtr(_) | syn::Type::TraitObject(_) | syn::Type::ImplTrait(_) => {
+                self.depth += 1;
+                syn::visit::visit_type(self, ty);
+                self.depth -= 1;
+            }
+            syn::Type::Macro(_) | syn::Type::Verbatim(_) => self.other = true,
+            _ => syn::visit::visit_type(self, ty),
+        }
+    }
+
+    fn visit_macro(&mut self, _: &'ast syn::Macro) {
+        self.other = true;
+    }
+}
+
 /// The lifetime positions of a signature part and the uses of one lifetime among them. A use
 /// counts as a reference only as the lifetime of a reference outside function pointers, trait
 /// objects, `impl Trait`, `Fn` sugar and higher-ranked binders, where elision means another
@@ -1803,20 +1982,11 @@ fn bounds_to_where(generics: &mut syn::Generics) {
 }
 
 /// Merge the `where` predicates of one bounded type into one and sort its bounds by text, the
-/// parameters of `generics` read by position so that renamed parameters sort alike. A predicate
-/// with a `for<…>` binder or an attribute stays apart, and bounds of the `Fn` family, with an
-/// associated item binding or opaque to the parser keep their order.
-fn sort_bounds(generics: &mut syn::Generics) {
+/// generic parameters in scope, `names`, read by position so that renamed parameters sort alike.
+/// A predicate with a `for<…>` binder or an attribute stays apart.
+fn sort_bounds(generics: &mut syn::Generics, names: &[(bool, String)]) {
     use quote::ToTokens as _;
 
-    let mut names: Vec<(bool, String)> = Vec::with_capacity(generics.params.len());
-    for param in &generics.params {
-        names.push(match param {
-            syn::GenericParam::Type(param) => (false, param.ident.to_string()),
-            syn::GenericParam::Const(param) => (false, param.ident.to_string()),
-            syn::GenericParam::Lifetime(param) => (true, param.lifetime.ident.to_string()),
-        });
-    }
     let Some(clause) = &mut generics.where_clause else {
         return;
     };
@@ -1849,17 +2019,28 @@ fn sort_bounds(generics: &mut syn::Generics) {
     for (key, predicate) in &mut merged {
         if key.is_some()
             && let syn::WherePredicate::Type(predicate) = predicate
-            && predicate.bounds.iter().all(sortable_bound)
         {
-            let mut bounds: Vec<syn::TypeParamBound> =
-                core::mem::take(&mut predicate.bounds).into_iter().collect();
-            bounds.sort_by_cached_key(|bound| bound_key(bound, &names));
-            predicate.bounds = bounds.into_iter().collect();
+            sort_bound_slice(&mut predicate.bounds, names);
         }
     }
     clause
         .predicates
         .extend(merged.into_iter().map(|(_, predicate)| predicate));
+}
+
+/// Sort a bound list by text, the generic parameters in scope, `names`, read by position. Bounds
+/// of the `Fn` family, with an associated item binding or opaque to the parser keep the whole
+/// list in its order.
+fn sort_bound_slice(
+    bounds: &mut syn::punctuated::Punctuated<syn::TypeParamBound, syn::Token![+]>,
+    names: &[(bool, String)],
+) {
+    if bounds.len() < 2 || !bounds.iter().all(sortable_bound) {
+        return;
+    }
+    let mut sorted: Vec<syn::TypeParamBound> = core::mem::take(bounds).into_iter().collect();
+    sorted.sort_by_cached_key(|bound| bound_key(bound, names));
+    *bounds = sorted.into_iter().collect();
 }
 
 /// Whether a bound's place in its list is free: a lifetime, or a trait bound outside the `Fn`
@@ -1903,7 +2084,7 @@ fn bound_key(bound: &syn::TypeParamBound, names: &[(bool, String)]) -> String {
                     let text = ident.to_string();
                     match names
                         .iter()
-                        .position(|(is_lifetime, name)| *is_lifetime == lifetime && *name == text)
+                        .rposition(|(is_lifetime, name)| *is_lifetime == lifetime && *name == text)
                     {
                         Some(position) => {
                             out.push('#');

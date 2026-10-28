@@ -487,3 +487,16 @@ jobs:
         with:
           name: strings-format-witnesses
           path: ${{ runner.temp }}/strings-format-witnesses.json
+      - name: Verify bound order and impl lifetime witnesses
+        id: bounds_impl_lifetimes_witnesses
+        run: >-
+          python3 -B tests/dependency_constants_witnesses.py
+          --cases tests/fixtures/dependency/bounds_impl_lifetimes_cases.json
+          --request-id "DG-CI-BOUNDS-IMPL-${{ github.run_id }}-${{ github.run_attempt }}"
+          --output "${{ runner.temp }}/bounds-impl-lifetimes-witnesses.json"
+          --timeout 600
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && steps.bounds_impl_lifetimes_witnesses.outcome != 'skipped'
+        with:
+          name: bounds-impl-lifetimes-witnesses
+          path: ${{ runner.temp }}/bounds-impl-lifetimes-witnesses.json
