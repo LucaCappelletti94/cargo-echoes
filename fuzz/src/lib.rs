@@ -107,7 +107,8 @@ pub fn check_dependency_schedules(data: &[u8]) {
     let byte = |index| u32::from(data.get(index).copied().unwrap_or(0));
     let mask = byte(0);
     let shift = byte(1) % 32;
-    let bias = byte(2);
+    // An odd `bias` keeps `first` from folding to zero and `^ bias` and `| bias` from being identities.
+    let bias = byte(2) | 1;
     let (first, second) = if mask & 1 == 0 {
         ("first", "second")
     } else {
