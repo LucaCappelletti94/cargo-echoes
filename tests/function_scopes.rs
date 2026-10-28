@@ -1257,3 +1257,27 @@ fn the_failure_mode_retains_inclusive_comparisons() {
         failing_form("fn f(x: u32) -> bool { x != 0 }")
     );
 }
+
+#[test]
+fn integer_choices_read_as_casts_and_maxima_in_the_borrowed_view() {
+    assert_eq!(
+        view("fn f(x: u32, y: u32) -> u32 { if x >= y { x } else { y } }"),
+        view("fn f(x: u32, y: u32) -> u32 { std::cmp::max(y, x) }")
+    );
+    assert_eq!(
+        view("fn f(p: bool) -> u8 { if p { 1u8 } else { 0u8 } }"),
+        view("fn f(p: bool) -> u8 { u8::from(p) }")
+    );
+    assert_ne!(
+        view("fn f(x: f32, y: f32) -> f32 { if x > y { x } else { y } }"),
+        view("fn f(x: f32, y: f32) -> f32 { x.max(y) }")
+    );
+}
+
+#[test]
+fn the_failure_mode_retains_integer_choices() {
+    assert_ne!(
+        failing_form("fn f(x: u32, y: u32) -> u32 { x.max(y) }"),
+        failing_form("fn f(x: u32, y: u32) -> u32 { y.max(x) }")
+    );
+}

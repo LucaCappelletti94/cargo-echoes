@@ -1579,22 +1579,55 @@ impl<'env> Renamer<'env> {
         if path.segments.len() != 2 {
             return None;
         }
-        let root = if let Some(binding) = self.lookup_with_opaque(&[Ns::Type], &head, false) {
-            let Some(MacroResolution::Crate(root)) = self.standard_binding(binding) else {
-                return None;
-            };
-            root
-        } else {
-            if !self.standard_unbound(&head) {
-                return None;
-            }
-            StandardRoot::named(&head)?
-        };
+        let root = self.standard_root(&head)?;
         let name = crate::scope::ident_name(&path.segments.last()?.ident);
         if import && name == "self" {
             return Some(MacroResolution::Crate(root));
         }
         root.grammar(&name).map(MacroResolution::Macro)
+    }
+
+    /// The standard crate root `head` names, through a binding or the extern prelude.
+    fn standard_root(&self, head: &str) -> Option<crate::macros::StandardRoot> {
+        if let Some(binding) = self.lookup_with_opaque(&[Ns::Type], head, false) {
+            let Some(crate::macros::MacroResolution::Crate(root)) = self.standard_binding(binding)
+            else {
+                return None;
+            };
+            return Some(root);
+        }
+        if !self.standard_unbound(head) {
+            return None;
+        }
+        crate::macros::StandardRoot::named(head)
+    }
+
+    /// The `Flat` tag of `std::cmp::max` or `std::cmp::min`, `core` included, when `path` names
+    /// one through a standard crate root and the prelude `Ord` answers the method form.
+    pub(crate) fn standard_cmp(&self, path: &syn::Path) -> Option<char> {
+        let [root, module, name] = path.segments.iter().collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        if path.leading_colon.is_some()
+            || path
+                .segments
+                .iter()
+                .any(|segment| !matches!(segment.arguments, syn::PathArguments::None))
+            || module.ident != "cmp"
+            || !self.prelude_trait("Ord")
+        {
+            return None;
+        }
+        let tag = match crate::scope::ident_name(&name.ident).as_str() {
+            "max" => '⊤',
+            "min" => '⊥',
+            _ => return None,
+        };
+        matches!(
+            self.standard_root(&crate::scope::ident_name(&root.ident))?,
+            crate::macros::StandardRoot::Std | crate::macros::StandardRoot::Core
+        )
+        .then_some(tag)
     }
 
     fn standard_binding(&self, binding: Resolved<'_>) -> Option<crate::macros::MacroResolution> {

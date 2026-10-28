@@ -47,7 +47,7 @@ pub fn chained(ready: bool, armed: bool, hits: u32) -> u32 {
         return hits;
     }
     if armed {
-        return 1u32;
+        return 2u32;
     }
     0u32
 }
@@ -56,7 +56,7 @@ pub fn ladder(ready: bool, armed: bool, hits: u32) -> u32 {
     if ready {
         hits
     } else if armed {
-        1u32
+        2u32
     } else {
         0u32
     }

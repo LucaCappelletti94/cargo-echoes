@@ -1,0 +1,233 @@
+[
+  {
+    "id": "bi_cast",
+    "family": "bool_int_min_max",
+    "a": "fn f(p:bool)->u32{if p {1u32} else {0u32}} fn main(){for p in [false,true]{println!(\"{} {}\",p,f(p));}}",
+    "b": "fn f(p:bool)->u32{p as u32} fn main(){for p in [false,true]{println!(\"{} {}\",p,f(p));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 0\ntrue 1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 0\ntrue 1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 0\ntrue 1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 0\ntrue 1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "bi_not",
+    "family": "bool_int_min_max",
+    "a": "fn f(p:bool)->u8{let v: u8 = if p {0} else {1}; v} fn main(){for p in [false,true]{println!(\"{} {}\",p,f(p));}}",
+    "b": "fn f(p:bool)->u8{let v: u8 = !p as u8; v} fn main(){for p in [false,true]{println!(\"{} {}\",p,f(p));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 1\ntrue 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 1\ntrue 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 1\ntrue 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 1\ntrue 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "bi_two",
+    "family": "bool_int_min_max",
+    "a": "fn f(p:bool)->u32{if p {2u32} else {0u32}} fn main(){for p in [false,true]{println!(\"{} {}\",p,f(p));}}",
+    "b": "fn f(p:bool)->u32{p as u32} fn main(){for p in [false,true]{println!(\"{} {}\",p,f(p));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 0\ntrue 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 0\ntrue 2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 0\ntrue 1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false 0\ntrue 1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "mm_max_u8",
+    "family": "bool_int_min_max",
+    "a": "fn f(x:u8,y:u8)->u8{if x > y {x} else {y}} fn main(){for (x,y) in [(0u8,255u8),(255u8,0u8),(7u8,7u8),(3u8,4u8)]{println!(\"{} {} {}\",x,y,f(x,y));}}",
+    "b": "fn f(x:u8,y:u8)->u8{x.max(y)} fn main(){for (x,y) in [(0u8,255u8),(255u8,0u8),(7u8,7u8),(3u8,4u8)]{println!(\"{} {} {}\",x,y,f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 255 255\n255 0 255\n7 7 7\n3 4 4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 255 255\n255 0 255\n7 7 7\n3 4 4\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 255 255\n255 0 255\n7 7 7\n3 4 4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 255 255\n255 0 255\n7 7 7\n3 4 4\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "mm_max_ge",
+    "family": "bool_int_min_max",
+    "a": "fn f(x:u64,y:u64)->u64{if x >= y {x} else {y}} fn main(){for (x,y) in [(0u64,18446744073709551615u64),(5u64,5u64),(9u64,2u64)]{println!(\"{} {} {}\",x,y,f(x,y));}}",
+    "b": "fn f(x:u64,y:u64)->u64{y.max(x)} fn main(){for (x,y) in [(0u64,18446744073709551615u64),(5u64,5u64),(9u64,2u64)]{println!(\"{} {} {}\",x,y,f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 18446744073709551615 18446744073709551615\n5 5 5\n9 2 9\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 18446744073709551615 18446744073709551615\n5 5 5\n9 2 9\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 18446744073709551615 18446744073709551615\n5 5 5\n9 2 9\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 18446744073709551615 18446744073709551615\n5 5 5\n9 2 9\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "mm_min_i32",
+    "family": "bool_int_min_max",
+    "a": "fn f(x:i32,y:i32)->i32{if x <= y {x} else {y}} fn main(){for (x,y) in [(-2147483648i32,2147483647i32),(2147483647i32,-2147483648i32),(-1i32,-1i32),(3i32,-4i32)]{println!(\"{} {} {}\",x,y,f(x,y));}}",
+    "b": "fn f(x:i32,y:i32)->i32{std::cmp::min(y,x)} fn main(){for (x,y) in [(-2147483648i32,2147483647i32),(2147483647i32,-2147483648i32),(-1i32,-1i32),(3i32,-4i32)]{println!(\"{} {} {}\",x,y,f(x,y));}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 2147483647 -2147483648\n2147483647 -2147483648 -2147483648\n-1 -1 -1\n3 -4 -4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 2147483647 -2147483648\n2147483647 -2147483648 -2147483648\n-1 -1 -1\n3 -4 -4\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 2147483647 -2147483648\n2147483647 -2147483648 -2147483648\n-1 -1 -1\n3 -4 -4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "-2147483648 2147483647 -2147483648\n2147483647 -2147483648 -2147483648\n-1 -1 -1\n3 -4 -4\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "mm_float",
+    "family": "bool_int_min_max",
+    "a": "fn f(x:f64,y:f64)->f64{if x > y {x} else {y}} fn main(){for (x,y) in [(1.0,f64::NAN),(2.0,1.0)]{println!(\"{} {} {}\",x,y,f(x,y));}}",
+    "b": "fn f(x:f64,y:f64)->f64{x.max(y)} fn main(){for (x,y) in [(1.0,f64::NAN),(2.0,1.0)]{println!(\"{} {} {}\",x,y,f(x,y));}}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 NaN NaN\n2 1 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 NaN NaN\n2 1 2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 NaN 1\n2 1 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1 NaN 1\n2 1 2\n"
+        }
+      }
+    }
+  }
+]

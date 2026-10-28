@@ -453,6 +453,34 @@ impl Walker<'_, '_> {
     /// A call, read as a cast when it is the standard `T::from` of a proven primitive into a
     /// proven primitive `T` it converts to without loss, and as its operand when the types agree.
     fn call(&self, mut call: syn::ExprCall, total_calls: bool) -> (syn::Expr, Option<Lbl>) {
+        if let syn::Expr::Path(path) = call.func.as_ref()
+            && path.attrs.is_empty()
+            && path.qself.is_none()
+            && call.args.len() == 2
+            && let Some(tag) = self.renamer.standard_cmp(&path.path)
+        {
+            let left = self.scalar_in_place(&mut call.args[0], true);
+            let right = self.scalar_in_place(&mut call.args[1], true);
+            let (Some(left), Some(right)) = (left, right) else {
+                return (syn::Expr::Call(call), None);
+            };
+            let Some(prim) = schedule::commutative_prim(tag, &left, &right) else {
+                return (syn::Expr::Call(call), None);
+            };
+            let mut args: Vec<syn::Expr> = call.args.into_iter().collect();
+            let second = args.pop().expect("two arguments");
+            let first = args.pop().expect("two arguments");
+            let (receiver, argument) = if right < left && right.prim().is_some() {
+                (second, first)
+            } else {
+                (first, second)
+            };
+            let name = if tag == '⊤' { "max" } else { "min" };
+            return (
+                method_call(receiver, name, argument),
+                Some(schedule::commutative_label(tag, prim, left, right)),
+            );
+        }
         let Some((name, target)) = schedule::from_conversion(self.renamer, &call) else {
             return if total_calls {
                 self.total_call(syn::Expr::Call(call))
@@ -670,6 +698,20 @@ impl Walker<'_, '_> {
         let (Some(then), Some(otherwise)) = (then, otherwise) else {
             return (syn::Expr::If(branch), None);
         };
+        if let Some(value) = schedule::integer_choice(self.renamer, &cond_label, &then, &otherwise)
+        {
+            let then_expr = core::mem::replace(
+                tail_expr_mut(&mut branch.then_branch).expect("proven scalar tail"),
+                empty_expr(),
+            );
+            let else_expr = core::mem::replace(
+                tail_expr_mut(&mut else_block.block).expect("proven scalar tail"),
+                empty_expr(),
+            );
+            let cond = (*branch.cond, cond_label);
+            let expr = choice_expr(&value, cond, (then_expr, &then), (else_expr, &otherwise));
+            return (expr, Some(value));
+        }
         let Some(value) = schedule::branch_value(&cond_label, &then, &otherwise) else {
             return (syn::Expr::If(branch), None);
         };
@@ -714,7 +756,7 @@ impl Walker<'_, '_> {
     /// Whether `method` is a commutative inherent method on a proven fixed-width integer
     /// receiver, which inherent resolution binds to the native by-value method.
     fn native_commutative(&self, method: &syn::ExprMethodCall) -> bool {
-        if schedule::commutative_method(method).is_none() {
+        if schedule::commutative_method(self.renamer, method).is_none() {
             return false;
         }
         let mut locals = 0;
@@ -733,7 +775,8 @@ impl Walker<'_, '_> {
     /// literal whose type the receiver infers staying the argument, or the other operand when
     /// one operand is the method's identity.
     fn commutative(&self, mut method: syn::ExprMethodCall) -> (syn::Expr, Option<Lbl>) {
-        let tag = schedule::commutative_method(&method).expect("a native commutative method");
+        let tag = schedule::commutative_method(self.renamer, &method)
+            .expect("a native commutative method");
         let receiver = self.scalar_in_place(&mut method.receiver, true);
         let argument = self.scalar_in_place(&mut method.args[0], true);
         let (Some(receiver), Some(argument)) = (receiver, argument) else {
@@ -828,7 +871,9 @@ impl VisitMut for Walker<'_, '_> {
                 *expr = self.scalar(owned, false).0;
             }
             syn::Expr::Call(call)
-                if self.dedup && schedule::from_conversion(self.renamer, call).is_some() =>
+                if self.dedup
+                    && (schedule::from_conversion(self.renamer, call).is_some()
+                        || matches!(call.func.as_ref(), syn::Expr::Path(path) if self.renamer.standard_cmp(&path.path).is_some())) =>
             {
                 let owned = core::mem::replace(expr, empty_expr());
                 *expr = self.scalar(owned, false).0;
@@ -940,6 +985,56 @@ fn logical(
             )
         });
     (expr, label)
+}
+/// The spelling of an integer choice `value`: the `Ord` method over the two branch values in
+/// label order, or the cast of the condition, negated when `then` holds the `0`.
+fn choice_expr(
+    value: &Lbl,
+    cond: (syn::Expr, Lbl),
+    then: (syn::Expr, &Lbl),
+    otherwise: (syn::Expr, &Lbl),
+) -> syn::Expr {
+    if let Lbl::Flat(tag, ..) = value {
+        let (receiver, argument) = if otherwise.1 < then.1 && otherwise.1.prim().is_some() {
+            (otherwise.0, then.0)
+        } else {
+            (then.0, otherwise.0)
+        };
+        return method_call(receiver, if *tag == '⊤' { "max" } else { "min" }, argument);
+    }
+    let (operand, _) = if then.1.literal_bits() == Some(1) {
+        cond
+    } else {
+        negate(cond.0, cond.1)
+    };
+    let name = then
+        .1
+        .prim()
+        .and_then(schedule::int_type_ident)
+        .expect("an integer choice of a fixed-width type");
+    syn::Expr::Cast(syn::ExprCast {
+        attrs: Vec::new(),
+        expr: Box::new(operand),
+        as_token: syn::token::As::default(),
+        ty: Box::new(syn::Type::Path(syn::TypePath {
+            attrs: Vec::new(),
+            qself: None,
+            path: syn::Path::from(name),
+        })),
+    })
+}
+
+/// The method call `receiver.name(argument)`.
+fn method_call(receiver: syn::Expr, name: &str, argument: syn::Expr) -> syn::Expr {
+    syn::Expr::MethodCall(syn::ExprMethodCall {
+        attrs: Vec::new(),
+        receiver: Box::new(receiver),
+        dot_token: syn::token::Dot::default(),
+        method: syn::Ident::new(name, proc_macro2::Span::call_site()),
+        turbofish: None,
+        paren_token: syn::token::Paren::default(),
+        args: core::iter::once(argument).collect(),
+    })
 }
 
 /// The tokens of `lo tag hi` over the operands of `binary`, labeled `operands`. An integer

@@ -1594,6 +1594,18 @@ fn label_call(
         sites.extend(a_sites);
     }
     if let syn::Expr::Path(path) = call.func.as_ref()
+        && path.attrs.is_empty()
+        && path.qself.is_none()
+        && let Some(tag) = renamer.standard_cmp(&path.path)
+        && let [left, right] = args.as_slice()
+        && let Some(prim) = commutative_prim(tag, left, right)
+    {
+        let label = commutative_label(tag, prim, left.clone(), right.clone());
+        sites.clear();
+        value_sites(&label, &mut sites);
+        return (label, sites);
+    }
+    if let syn::Expr::Path(path) = call.func.as_ref()
         && path.qself.is_none()
         && let Some(helper) = renamer.helper_id(env, &path.path)
         && let Some(result) = total_helper(renamer, helper, &args, call)
@@ -1664,7 +1676,7 @@ fn label_method(
         children.push(label);
         sites.extend(a_sites);
     }
-    if let Some(tag) = commutative_method(method)
+    if let Some(tag) = commutative_method(renamer, method)
         && let [receiver, argument] = children.as_slice()
         && let Some(prim) = commutative_prim(tag, receiver, argument)
     {
@@ -1683,19 +1695,25 @@ fn label_method(
     (Lbl::Other("m".into(), children), sites)
 }
 
-/// The commutative inherent integer methods, each with the `Flat` tag of its unordered
-/// operand pair.
-const COMMUTATIVE_METHODS: [(&str, char); 5] = [
+/// The commutative integer methods, each with the `Flat` tag of its unordered operand pair.
+/// `max` and `min` are the `Ord` methods, the others inherent.
+const COMMUTATIVE_METHODS: [(&str, char); 7] = [
     ("wrapping_add", '⊞'),
     ("wrapping_mul", '⊠'),
     ("saturating_add", '⊕'),
     ("saturating_mul", '⊗'),
     ("abs_diff", '⊖'),
+    ("max", '⊤'),
+    ("min", '⊥'),
 ];
 
+/// The `Flat` tags of the `Ord` methods `max` and `min`.
+pub(crate) const ORD_TAGS: [char; 2] = ['⊤', '⊥'];
+
 /// The `Flat` tag of an unattributed one-argument call without turbofish to a commutative
-/// inherent integer method name.
-pub(crate) fn commutative_method(method: &syn::ExprMethodCall) -> Option<char> {
+/// integer method name. `Ord::max` and `Ord::min` take `self` by value, so a user trait method
+/// of the same name makes the call ambiguous, and they need the prelude `Ord` unclaimed.
+pub(crate) fn commutative_method(renamer: &Renamer, method: &syn::ExprMethodCall) -> Option<char> {
     if !method.attrs.is_empty() || method.turbofish.is_some() || method.args.len() != 1 {
         return None;
     }
@@ -1703,6 +1721,7 @@ pub(crate) fn commutative_method(method: &syn::ExprMethodCall) -> Option<char> {
         .iter()
         .find(|(name, _)| method.method == name)
         .map(|&(_, tag)| tag)
+        .filter(|tag| !ORD_TAGS.contains(tag) || renamer.prelude_trait("Ord"))
 }
 
 /// The result type of the native method `tag` names: a proven fixed-width integer receiver,
@@ -1827,6 +1846,65 @@ pub(crate) fn scalar_tail(block: &syn::Block) -> Option<&syn::Expr> {
         return None;
     }
     Some(tail)
+}
+
+/// The value of an `if` over proven branches, reading an integer choice first.
+pub(crate) fn resolved_branch_value(
+    renamer: &Renamer,
+    cond: &Lbl,
+    then: &Lbl,
+    otherwise: &Lbl,
+) -> Option<Lbl> {
+    integer_choice(renamer, cond, then, otherwise).or_else(|| branch_value(cond, then, otherwise))
+}
+
+/// An `if` over a proven `bool` condition choosing between integers of one type: `1` or `0`
+/// reads as the cast of the condition or of its negation, and the larger or smaller operand of
+/// the compared pair reads as the `Ord` method `max` or `min` of both. Both branches are total
+/// values, so the condition reading an operand once more observes nothing.
+pub(crate) fn integer_choice(
+    renamer: &Renamer,
+    cond: &Lbl,
+    then: &Lbl,
+    otherwise: &Lbl,
+) -> Option<Lbl> {
+    let prim = then.prim().filter(|prim| otherwise.prim() == Some(*prim))?;
+    let name = int_type_ident(prim)?;
+    if cond.prim() != Some(PrimTy::Bool) || matches!(cond, Lbl::Bool(_)) {
+        return None;
+    }
+    let cast = |value: Lbl| {
+        (renamer.type_name_prim(&name) == Some(prim)).then(|| cast_label(renamer, value, &name))
+    };
+    match (then.literal_bits(), otherwise.literal_bits()) {
+        (Some(1), Some(0)) => return cast(cond.clone()),
+        (Some(0), Some(1)) => return cast(not_label(cond.clone())),
+        _ => {}
+    }
+    let Lbl::Op('<' | '≤', lo, hi, _) = cond else {
+        return None;
+    };
+    let tag = if then == hi.as_ref() && otherwise == lo.as_ref() {
+        '⊤'
+    } else if then == lo.as_ref() && otherwise == hi.as_ref() {
+        '⊥'
+    } else {
+        return None;
+    };
+    renamer
+        .prelude_trait("Ord")
+        .then(|| commutative_label(tag, prim, then.clone(), otherwise.clone()))
+}
+
+/// The primitive type name of a fixed-width integer type.
+pub(crate) fn int_type_ident(prim: PrimTy) -> Option<syn::Ident> {
+    let PrimTy::Int { width, signed } = prim else {
+        return None;
+    };
+    Some(syn::Ident::new(
+        &alloc::format!("{}{}", if signed { 'i' } else { 'u' }, width.bits()),
+        proc_macro2::Span::call_site(),
+    ))
 }
 
 /// Select independently typed literal-condition tails, opposite boolean literals,
@@ -2035,7 +2113,7 @@ fn boolean_branch_fold(
     let saved = *locals;
     let (then_label, _) = label_expr(renamer, env, then_tail, consumer, locals, orders);
     let (otherwise_label, _) = label_expr(renamer, env, otherwise_tail, consumer, locals, orders);
-    let Some(value) = branch_value(cond, &then_label, &otherwise_label) else {
+    let Some(value) = resolved_branch_value(renamer, cond, &then_label, &otherwise_label) else {
         *locals = saved;
         return None;
     };
@@ -2321,7 +2399,7 @@ pub(crate) fn boolean_match_value(
     let (then, _) = label_expr(renamer, env, then, consumer, locals, orders);
     let (otherwise, _) = label_expr(renamer, env, otherwise, consumer, locals, orders);
     let value = if cond.prim() == Some(PrimTy::Bool) {
-        branch_value(&cond, &then, &otherwise)
+        resolved_branch_value(renamer, &cond, &then, &otherwise)
     } else {
         None
     };

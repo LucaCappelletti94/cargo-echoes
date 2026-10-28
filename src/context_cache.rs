@@ -213,6 +213,10 @@ pub mod alpha {
     pub fn bounded(value: u32) -> bool {
         value >= 1 && value <= 9
     }
+    pub fn chosen(value: u32, other: u32, flag: bool) -> u32 {
+        let bit: u32 = if flag { 1 } else { 0 };
+        bit + std::cmp::max(value, other)
+    }
 }
 mod custom {
     macro_rules! vec {
