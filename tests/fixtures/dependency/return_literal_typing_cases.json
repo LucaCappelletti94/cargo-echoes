@@ -1,0 +1,303 @@
+[
+  {
+    "id": "rt_tail_arithmetic",
+    "family": "return_literal_typing",
+    "a": "fn main(){println!(\"{:?}\",f());} fn f()->u32{2+3}",
+    "b": "fn main(){println!(\"{:?}\",f());} fn f()->u32{5u32}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rt_branch_cast",
+    "family": "return_literal_typing",
+    "a": "fn main(){println!(\"{:?}\",(f(true),f(false)));} fn f(p:bool)->u32{if p{1}else{0}}",
+    "b": "fn main(){println!(\"{:?}\",(f(true),f(false)));} fn f(p:bool)->u32{p as u32}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(1, 0)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(1, 0)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(1, 0)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(1, 0)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rt_return",
+    "family": "return_literal_typing",
+    "a": "fn main(){println!(\"{:?}\",(f(true),f(false)));} fn f(p:bool)->u8{if p{return 7;} 9}",
+    "b": "fn main(){println!(\"{:?}\",(f(true),f(false)));} fn f(p:bool)->u8{if p{return 7u8;} 9u8}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(7, 9)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(7, 9)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(7, 9)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(7, 9)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rt_wide_literal",
+    "family": "return_literal_typing",
+    "a": "fn main(){println!(\"{:?}\",f());} fn f()->u64{4000000000}",
+    "b": "fn main(){println!(\"{:?}\",f());} fn f()->u64{4000000000u64}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4000000000\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4000000000\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4000000000\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4000000000\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rt_negative",
+    "family": "return_literal_typing",
+    "a": "fn main(){println!(\"{:?}\",(f(true),f(false)));} fn f(p:bool)->i16{if p{return -1;} -32768}",
+    "b": "fn main(){println!(\"{:?}\",(f(true),f(false)));} fn f(p:bool)->i16{if p{return -1i16;} -32768i16}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(-1, -32768)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(-1, -32768)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(-1, -32768)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(-1, -32768)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rt_block_tail",
+    "family": "return_literal_typing",
+    "a": "fn main(){println!(\"{:?}\",f());} fn f()->i64{{3}}",
+    "b": "fn main(){println!(\"{:?}\",f());} fn f()->i64{{3i64}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rt_method",
+    "family": "return_literal_typing",
+    "a": "fn main(){println!(\"{:?}\",S.f());} struct S; impl S{fn f(&self)->u64{0}}",
+    "b": "fn main(){println!(\"{:?}\",S.f());} struct S; impl S{fn f(&self)->u64{0u64}}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rt_impl_trait",
+    "family": "return_literal_typing",
+    "a": "fn main(){println!(\"{:?}\",f());} fn f()->impl std::fmt::Debug{3000000000}",
+    "b": "fn main(){println!(\"{:?}\",f());} fn f()->impl std::fmt::Debug{3000000000u32}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": [
+            "literal out of range for `i32`"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "literal out of range for `i32`"
+          ],
+          "run": "absent"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3000000000\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3000000000\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rt_shadowed_alias",
+    "family": "return_literal_typing",
+    "a": "fn main(){println!(\"{:?}\",f());} type u32=u8; fn f()->u32{255}",
+    "b": "fn main(){println!(\"{:?}\",f());} type u32=u8; fn f()->u32{255u32}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "255\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": [
+            "E0308"
+          ],
+          "run": "absent"
+        },
+        "on": {
+          "compile": [
+            "E0308"
+          ],
+          "run": "absent"
+        }
+      }
+    }
+  }
+]

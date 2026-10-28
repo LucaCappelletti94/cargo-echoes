@@ -692,7 +692,7 @@ fn function_groups(report: &Report) -> Vec<Vec<&str>> {
 fn xor_doctests_group_only_the_proven_primitive_cancellations() {
     let report = Echoes::default().run(XOR_FIXTURE).unwrap();
     assert_eq!(report.total, 16);
-    assert_eq!(report.unique, 11);
+    assert_eq!(report.unique, 10);
     let mut groups: Vec<Vec<&str>> = report
         .groups
         .iter()
@@ -715,7 +715,7 @@ fn xor_doctests_group_only_the_proven_primitive_cancellations() {
                 "xorws::OddWritten",
                 "xorws::Plain"
             ],
-            vec!["xorws::Written", "xorws::Zero"],
+            vec!["xorws::PartialZero", "xorws::Written", "xorws::Zero"],
         ]
     );
 }
@@ -1925,6 +1925,43 @@ fn literal_chain_functions_group_with_matches() {
         assert_eq!(function_groups(&scan(tokens)), expected);
     }
     assert_eq!(function_groups(&scan(8)).len(), 0);
+}
+
+const RETYPE_FIXTURE: &str = "tests/fixtures/retypews";
+
+#[test]
+fn unsuffixed_return_doctests_group_with_their_suffixed_form() {
+    let report = Echoes::default().run(RETYPE_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["retypews::Suffixed", "retypews::Unsuffixed"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(22)
+        .run(RETYPE_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(23)
+        .run(RETYPE_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn literal_tail_functions_group_by_their_return_type() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(RETYPE_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["retypews::hour", "retypews::limit"]];
+    for tokens in [0, 1] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(2)).len(), 0);
 }
 
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";

@@ -49,7 +49,6 @@ fn booleans_read_as_integers() {
         "fn f(p: bool) -> u8 { let v: u8 = if p { 1 } else { 0 }; v }",
         "fn f(p: bool) -> u8 { let v: u8 = p as u8; v }",
     );
-    separate(&pair("if p { 1 } else { 0 }"), &pair("p as u32"));
 }
 
 #[test]

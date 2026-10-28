@@ -234,8 +234,8 @@ fn constant_suffix_mismatches_and_unproven_types_remain_retained() {
         form("fn f() -> u32 { 1u32 << -1i32 }"),
         form("fn f() -> u32 { 1u32 }")
     );
-    // Return types give no inference to the tail tree.
-    assert_ne!(
+    // The declared return type types the tail tree.
+    assert_eq!(
         form("fn f() -> u32 { 2 + 3 }"),
         form("fn f() -> u32 { 5u32 }")
     );

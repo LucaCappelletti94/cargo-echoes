@@ -239,6 +239,10 @@ pub mod alpha {
     pub fn small(value: u32) -> bool {
         matches!(value, 1 | 3..=5) || (7..=9).contains(&value)
     }
+    pub fn coded(flag: bool) -> u8 {
+        if flag { return 2 + 3; }
+        if flag { 1 } else { 0 }
+    }
 }
 mod custom {
     macro_rules! vec {

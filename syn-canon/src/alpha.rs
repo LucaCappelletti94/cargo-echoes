@@ -373,6 +373,8 @@ pub(crate) struct Renamer<'env> {
     /// Original-syntax resolution without rewriting.
     analysis: bool,
     receiver: bool,
+    /// The body of the function being visited and its declared fixed-width integer return type.
+    body_return: Option<(*const syn::Block, PrimTy)>,
 }
 
 impl<'env> Renamer<'env> {
@@ -426,6 +428,7 @@ impl<'env> Renamer<'env> {
             helper_blocked: false,
             analysis: false,
             receiver: false,
+            body_return: None,
         }
     }
 
@@ -1255,6 +1258,13 @@ impl<'env> Renamer<'env> {
     /// Whether no trait in view declares a method named `to_string` or `to_owned`.
     pub(crate) fn owned_methods(&self) -> bool {
         self.owned_methods
+    }
+
+    /// The declared fixed-width integer return type of the function whose body is `block`.
+    pub(crate) fn body_return(&self, block: &syn::Block) -> Option<PrimTy> {
+        self.body_return
+            .filter(|(body, _)| core::ptr::eq(*body, block))
+            .map(|(_, prim)| prim)
     }
 
     /// Whether `clone` on a primitive resolves to `Clone::clone`: the standard prelude is
@@ -2654,7 +2664,16 @@ impl<'env> Renamer<'env> {
                 crate::collections::normalize(self, sig, body);
             }
             self.normalize_return_body(body, sig.asyncness.is_none());
+            let returns = match &sig.output {
+                syn::ReturnType::Type(_, ty) => self.param_prim(ty),
+                syn::ReturnType::Default => None,
+            };
+            let outer = core::mem::replace(
+                &mut self.body_return,
+                returns.map(|prim| (core::ptr::from_ref::<syn::Block>(body), prim)),
+            );
             self.visit_block_mut(body);
+            self.body_return = outer;
         }
         self.pop();
         self.pop();
