@@ -366,6 +366,15 @@ pub(crate) fn signed_literal(expr: &syn::Expr) -> Option<(PrimTy, u128)> {
     {
         return None;
     }
+    closed_literal(expr)
+}
+
+/// The proven fixed-width type and value of a closed literal expression such as `2u32 * 4u32`,
+/// when it evaluates without overflow.
+pub(crate) fn closed_literal(expr: &syn::Expr) -> Option<(PrimTy, u128)> {
+    if !closed(expr, 0) {
+        return None;
+    }
     let ty = proven_type(expr, None, 0)?.fixed()?;
     let value = evaluate(expr, ty, 0)?;
     Some((

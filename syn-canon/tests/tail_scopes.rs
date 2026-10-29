@@ -161,6 +161,31 @@ fn proven_primitive_returns_keep_supported_equivalences() {
 }
 
 #[test]
+fn closed_literal_arithmetic_proves_the_locals_it_initializes() {
+    for (written, tail) in [
+        (
+            "fn f(x: u32) -> u32 { let k = 2u32 + 3u32; return k | x; }",
+            "fn f(x: u32) -> u32 { let k = 2u32 + 3u32; k | x }",
+        ),
+        (
+            "fn f(x: u32) -> u32 { let k = x << (2u32 * 4u32); return k; }",
+            "fn f(x: u32) -> u32 { let k = x << (2u32 * 4u32); k }",
+        ),
+        (
+            "fn f(x: i8) -> i8 { let k = -(3i8 * 4i8); return k & x; }",
+            "fn f(x: i8) -> i8 { let k = -(3i8 * 4i8); k & x }",
+        ),
+    ] {
+        compare(written, tail, true);
+    }
+    compare(
+        "fn f() -> bool { let k = 200u8 * 2u8; k == 144u8 }",
+        "fn f() -> bool { true }",
+        false,
+    );
+}
+
+#[test]
 fn observed_return_spelling_stays_distinct() {
     for template in [
         "#[observe] fn f() -> u32 { BODY }",

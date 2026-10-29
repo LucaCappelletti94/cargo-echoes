@@ -1445,3 +1445,23 @@ fn the_failure_mode_retains_untyped_literal_tails() {
         failing_form("fn f() -> u32 { 5u32 }")
     );
 }
+
+#[test]
+fn a_returned_value_built_from_closed_literal_arithmetic_reads_as_its_tail() {
+    let original = "fn f(red: u32, green: u32, blue: u32, alpha: u32, opaque: bool) -> u32 {
+        let rgb = ((red & 0xffu32) << 16u32) | ((green & 0xffu32) << 8u32) | (blue & 0xffu32);
+        let a = if opaque { 0xffu32 } else { alpha & 0xffu32 };
+        let visible = if a == 0u32 { 0u32 } else { rgb };
+        (a << 24u32) | visible
+    }";
+    let rewritten = "fn f(x: u32, y: u32, z: u32, w: u32, solid: bool) -> u32 {
+        let unused = 17u32;
+        let lo = 255u32 & z;
+        let mid = (y & 255u32) << (2u32 * 4u32);
+        let packed = lo | mid | (x & 0xffu32) << 16u32;
+        let top = if !solid { w & 255u32 } else { 255u32 };
+        let shown = if top == 0u32 { 0u32 } else { packed };
+        return top << 24u32 | shown;
+    }";
+    assert_eq!(view(original), view(rewritten));
+}
