@@ -1325,7 +1325,10 @@ pub(crate) fn label_expr(
         syn::Expr::Lit(lit) => (label_lit(&lit.lit), Vec::new()),
         syn::Expr::Path(path) if path.qself.is_none() => label_path(env, &path.path),
         syn::Expr::Path(_) => (Lbl::Other("q".into(), Vec::new()), Vec::new()),
-        syn::Expr::Binary(bin) => label_binary(renamer, env, bin, consumer, locals, orders),
+        syn::Expr::Binary(bin) => match crate::constants::closed_literal(expr) {
+            Some((prim, bits)) => (Lbl::Int(bits, Some(prim)), Vec::new()),
+            None => label_binary(renamer, env, bin, consumer, locals, orders),
+        },
         syn::Expr::Paren(paren) => label_expr(renamer, env, &paren.expr, consumer, locals, orders),
         syn::Expr::Group(group) => label_expr(renamer, env, &group.expr, consumer, locals, orders),
         syn::Expr::Tuple(tuple) => {
@@ -1339,7 +1342,7 @@ pub(crate) fn label_expr(
         syn::Expr::Reference(reference) => {
             label_reference(renamer, env, reference, consumer, locals, orders)
         }
-        syn::Expr::Unary(unary) => match crate::constants::signed_literal(expr) {
+        syn::Expr::Unary(unary) => match crate::constants::closed_literal(expr) {
             Some((prim, bits)) => (Lbl::Int(bits, Some(prim)), Vec::new()),
             None => label_unary(renamer, env, unary, consumer, locals, orders),
         },

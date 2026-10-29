@@ -243,6 +243,10 @@ pub mod alpha {
         if flag { return 2 + 3; }
         if flag { 1 } else { 0 }
     }
+    pub fn shifted(value: u32) -> u32 {
+        let width = 2u32 * 4u32;
+        return value << width;
+    }
 }
 mod custom {
     macro_rules! vec {
