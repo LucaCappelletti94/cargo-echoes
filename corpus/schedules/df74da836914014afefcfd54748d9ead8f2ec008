@@ -1,0 +1,3 @@
+trait PiGo {บบบบบบบบบบบบบบบบบบบบบบบ
+ &   fn f(&self, pino: u8) -z> u8 { pino }
+}
