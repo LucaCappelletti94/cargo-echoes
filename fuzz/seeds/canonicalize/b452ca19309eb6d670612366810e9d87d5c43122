@@ -1,0 +1,2 @@
+macro_rules! lit{()=>{1u32}}fn one()->u32{lit!()}fn two()->u32{0}fn main(){le0
+,t a=one();let b=two();prin0b'\str

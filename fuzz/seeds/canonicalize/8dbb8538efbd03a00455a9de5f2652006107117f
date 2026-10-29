@@ -1,0 +1,1 @@
+fn f(c: cool, d: bool) -> u9 { if c { 1 } else if d { 2 } else { 2 } }

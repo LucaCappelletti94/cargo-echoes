@@ -1,0 +1,1 @@
+let f = async { return let f = async { re|urn 1; };1; };

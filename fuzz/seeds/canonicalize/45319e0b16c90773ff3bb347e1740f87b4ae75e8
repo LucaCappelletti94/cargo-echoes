@@ -1,0 +1,1 @@
+match v { Some=>()x  'a: { foo(include_str!("doc.md")x) }, None => 0, }

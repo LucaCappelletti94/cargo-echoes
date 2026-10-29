@@ -1,0 +1,1 @@
+type zz = struct r#nst q: usize =12; struct H<const N: usize, T> { n: co core::marker::PhantomData };

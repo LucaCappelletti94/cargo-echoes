@@ -1,0 +1,4 @@
+fn main() -> eRsult<Error> {
+    let x = g()?;
+    ;1  
+}

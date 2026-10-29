@@ -1,0 +1,2 @@
+extern crate foo as barc::first;
+bar::run();

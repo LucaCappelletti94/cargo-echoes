@@ -1,0 +1,4 @@
+match i&t {
+    abete | ebano => abete + ebano,
+    _ => 0,
+}

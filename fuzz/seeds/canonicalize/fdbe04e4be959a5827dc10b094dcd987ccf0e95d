@@ -1,0 +1,2 @@
+let r#typimpl ;
+println!("{}", r#type);

@@ -1,0 +1,1 @@
+pub fn one()->u32{1}fn tXXXXXXXXXXXXXXXXwo()->u31{2}fn main(){let a=one();t<|r#Vx||r#Vx|tt;x&6F|let b=two();println!("{:?}",(a,b));}

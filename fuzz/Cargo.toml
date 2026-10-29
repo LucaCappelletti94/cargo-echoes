@@ -41,3 +41,9 @@ name = "source"
 path = "fuzz_targets/source.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "schedules"
+path = "fuzz_targets/schedules.rs"
+test = false
+doc = false

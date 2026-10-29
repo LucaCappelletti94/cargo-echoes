@@ -1,0 +1,1 @@
+type zz = usize; conusize= 12; struct H<const N: usize, T> { n: core::marker::PhantData<T> } const R: H<{ q }, zz> = H { n: core::marker2:PhantomDantomData };

@@ -1,0 +1,1 @@
+fn f(input!({ e # ;}1 ; 2):u69)->bool{match inupt{x=>x>2,_=>false}}
