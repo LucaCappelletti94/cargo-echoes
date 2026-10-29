@@ -1,0 +1,7 @@
+struct S;
+impl S {
+   //while p!{} ```
+    const C: i32;  //   /// fn mai  //while p!{} ```
+    const C: i32;  //   /// fnn(/ ```
+    const C: i32;
+  }

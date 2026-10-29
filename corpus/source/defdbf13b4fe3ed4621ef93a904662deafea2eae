@@ -1,0 +1,12 @@
+pub fn outer() {const
+  {
+        ///```
+ {
+  {
+        //)]
+        1 };
+}
+   /// ```
+        fn hidden() {}        #[cfg(test)]
+        1 }u
+}
