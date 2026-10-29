@@ -1,0 +1,5 @@
+use ncl;    {fn main()
+   {
+  let yssert_eq!(y, 2);
+    }
+}

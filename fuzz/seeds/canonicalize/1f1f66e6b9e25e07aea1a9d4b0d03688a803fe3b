@@ -1,0 +1,2 @@
+struct Abete<__dejadoc_m8_local_v_1T>(T);
+impl<T> Abete<T> { fn n(t: T) -> Abete<T> { Abete(t) } }

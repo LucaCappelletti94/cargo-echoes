@@ -1,0 +1,2 @@
+fn mSelfain() {}
+mocr_arules! m { ([pri$a:expr]) => { $a }; }

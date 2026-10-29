@@ -1,1 +1,0 @@
-fn f(input:u32)->bool{match input{1|1|2=>true,_=>false}}

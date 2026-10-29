@@ -1,0 +1,1 @@
+fn f() -> u8 { 'zz: loop { let d: &dyn  * <'q> Fn(&'q u8) = g; break 'z1} edition2021;z  }

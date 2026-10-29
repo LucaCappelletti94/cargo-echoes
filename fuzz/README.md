@@ -2,7 +2,8 @@
 
 ClusterFuzzLite runs these weekly in batch. Each target runs echoes on the 1 GiB stack `group` uses.
 
-- `canonicalize` groups identical bodies at different source sites and compares legal typed schedules, primitive algebra, boolean rewrites, primitive value folds, literal folds, named-field ordering, literal alternatives, closed item order and inherent `impl` partitions with changed-neighbor controls.
+- `canonicalize` groups the input's source at two sites and expects one group.
+- `schedules` compares legal typed schedules, primitive algebra, boolean rewrites, primitive value folds, literal folds, named-field ordering, literal alternatives, closed item order and inherent `impl` partitions with changed-neighbor controls, one family per input chosen by its last byte.
 - `doc` writes NUL-separated parts as `///`, raw, escaped and `/** */` doc attributes and extracts them.
 - `source` parses a whole file with `syn` and extracts it.
 

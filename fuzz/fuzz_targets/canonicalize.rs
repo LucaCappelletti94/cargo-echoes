@@ -1,4 +1,4 @@
-//! Canonical grouping across typed schedules and source-site metadata.
+//! Identical bodies at different source sites group together.
 
 #![no_main]
 
@@ -6,25 +6,18 @@ use echoes::{DocTest, group};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
-    let data = data.to_vec();
+    let Ok(code) = std::str::from_utf8(data) else {
+        return;
+    };
+    let code = code.to_owned();
     echoes_fuzz::on_large_stack(move || {
-        echoes_fuzz::check_dependency_schedules(&data);
-        echoes_fuzz::check_boolean_schedules(&data);
-        echoes_fuzz::check_value_schedules(&data);
-        echoes_fuzz::check_helper_schedules(&data);
-        echoes_fuzz::check_structure_schedules(&data);
-        echoes_fuzz::check_item_schedules(&data);
-        echoes_fuzz::check_concat_literals(&data);
-        let Ok(code) = std::str::from_utf8(&data) else {
-            return;
-        };
         let site = |item: &str| DocTest {
             file: format!("src/{item}.rs"),
             line: 1,
             end: None,
             item: format!("c::{item}"),
             info: Vec::new(),
-            code: code.into(),
+            code: code.clone(),
             allow: false,
             self_type: None,
             public: false,

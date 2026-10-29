@@ -1,0 +1,1 @@
+pub fn onj()->u32{1}fn o()->u32{2}fn main(){let a=while let b=two();println!("{:?}",(a,b));}

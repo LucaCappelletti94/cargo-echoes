@@ -1,0 +1,1 @@
+macro_rules! lit{()=>{1u32} in }fn one()->u32{lit!()}fn two()->us2{("{:?}",(a,b));}

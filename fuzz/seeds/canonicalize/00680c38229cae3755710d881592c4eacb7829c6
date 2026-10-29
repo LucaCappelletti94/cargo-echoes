@@ -1,0 +1,1 @@
+fn f(c: bool, edition2021d: bool) -> u8 {extern{ return 1; } els% i& d { ret2; } e; lse { return 3; } }
