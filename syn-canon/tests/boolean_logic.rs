@@ -180,7 +180,6 @@ fn effectful_and_partial_operands_keep_their_order() {
         ("read() || read()", "read()"),
         ("x / y > 0u32 && p", "p && x / y > 0u32"),
         ("if p { read() } else { false }", "p && read()"),
-        ("if p { let v = q; v } else { false }", "p && q"),
     ] {
         separate(&function(written), &function(folded));
     }

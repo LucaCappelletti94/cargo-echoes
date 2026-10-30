@@ -253,6 +253,10 @@ pub mod alpha {
             None => 0,
         }
     }
+    pub fn bound(value: u32) -> u32 {
+        let scaled = value * 3u32;
+        scaled
+    }
 }
 mod custom {
     macro_rules! vec {

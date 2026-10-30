@@ -1353,7 +1353,7 @@ impl<'env> Renamer<'env> {
 
     /// The literal of an unattributed built-in `concat!` of string literals, in compiling
     /// mode outside observed syntax.
-    fn concat_literal(&self, call: &syn::ExprMacro) -> Option<syn::LitStr> {
+    pub(crate) fn concat_literal(&self, call: &syn::ExprMacro) -> Option<syn::LitStr> {
         if !call.attrs.is_empty() || !self.constants_allowed() || self.macro_punctuation_observed {
             return None;
         }

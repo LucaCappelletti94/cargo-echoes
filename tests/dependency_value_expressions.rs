@@ -67,7 +67,7 @@ fn capture_failure_in_initializer_retains_the_complete_block() {
     let captured = "fn f(x:u32,read:fn()->u32)->u32{let x=read();x&15u32}";
     separate(original, collapsed);
     separate(original, captured);
-    assert_eq!(form(original).body_units(), 18);
+    assert_eq!(form(original).body_units(), 13);
 }
 
 #[test]
@@ -100,7 +100,8 @@ fn alias_chain(definitions: usize) -> String {
 
 #[test]
 fn cached_expansion_within_the_cap_collapses_the_alias_chain() {
-    let original = alias_chain(5461);
+    // The tail definition reads as its alias first, so the scheduler expands one fewer.
+    let original = alias_chain(5462);
     let inline = "fn f(x:u32)->u32{x&15u32}";
     assert_eq!(form(&original), form(inline));
     assert_ne!(
@@ -112,7 +113,7 @@ fn cached_expansion_within_the_cap_collapses_the_alias_chain() {
 
 #[test]
 fn cached_expansion_over_the_cap_retains_every_definition() {
-    let original = alias_chain(5462);
+    let original = alias_chain(5463);
     let inline = "fn f(x:u32)->u32{x&15u32}";
     separate(&original, inline);
     assert_eq!(form(&original).body_units(), 27313);

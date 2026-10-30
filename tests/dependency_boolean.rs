@@ -97,10 +97,6 @@ fn value_branches_fold_only_literal_boolean_tails() {
 #[test]
 fn value_branch_guards_keep_condition_and_branch_boundaries() {
     separate(
-        "fn f(p: bool) -> bool { if p { let x = true; x } else { false } }",
-        "fn g(x: bool) -> bool { x }",
-    );
-    separate(
         "fn f(p: bool, q: bool) -> bool { if p { true } else { q } }",
         "fn g(x: bool, y: bool) -> bool { x }",
     );
@@ -257,10 +253,6 @@ fn literal_condition_guards_keep_discarded_constraints_and_later_batches() {
         "fn g() -> u32 { 4u32 }",
     );
     separate(
-        "fn f() -> u32 { if true { let v = 1u32; v } else { 2u32 } }",
-        "fn g() -> u32 { 1u32 }",
-    );
-    separate(
         "fn f() -> u32 { if true { 1u32 } else if false { 2u32 } else { 3u32 } }",
         "fn g() -> u32 { 1u32 }",
     );
@@ -271,6 +263,18 @@ fn literal_condition_guards_keep_discarded_constraints_and_later_batches() {
     separate(
         "fn f() { let n = if true { 0 } else { 0u8 }; consume(&n); }",
         "fn g() { let n = 0; consume(&n); }",
+    );
+}
+
+#[test]
+fn bound_branch_values_read_as_their_initializer() {
+    same(
+        "fn f(p: bool) -> bool { if p { let x = true; x } else { false } }",
+        "fn g(x: bool) -> bool { x }",
+    );
+    same(
+        "fn f() -> u32 { if true { let v = 1u32; v } else { 2u32 } }",
+        "fn g() -> u32 { 1u32 }",
     );
 }
 
