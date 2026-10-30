@@ -52,8 +52,25 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, sig: &syn::Signature, block: &mut
         renamer,
         scopes: Vec::new(),
         references,
+        local_matches: declares_matches(block),
     };
     fold.visit_block_mut(block);
+}
+
+/// Whether `block` declares a macro named `matches` at any depth.
+fn declares_matches(block: &syn::Block) -> bool {
+    struct Search(bool);
+    impl syn::visit::Visit<'_> for Search {
+        fn visit_item_macro(&mut self, item: &syn::ItemMacro) {
+            self.0 |= item
+                .ident
+                .as_ref()
+                .is_some_and(|ident| ident_name(ident) == "matches");
+        }
+    }
+    let mut search = Search(false);
+    syn::visit::Visit::visit_block(&mut search, block);
+    search.0
 }
 
 /// Whether `ty` is a shared reference type.
@@ -123,6 +140,8 @@ struct Fold<'a, 'env> {
     scopes: Vec<Scope>,
     /// The parameters, `self` included, the signature declares as shared references.
     references: BTreeSet<String>,
+    /// The body declares a macro named `matches`, which may shadow the standard one.
+    local_matches: bool,
 }
 
 impl Fold<'_, '_> {
@@ -397,6 +416,77 @@ impl Fold<'_, '_> {
                 .scopes
                 .iter()
                 .all(|scope| !scope.open && !scope.values.contains_key(name))
+    }
+
+    /// Read a standard `matches!(e, P)` or `matches!(e, P if g)` as the `match` it expands to,
+    /// `match e { P => true, _ => false }` with the guard kept.
+    fn expand_matches(&self, expr: &mut syn::Expr) {
+        let syn::Expr::Macro(call) = expr else {
+            return;
+        };
+        if self.local_matches
+            || !call.attrs.is_empty()
+            || !self.renamer.standard_matches(&call.mac.path)
+        {
+            return;
+        }
+        let Ok(args) = syn::parse2::<crate::macros::MatchesArgs>(call.mac.tokens.clone()) else {
+            return;
+        };
+        let pat = match args.guard {
+            Some((if_token, guard)) => syn::Pat::Guard(syn::PatGuard {
+                attrs: Vec::new(),
+                pat: Box::new(args.pattern),
+                if_token,
+                guard: Box::new(guard),
+            }),
+            None => args.pattern,
+        };
+        *expr = syn::Expr::Match(syn::ExprMatch {
+            attrs: Vec::new(),
+            match_token: syn::token::Match::default(),
+            expr: Box::new(args.value),
+            brace_token: syn::token::Brace::default(),
+            arms: alloc::vec![arm(pat, bool_expr(true)), arm(wildcard(), bool_expr(false)),],
+        });
+    }
+
+    /// Read `!match e { … }` whose every arm yields a `bool` literal as the `match` with each
+    /// literal negated.
+    fn negate_match(&self, expr: &mut syn::Expr) {
+        let syn::Expr::Unary(unary) = expr else {
+            return;
+        };
+        if !unary.attrs.is_empty() || !matches!(unary.op, syn::UnOp::Not(_)) {
+            return;
+        }
+        let mut operand = unary.expr.as_ref();
+        while let syn::Expr::Paren(paren) = operand
+            && paren.attrs.is_empty()
+        {
+            operand = &paren.expr;
+        }
+        if !matches!(operand, syn::Expr::Match(_) | syn::Expr::Macro(_)) {
+            return;
+        }
+        let mut operand = operand.clone();
+        self.expand_matches(&mut operand);
+        let syn::Expr::Match(expr_match) = &mut operand else {
+            return;
+        };
+        if !expr_match.attrs.is_empty()
+            || !expr_match
+                .arms
+                .iter()
+                .all(|arm| arm.attrs.is_empty() && bool_literal(&arm.body).is_some())
+        {
+            return;
+        }
+        for arm in &mut expr_match.arms {
+            let value = bool_literal(&arm.body).is_some_and(|value| !value);
+            *arm.body = bool_expr(value);
+        }
+        *expr = operand;
     }
 
     /// Read the `ref` bindings of a `match`, `if let` or `while let` over a place.
@@ -678,6 +768,8 @@ impl VisitMut for Fold<'_, '_> {
         if !crate::drift::expr_attrs(expr).is_empty() {
             return;
         }
+        self.expand_matches(expr);
+        self.negate_match(expr);
         self.ref_bindings(expr);
         self.if_let(expr);
         syn::visit_mut::visit_expr_mut(self, expr);
@@ -784,4 +876,22 @@ fn arm(pat: syn::Pat, body: syn::Expr) -> syn::Arm {
         body: Box::new(body),
         comma: None,
     }
+}
+
+/// The value of the unattributed `bool` literal `expr`.
+fn bool_literal(expr: &syn::Expr) -> Option<bool> {
+    match expr {
+        syn::Expr::Lit(syn::ExprLit {
+            attrs,
+            lit: syn::Lit::Bool(value),
+        }) if attrs.is_empty() => Some(value.value),
+        _ => None,
+    }
+}
+
+fn bool_expr(value: bool) -> syn::Expr {
+    syn::Expr::Lit(syn::ExprLit {
+        attrs: Vec::new(),
+        lit: syn::Lit::Bool(syn::LitBool::new(value, proc_macro2::Span::call_site())),
+    })
 }

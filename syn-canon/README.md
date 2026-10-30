@@ -146,6 +146,8 @@ In compiling mode, a `match`, `if let`, `while let` or `let` over a place whose 
 
 In compiling mode, `let y = e; y` and `let y = e; return y;` at the end of a tail block read as `e` when `y` is a plain binding without annotation and `e` passes the temporary-free value proof of tail returns, a built-in `concat!` of string literals included.
 
+In compiling mode, a standard `matches!(e, P)` reads as `match e { P => true, _ => false }`, with a guard kept, and `!match e { … }` whose every arm yields a `bool` literal reads with each literal negated. A body that declares its own `matches!` macro keeps the call.
+
 ## Stability
 
 `CanonicalForm` keys and hashes are comparable within a semver-compatible release series. Before `1.0`, each minor version defines a series, such as `0.5.x`. Incompatible normalization requires a new series.

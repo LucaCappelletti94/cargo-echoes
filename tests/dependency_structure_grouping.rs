@@ -353,7 +353,7 @@ fn structure_canonical_alternatives_keep_payload_and_order() {
         "fn f(input:u32)->u32{match input{n@1|n@2=>n,_=>0u32}}",
         "fn f(input:u32)->u32{match input{n@2|n@1=>n,_=>0u32}}",
     );
-    distinct(
+    same(
         "fn f(input:u32)->bool{match input{1|2..=2=>true,_=>false}}",
         "fn f(input:u32)->bool{match input{2..=2|1=>true,_=>false}}",
     );

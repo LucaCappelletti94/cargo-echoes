@@ -400,10 +400,15 @@ impl Walker<'_, '_> {
         }
     }
 
-    /// The comparison chain a `matches!` call or a range `contains` call tests, when the pass
-    /// may rewrite proven values.
+    /// The comparison chain a `matches!` call, its `match` expansion or a range `contains` call
+    /// tests, when the pass may rewrite proven values.
     fn disjunction(&self, expr: &syn::Expr) -> Option<syn::Expr> {
-        if !self.dedup || !matches!(expr, syn::Expr::Macro(_) | syn::Expr::MethodCall(_)) {
+        if !self.dedup
+            || !matches!(
+                expr,
+                syn::Expr::Macro(_) | syn::Expr::Match(_) | syn::Expr::MethodCall(_)
+            )
+        {
             return None;
         }
         crate::disjunctions::expansion(self.renamer, &self.env, expr)
