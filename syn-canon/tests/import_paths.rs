@@ -165,6 +165,26 @@ fn nested_declarations_shadow_only_their_namespaces() {
 }
 
 #[test]
+fn generic_parameters_keep_naming_the_parameter() {
+    for (imported, plain) in [
+        (
+            "use std::mem;\nfn f<const mem: usize>() -> usize { mem }",
+            "fn f<const mem: usize>() -> usize { mem }",
+        ),
+        (
+            "use std::fmt::Debug;\nfn f<Debug: Copy>(value: Debug) -> Debug { value }",
+            "fn f<Debug: Copy>(value: Debug) -> Debug { value }",
+        ),
+    ] {
+        assert_eq!(
+            lone(imported, Edition::E2021),
+            lone(plain, Edition::E2021),
+            "{imported}\n{plain}"
+        );
+    }
+}
+
+#[test]
 fn qualified_paths_root_their_trait_path() {
     for (imported, rooted) in [
         (
