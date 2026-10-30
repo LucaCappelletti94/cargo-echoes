@@ -263,6 +263,9 @@ pub mod alpha {
     pub fn absent(value: Option<u32>) -> bool {
         value == None
     }
+    pub fn copied(name: &str) -> String {
+        String::from(name)
+    }
 }
 mod custom {
     macro_rules! vec {

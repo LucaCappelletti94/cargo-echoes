@@ -621,3 +621,16 @@ jobs:
         with:
           name: option-predicates-witnesses
           path: ${{ runner.temp }}/option-predicates-witnesses.json
+      - name: Verify string copy witnesses
+        id: string_copies_witnesses
+        run: >-
+          python3 -B tests/dependency_constants_witnesses.py
+          --cases tests/fixtures/dependency/string_copies_cases.json
+          --request-id "DG-CI-STRINGS-${{ github.run_id }}-${{ github.run_attempt }}"
+          --output "${{ runner.temp }}/string-copies-witnesses.json"
+          --timeout 600
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && steps.string_copies_witnesses.outcome != 'skipped'
+        with:
+          name: string-copies-witnesses
+          path: ${{ runner.temp }}/string-copies-witnesses.json

@@ -2986,13 +2986,14 @@ fn clone_free_file(file: &syn::File) -> bool {
 }
 
 /// The trait method names the collection readings rely on.
-pub(crate) const COLLECTION_METHODS: [&str; 6] = [
+pub(crate) const COLLECTION_METHODS: [&str; 7] = [
     "iter",
     "iter_mut",
     "into_iter",
     "len",
     "is_empty",
     "contains",
+    "as_str",
 ];
 
 /// Whether a file, bodies included, imports only from the standard library and declares no

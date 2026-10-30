@@ -1,0 +1,167 @@
+[
+  {
+    "id": "sc_str_owned",
+    "family": "string_copies",
+    "a": "fn f(s: &str) -> String { s.to_owned() } fn main(){ let c = f(\"abc\"); println!(\"{} {}\", c, c.capacity()); }",
+    "b": "fn f(s: &str) -> String { String::from(s) } fn main(){ let c = f(\"abc\"); println!(\"{} {}\", c, c.capacity()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "sc_str_to_string",
+    "family": "string_copies",
+    "a": "fn f(s: &str) -> String { s.to_string() } fn main(){ let c = f(\"abc\"); println!(\"{} {}\", c, c.capacity()); }",
+    "b": "fn f(s: &str) -> String { s.to_owned() } fn main(){ let c = f(\"abc\"); println!(\"{} {}\", c, c.capacity()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "sc_string_clone",
+    "family": "string_copies",
+    "a": "fn f(s: String) -> String { s.clone() } fn main(){ let mut s = String::with_capacity(32); s.push_str(\"abc\"); let c = f(s); println!(\"{} {}\", c, c.capacity()); }",
+    "b": "fn f(s: String) -> String { s.to_string() } fn main(){ let mut s = String::with_capacity(32); s.push_str(\"abc\"); let c = f(s); println!(\"{} {}\", c, c.capacity()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "sc_string_as_str",
+    "family": "string_copies",
+    "a": "fn f(s: &String) -> String { String::from(s.as_str()) } fn main(){ let mut s = String::with_capacity(32); s.push_str(\"abc\"); let c = f(&s); println!(\"{} {}\", c, c.capacity()); }",
+    "b": "fn f(s: &String) -> String { s.to_owned() } fn main(){ let mut s = String::with_capacity(32); s.push_str(\"abc\"); let c = f(&s); println!(\"{} {}\", c, c.capacity()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "sc_format",
+    "family": "string_copies",
+    "a": "fn f(s: &str) -> String { format!(\"{s}\") } fn main(){ let c = f(\"abc\"); println!(\"{} {}\", c, c.capacity()); }",
+    "b": "fn f(s: &str) -> String { s.to_string() } fn main(){ let c = f(\"abc\"); println!(\"{} {}\", c, c.capacity()); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 8\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        }
+      }
+    }
+  }
+]
