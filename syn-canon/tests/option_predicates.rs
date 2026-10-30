@@ -153,6 +153,14 @@ fn defaults_identities_and_takes_read_as_their_match() {
         ),
         (
             function(
+                "o: Option<String>",
+                "Option<String>",
+                "match o { Some(v) => Some(v), _ => None }",
+            ),
+            function("o: Option<String>", "Option<String>", "o"),
+        ),
+        (
+            function(
                 "o: &mut Option<String>",
                 "Option<String>",
                 "std::mem::replace(o, None)",
@@ -190,6 +198,14 @@ fn unproven_receivers_and_moving_conversions_stay_apart() {
         (
             function("o: &Option<String>", "Option<String>", "match o { Some(v) => Some(v), None => None }"),
             function("o: &Option<String>", "Option<String>", "o"),
+        ),
+        (
+            function("o: Option<String>", "Option<String>", "match o { _ => None, Some(v) => Some(v) }"),
+            function("o: Option<String>", "Option<String>", "o"),
+        ),
+        (
+            function("o: &mut Option<String>, g: fn(&mut Option<String>, Option<String>) -> Option<String>", "Option<String>", "(g)(o, None)"),
+            function("o: &mut Option<String>, g: fn(&mut Option<String>, Option<String>) -> Option<String>", "Option<String>", "o.take()"),
         ),
     ] {
         separate(&left, &right);
