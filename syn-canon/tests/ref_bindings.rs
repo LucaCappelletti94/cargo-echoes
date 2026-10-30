@@ -143,6 +143,10 @@ fn moves_borrows_and_unproven_scrutinees_stay_apart() {
             "fn f(o: Option<String>) -> usize { match o { Some(ref s) => s.len(), Some(ref t) if t.is_empty() => 1, None => 0 } }",
             "fn f(o: Option<String>) -> usize { match o { Some(s) => s.len(), Some(ref t) if t.is_empty() => 1, None => 0 } }",
         ),
+        (
+            "fn f(mut t: (String, String)) -> usize { match t { (ref a, ref mut b) => { b.push('a'); a.len() } } }",
+            "fn f(mut t: (String, String)) -> usize { match &mut t { (a, b) => { b.push('a'); a.len() } } }",
+        ),
     ] {
         separate(left, right);
     }
