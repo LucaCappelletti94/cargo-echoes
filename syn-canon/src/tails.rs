@@ -213,6 +213,7 @@ impl<'env> Proof<'_, 'env> {
         let types_known = local_types_known && types_known;
         if self.compiles && types_known {
             self.let_else(&mut block.stmts, env.clone());
+            self.bound_tail(&mut block.stmts, &env);
         }
         let Some((last, prefix)) = block.stmts.split_last_mut() else {
             return true;
@@ -249,6 +250,73 @@ impl<'env> Proof<'_, 'env> {
             _ => return true,
         };
         self.early_returns(&mut block.stmts, &env, types_known, safe)
+    }
+
+    /// Read `let y = e; y`, or `let y = e; return y;`, at the end of `stmts` as the tail `e`
+    /// when `e` is a temporary-free value. The binding moves out, so it never drops itself, and
+    /// a value creates no temporary whose drop the `let` would move before the rest of the
+    /// scope.
+    fn bound_tail(&mut self, stmts: &mut alloc::vec::Vec<syn::Stmt>, env: &Env<'env>) {
+        let [
+            head @ ..,
+            syn::Stmt::Local(syn::Local {
+                attrs,
+                pat: syn::Pat::Ident(binding),
+                init: Some(init),
+                ..
+            }),
+            last,
+        ] = stmts.as_mut_slice()
+        else {
+            return;
+        };
+        let read = match &*last {
+            syn::Stmt::Expr(syn::Expr::Return(ret), _)
+                if ret.attrs.iter().all(crate::drift::is_inert_attr) =>
+            {
+                ret.expr.as_deref()
+            }
+            syn::Stmt::Expr(expr, None) => Some(expr),
+            _ => None,
+        };
+        let reads_binding = matches!(
+            read,
+            Some(syn::Expr::Path(path))
+                if path.attrs.is_empty()
+                    && path.qself.is_none()
+                    && path.path.get_ident().is_some_and(|ident| {
+                        crate::scope::ident_name(ident) == crate::scope::ident_name(&binding.ident)
+                    })
+        );
+        if !reads_binding
+            || !attrs.is_empty()
+            || !binding.attrs.is_empty()
+            || binding.by_ref.is_some()
+            || binding.mutability.is_some()
+            || binding.subpat.is_some()
+            || init.diverge.is_some()
+        {
+            return;
+        }
+        let mut env = env.clone();
+        for stmt in head.iter() {
+            if let syn::Stmt::Local(local) = stmt {
+                self.local(local, &mut env, true);
+            }
+        }
+        let literal = matches!(
+            init.expr.as_ref(),
+            syn::Expr::Macro(call) if self.renamer.concat_literal(call).is_some()
+        );
+        if !literal && !self.value(&init.expr, &env) {
+            return;
+        }
+        let value = core::mem::replace(
+            init.expr.as_mut(),
+            syn::Expr::Verbatim(proc_macro2::TokenStream::new()),
+        );
+        stmts.truncate(stmts.len() - 2);
+        stmts.push(syn::Stmt::Expr(value, None));
     }
 
     /// Read the first `let P = e else { D };` whose initializer is a place as

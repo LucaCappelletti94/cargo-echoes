@@ -112,8 +112,8 @@ fn effectful_panic_initializers_and_owned_values_keep_the_declarations() {
         "fn g(input: u32, cell: [u32; 4]) -> u32 { cell[input] ^ 3u32 }",
     );
     separate(
-        "fn f() -> u32 { let probe = 1u32 / 0u32; probe }",
-        "fn g() -> u32 { 1u32 / 0u32 }",
+        "fn f() -> u32 { let probe = 1u32 / 0u32; mark(); probe }",
+        "fn g() -> u32 { mark(); 1u32 / 0u32 }",
     );
     separate(
         "fn f() -> u32 { struct D; impl Drop for D { fn drop(&mut self) {} } let unused = D; 1u32 }",
@@ -122,6 +122,15 @@ fn effectful_panic_initializers_and_owned_values_keep_the_declarations() {
     separate(
         "fn f() -> u32 { struct Owned; let unused = Owned; 1u32 }",
         "fn g() -> u32 { struct Owned; 1u32 }",
+    );
+}
+
+#[test]
+fn a_panicking_tail_binding_reads_as_its_initializer() {
+    // Nothing runs between the binding and the tail, so both spellings panic at the same point.
+    same(
+        "fn f() -> u32 { let probe = 1u32 / 0u32; probe }",
+        "fn g() -> u32 { 1u32 / 0u32 }",
     );
 }
 

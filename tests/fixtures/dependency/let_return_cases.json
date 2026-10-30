@@ -1,0 +1,167 @@
+[
+  {
+    "id": "lr_arith",
+    "family": "let_return",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(x: u32) -> u32 { let _a = D(\"local\"); let v = x + 1; v } fn main(){ println!(\"{}\", f(4)); }",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(x: u32) -> u32 { let _a = D(\"local\"); x + 1 } fn main(){ println!(\"{}\", f(4)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n5\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lr_return",
+    "family": "let_return",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(x: u32) -> u32 { let _a = D(\"local\"); let v = x * 2; return v; } fn main(){ println!(\"{}\", f(4)); }",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(x: u32) -> u32 { let _a = D(\"local\"); x * 2 } fn main(){ println!(\"{}\", f(4)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n8\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\n8\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lr_branch",
+    "family": "let_return",
+    "a": "fn f(x: u32) -> u32 { if x > 1 { let y = x - 1; y } else { 0 } } fn main(){ println!(\"{} {}\", f(0), f(u32::MAX)); }",
+    "b": "fn f(x: u32) -> u32 { if x > 1 { x - 1 } else { 0 } } fn main(){ println!(\"{} {}\", f(0), f(u32::MAX)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 4294967294\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 4294967294\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 4294967294\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 4294967294\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lr_some",
+    "family": "let_return",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(x: u32) -> Option<u32> { let _a = D(\"local\"); let r = Some(x); r } fn main(){ println!(\"{:?}\", f(3)); }",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(x: u32) -> Option<u32> { let _a = D(\"local\"); Some(x) } fn main(){ println!(\"{:?}\", f(3)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\nSome(3)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\nSome(3)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\nSome(3)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\nSome(3)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lr_mutated",
+    "family": "let_return",
+    "a": "fn f(x: u32) -> u32 { let mut y = x; y += 1; y } fn main(){ println!(\"{}\", f(4)); }",
+    "b": "fn f(x: u32) -> u32 { x } fn main(){ println!(\"{}\", f(4)); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "5\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4\n"
+        }
+      }
+    }
+  }
+]

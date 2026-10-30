@@ -144,6 +144,8 @@ A function view from `SourceContext` under Rust 2018 or later reads a file-level
 
 In compiling mode, a `match`, `if let`, `while let` or `let` over a place whose patterns bind only by `ref`, or only by `ref mut`, reads as the same patterns without `ref` over a borrow of the place, so `match o { Some(ref s) => … }` matches `match &o { Some(s) => … }`. A parameter declared as a shared reference reads `*r` as `r` there. A by-value binding, a reference pattern or a plain name that resolution cannot prove a constant keeps the written form.
 
+In compiling mode, `let y = e; y` and `let y = e; return y;` at the end of a tail block read as `e` when `y` is a plain binding without annotation and `e` passes the temporary-free value proof of tail returns, a built-in `concat!` of string literals included.
+
 ## Stability
 
 `CanonicalForm` keys and hashes are comparable within a semver-compatible release series. Before `1.0`, each minor version defines a series, such as `0.5.x`. Incompatible normalization requires a new series.
