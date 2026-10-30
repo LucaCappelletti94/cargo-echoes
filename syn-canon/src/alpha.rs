@@ -1524,6 +1524,31 @@ impl<'env> Renamer<'env> {
             && !self.scopes.iter().any(|scope| scope.frozen)
     }
 
+    /// Whether `func` is the path `std::module::name` or `core::module::name` through a
+    /// standard crate root.
+    pub(crate) fn standard_function(&self, func: &syn::Expr, module: &str, name: &str) -> bool {
+        let syn::Expr::Path(path) = func else {
+            return false;
+        };
+        let [root, step, last] = path.path.segments.iter().collect::<Vec<_>>()[..] else {
+            return false;
+        };
+        path.attrs.is_empty()
+            && path.qself.is_none()
+            && path.path.leading_colon.is_none()
+            && path
+                .path
+                .segments
+                .iter()
+                .all(|segment| segment.arguments.is_none())
+            && crate::scope::ident_name(&step.ident) == module
+            && crate::scope::ident_name(&last.ident) == name
+            && matches!(
+                self.standard_root(&crate::scope::ident_name(&root.ident)),
+                Some(crate::macros::StandardRoot::Std | crate::macros::StandardRoot::Core)
+            )
+    }
+
     /// The proven primitive type of a declared type, when the declaration
     /// establishes one through fully known local definitions.
     pub(crate) fn param_prim(&self, ty: &syn::Type) -> Option<PrimTy> {
@@ -2727,6 +2752,7 @@ impl<'env> Renamer<'env> {
         syn::visit_mut::visit_return_type_mut(self, &mut sig.output);
         if let Some(body) = body {
             if self.arms_allowed() {
+                crate::options::normalize(self, sig, body);
                 crate::arms::normalize(self, sig, body);
             }
             if self.collections_allowed() {

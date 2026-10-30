@@ -2119,6 +2119,43 @@ fn negated_matches_functions_group_with_their_swapped_match() {
     assert_eq!(function_groups(&scan(10)).len(), 0);
 }
 
+const OPTIONS_FIXTURE: &str = "tests/fixtures/optionsws";
+
+#[test]
+fn option_predicate_doctests_group_with_their_compared_form() {
+    let report = Echoes::default().run(OPTIONS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["optionsws::Compared", "optionsws::Method"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(36)
+        .run(OPTIONS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(37)
+        .run(OPTIONS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn unwrap_or_functions_group_with_their_written_match() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(OPTIONS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["optionsws::limit", "optionsws::matched"]];
+    for tokens in [0, 9] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(10)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

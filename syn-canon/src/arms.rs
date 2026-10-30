@@ -575,6 +575,7 @@ impl Fold<'_, '_> {
     fn arms(&self, expr_match: &mut syn::ExprMatch) {
         let prelude = self.prelude();
         if prelude {
+            lead_with_present(expr_match);
             self.catch_none(expr_match);
         }
         self.order(expr_match, prelude);
@@ -830,6 +831,48 @@ fn strip_ref(pat: &mut syn::Pat) {
         fn visit_expr_mut(&mut self, _: &mut syn::Expr) {}
     }
     Strip.visit_pat_mut(pat);
+}
+
+/// Read `match e { None => a, _ => b }` as `match e { Some(_) => b, _ => a }` and
+/// `match e { Err(_) => a, _ => b }` as `match e { Ok(_) => b, _ => a }`. The prelude variant
+/// pattern makes `e` an `Option` or a `Result`, whose wildcard then matches exactly the other
+/// variant.
+fn lead_with_present(expr_match: &mut syn::ExprMatch) {
+    let [absent, rest] = expr_match.arms.as_slice() else {
+        return;
+    };
+    let present = match &absent.pat {
+        syn::Pat::Ident(ident) if bare_none(ident) => "Some",
+        syn::Pat::TupleStruct(pattern)
+            if pattern.attrs.is_empty()
+                && pattern.qself.is_none()
+                && pattern.path.is_ident("Err")
+                && matches!(
+                    &pattern.elems.iter().collect::<Vec<_>>()[..],
+                    [syn::Pat::Wild(wild)] if wild.attrs.is_empty()
+                ) =>
+        {
+            "Ok"
+        }
+        _ => return,
+    };
+    if !expr_match.attrs.is_empty()
+        || !absent.attrs.is_empty()
+        || !rest.attrs.is_empty()
+        || !matches!(&rest.pat, syn::Pat::Wild(wild) if wild.attrs.is_empty())
+    {
+        return;
+    }
+    let pattern = syn::Pat::TupleStruct(syn::PatTupleStruct {
+        attrs: Vec::new(),
+        qself: None,
+        path: syn::Path::from(syn::Ident::new(present, proc_macro2::Span::call_site())),
+        paren_token: syn::token::Paren::default(),
+        elems: core::iter::once(wildcard()).collect(),
+    });
+    let (absent, rest) = expr_match.arms.split_at_mut(1);
+    core::mem::swap(&mut absent[0].body, &mut rest[0].body);
+    absent[0].pat = pattern;
 }
 
 /// Whether `ident` is the unattributed bare pattern `None`.
