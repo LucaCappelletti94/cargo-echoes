@@ -1,11 +1,11 @@
 //! Literal disjunctions and literal ranges over a proven integer place.
 //!
 //! A standard `matches!` without a guard whose patterns are integer literals and literal ranges,
-//! and the inherent `contains` of a literal range, read as the chain of comparisons they test:
-//! `matches!(x, 1 | 3..=5)` as `x == 1 || x >= 3 && x <= 5`. The scrutinee must be a binding of a
-//! proven fixed-width integer type, which the chain may read once per comparison, and the
-//! alternatives must be disjoint, so every spelling of one set of values meets one chain whose
-//! order the boolean readings settle.
+//! the `match` it expands to, and the inherent `contains` of a literal range, read as the chain
+//! of comparisons they test: `matches!(x, 1 | 3..=5)` as `x == 1 || x >= 3 && x <= 5`. The
+//! scrutinee must be a binding of a proven fixed-width integer type, which the chain may read
+//! once per comparison, and the alternatives must be disjoint, so every spelling of one set of
+//! values meets one chain whose order the boolean readings settle.
 
 use alloc::boxed::Box;
 use alloc::string::ToString as _;
@@ -14,7 +14,8 @@ use alloc::vec::Vec;
 use crate::alpha::{Env, Renamer};
 use crate::scope::{IntWidth, PrimTy};
 
-/// The comparison chain the `matches!` call or the range `contains` call `expr` tests.
+/// The comparison chain the `matches!` call, its `match` expansion or the range `contains` call
+/// `expr` tests.
 pub(crate) fn expansion(
     renamer: &Renamer<'_>,
     env: &Env<'_>,
@@ -31,6 +32,12 @@ pub(crate) fn expansion(
             let mut alternatives = Vec::new();
             pattern_alternatives(&args.pattern, &mut alternatives)?;
             (args.value, alternatives)
+        }
+        syn::Expr::Match(expr_match) => {
+            let pattern = matches_arm(expr_match)?;
+            let mut alternatives = Vec::new();
+            pattern_alternatives(pattern, &mut alternatives)?;
+            ((*expr_match.expr).clone(), alternatives)
         }
         syn::Expr::MethodCall(call) => contained(renamer, call)?,
         _ => return None,
@@ -53,6 +60,22 @@ pub(crate) fn expansion(
         .collect::<Option<Vec<_>>>()?
         .into_iter()
         .reduce(|left, right| binary(left, syn::BinOp::Or(syn::token::OrOr::default()), right))
+}
+
+/// The pattern of `match e { P => true, _ => false }`, the expansion of `matches!(e, P)`.
+fn matches_arm(expr_match: &syn::ExprMatch) -> Option<&syn::Pat> {
+    let [matched, rest] = expr_match.arms.as_slice() else {
+        return None;
+    };
+    let literal = |arm: &syn::Arm, expected: bool| {
+        arm.attrs.is_empty()
+            && matches!(arm.body.as_ref(), syn::Expr::Lit(syn::ExprLit { attrs, lit: syn::Lit::Bool(value) }) if attrs.is_empty() && value.value == expected)
+    };
+    (expr_match.attrs.is_empty()
+        && literal(matched, true)
+        && literal(rest, false)
+        && matches!(&rest.pat, syn::Pat::Wild(wild) if wild.attrs.is_empty()))
+    .then_some(&matched.pat)
 }
 
 /// One alternative: a literal, or a range with optional literal bounds.

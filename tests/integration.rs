@@ -2082,6 +2082,43 @@ fn let_and_return_functions_group_with_their_direct_tail() {
     assert_eq!(function_groups(&scan(6)).len(), 0);
 }
 
+const MATCHES_FIXTURE: &str = "tests/fixtures/matchesws";
+
+#[test]
+fn matches_doctests_group_with_their_written_match() {
+    let report = Echoes::default().run(MATCHES_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["matchesws::Macro", "matchesws::Written"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(59)
+        .run(MATCHES_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(60)
+        .run(MATCHES_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn negated_matches_functions_group_with_their_swapped_match() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(MATCHES_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["matchesws::absent", "matchesws::empty"]];
+    for tokens in [0, 9] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(10)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

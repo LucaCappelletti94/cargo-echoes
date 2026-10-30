@@ -257,6 +257,9 @@ pub mod alpha {
         let scaled = value * 3u32;
         scaled
     }
+    pub fn present(value: Option<u32>) -> bool {
+        !matches!(value, Some(_))
+    }
 }
 mod custom {
     macro_rules! vec {

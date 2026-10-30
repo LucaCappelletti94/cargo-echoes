@@ -1,0 +1,167 @@
+[
+  {
+    "id": "me_enum",
+    "family": "matches_expansion",
+    "a": "#[derive(Clone, Copy)] enum E { A, B, C } fn f(e: E) -> bool { matches!(e, E::A | E::C) } fn main(){ println!(\"{} {} {}\", f(E::A), f(E::B), f(E::C)); }",
+    "b": "#[derive(Clone, Copy)] enum E { A, B, C } fn f(e: E) -> bool { match e { E::A | E::C => true, _ => false } } fn main(){ println!(\"{} {} {}\", f(E::A), f(E::B), f(E::C)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "me_guard",
+    "family": "matches_expansion",
+    "a": "fn f(o: Option<u32>) -> bool { matches!(o, Some(v) if v > 3) } fn main(){ println!(\"{} {} {}\", f(Some(4)), f(Some(3)), f(None)); }",
+    "b": "fn f(o: Option<u32>) -> bool { match o { Some(v) if v > 3 => true, _ => false } } fn main(){ println!(\"{} {} {}\", f(Some(4)), f(Some(3)), f(None)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "me_call",
+    "family": "matches_expansion",
+    "a": "fn g() -> Option<u32> { println!(\"call\"); Some(4) } fn f() -> bool { matches!(g(), Some(1..=5)) } fn main(){ println!(\"{}\", f()); }",
+    "b": "fn g() -> Option<u32> { println!(\"call\"); Some(4) } fn f() -> bool { match g() { Some(1..=5) => true, _ => false } } fn main(){ println!(\"{}\", f()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "call\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "call\ntrue\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "call\ntrue\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "call\ntrue\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "me_negated",
+    "family": "matches_expansion",
+    "a": "#[derive(Clone, Copy)] enum E { A, B, C } fn f(e: E) -> bool { !matches!(e, E::A) } fn main(){ println!(\"{} {} {}\", f(E::A), f(E::B), f(E::C)); }",
+    "b": "#[derive(Clone, Copy)] enum E { A, B, C } fn f(e: E) -> bool { match e { E::A => false, _ => true } } fn main(){ println!(\"{} {} {}\", f(E::A), f(E::B), f(E::C)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "me_swapped",
+    "family": "matches_expansion",
+    "a": "#[derive(Clone, Copy)] enum E { A, B, C } fn f(e: E) -> bool { matches!(e, E::A) } fn main(){ println!(\"{} {} {}\", f(E::A), f(E::B), f(E::C)); }",
+    "b": "#[derive(Clone, Copy)] enum E { A, B, C } fn f(e: E) -> bool { match e { E::A => false, _ => true } } fn main(){ println!(\"{} {} {}\", f(E::A), f(E::B), f(E::C)); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true true\n"
+        }
+      }
+    }
+  }
+]

@@ -247,15 +247,16 @@ fn structure_literal_alternatives_unchanged_arms() {
     let binding_first = "fn f(input:u32)->bool{match input{1|x=>true,_=>false}}";
     let binding_second = "fn f(input:u32)->bool{match input{x|1=>true,_=>false}}";
     assert_ne!(form(binding_first), form(binding_second));
+    // Disjoint literal and range alternatives over an integer place read as one comparison chain.
     let range_first = "fn f(input:u32)->bool{match input{4|1..=3=>true,_=>false}}";
     let range_second = "fn f(input:u32)->bool{match input{1..=3|4=>true,_=>false}}";
-    assert_ne!(form(range_first), form(range_second));
+    assert_eq!(form(range_first), form(range_second));
     let path_first = "enum E{A} fn f(input:u32)->bool{match input{E::A|1=>true,_=>false}}";
     let path_second = "enum E{A} fn f(input:u32)->bool{match input{1|E::A=>true,_=>false}}";
     assert_ne!(form(path_first), form(path_second));
     let nested_first = "fn f(input:u32)->bool{match input{3|(1|2)=>true,_=>false}}";
     let nested_second = "fn f(input:u32)->bool{match input{(1|2)|3=>true,_=>false}}";
-    assert_ne!(form(nested_first), form(nested_second));
+    assert_eq!(form(nested_first), form(nested_second));
     let macro_first = "fn f(input:u32)->bool{match input{m!(x)|1=>true,_=>false}}";
     let macro_second = "fn f(input:u32)->bool{match input{1|m!(x)=>true,_=>false}}";
     assert_ne!(form(macro_first), form(macro_second));
