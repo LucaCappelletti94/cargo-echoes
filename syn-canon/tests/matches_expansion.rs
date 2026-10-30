@@ -103,6 +103,10 @@ fn local_macros_and_other_arm_values_stay_apart() {
             "fn f(o: Option<u32>, p: bool) -> bool { !match o { Some(_) => p, _ => false } }",
             "fn f(o: Option<u32>, p: bool) -> bool { match o { Some(_) => !p, _ => true } }",
         ),
+        (
+            "fn f(o: Option<u32>) -> bool { matches!(o; Some(_)) }",
+            "fn f(o: Option<u32>) -> bool { match o { Some(_) => true, _ => false } }",
+        ),
     ] {
         separate(left, right);
     }
