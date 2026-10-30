@@ -257,16 +257,20 @@ impl<'env> Proof<'_, 'env> {
     /// a value creates no temporary whose drop the `let` would move before the rest of the
     /// scope.
     fn bound_tail(&mut self, stmts: &mut alloc::vec::Vec<syn::Stmt>, env: &Env<'env>) {
-        let [head @ .., syn::Stmt::Local(local), last] = stmts.as_slice() else {
+        let [
+            head @ ..,
+            syn::Stmt::Local(syn::Local {
+                attrs,
+                pat: syn::Pat::Ident(binding),
+                init: Some(init),
+                ..
+            }),
+            last,
+        ] = stmts.as_mut_slice()
+        else {
             return;
         };
-        let syn::Pat::Ident(binding) = &local.pat else {
-            return;
-        };
-        let Some(init) = &local.init else {
-            return;
-        };
-        let read = match last {
+        let read = match &*last {
             syn::Stmt::Expr(syn::Expr::Return(ret), _)
                 if ret.attrs.iter().all(crate::drift::is_inert_attr) =>
             {
@@ -285,7 +289,7 @@ impl<'env> Proof<'_, 'env> {
                     })
         );
         if !reads_binding
-            || !local.attrs.is_empty()
+            || !attrs.is_empty()
             || !binding.attrs.is_empty()
             || binding.by_ref.is_some()
             || binding.mutability.is_some()
@@ -295,7 +299,7 @@ impl<'env> Proof<'_, 'env> {
             return;
         }
         let mut env = env.clone();
-        for stmt in head {
+        for stmt in head.iter() {
             if let syn::Stmt::Local(local) = stmt {
                 self.local(local, &mut env, true);
             }
@@ -307,13 +311,12 @@ impl<'env> Proof<'_, 'env> {
         if !literal && !self.value(&init.expr, &env) {
             return;
         }
-        stmts.pop();
-        if let Some(syn::Stmt::Local(syn::Local {
-            init: Some(init), ..
-        })) = stmts.pop()
-        {
-            stmts.push(syn::Stmt::Expr(*init.expr, None));
-        }
+        let value = core::mem::replace(
+            init.expr.as_mut(),
+            syn::Expr::Verbatim(proc_macro2::TokenStream::new()),
+        );
+        stmts.truncate(stmts.len() - 2);
+        stmts.push(syn::Stmt::Expr(value, None));
     }
 
     /// Read the first `let P = e else { D };` whose initializer is a place as
