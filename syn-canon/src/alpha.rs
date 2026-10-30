@@ -82,6 +82,8 @@ struct Resolved<'env> {
     macro_resolution: Option<crate::macros::MacroResolution>,
     /// The canon of an inherited binding. A local binding's canon is in the local table.
     inherited: Option<&'env str>,
+    /// The rooted path of an inherited import of an external crate item.
+    external: Option<&'env [String]>,
 }
 
 impl Resolved<'_> {
@@ -863,6 +865,7 @@ impl<'env> Renamer<'env> {
         ns: Ns,
         binding: &Binding,
         inherited: Option<&'a str>,
+        external: Option<&'a [String]>,
     ) -> Resolved<'a> {
         Resolved {
             domain,
@@ -875,6 +878,7 @@ impl<'env> Renamer<'env> {
             helper: binding.helper,
             macro_resolution: binding.macro_resolution,
             inherited,
+            external,
         }
     }
 
@@ -898,7 +902,7 @@ impl<'env> Renamer<'env> {
                     if opaque_tokens && (binding.raw || name.starts_with("r#")) {
                         return None;
                     }
-                    return Some(Self::resolved(Domain::Local, *ns, binding, None));
+                    return Some(Self::resolved(Domain::Local, *ns, binding, None, None));
                 }
             }
             // The `Self` frame's one binding has the owner label for its canon.
@@ -906,20 +910,29 @@ impl<'env> Renamer<'env> {
                 .self_frame
                 .as_ref()
                 .and_then(|frame| frame.lookup(*ns, name))
-                .map(|binding| (binding, OWNER_SELF))
+                .map(|binding| (binding, OWNER_SELF, None))
                 .or_else(|| {
                     self.generics
                         .into_iter()
                         .chain(self.seed)
                         .chain(inherited)
-                        .find_map(|frame| frame.lookup(*ns, name))
-                        .map(|binding| (binding, binding.canon.as_str()))
+                        .find_map(|frame| {
+                            frame.lookup(*ns, name).map(|binding| {
+                                (binding, binding.canon.as_str(), frame.external(binding))
+                            })
+                        })
                 });
-            if let Some((binding, canon)) = found {
+            if let Some((binding, canon, external)) = found {
                 if opaque_tokens && (binding.raw || name.starts_with("r#")) {
                     return None;
                 }
-                return Some(Self::resolved(Domain::Inherited, *ns, binding, Some(canon)));
+                return Some(Self::resolved(
+                    Domain::Inherited,
+                    *ns,
+                    binding,
+                    Some(canon),
+                    external,
+                ));
             }
         }
         None
@@ -935,6 +948,11 @@ impl<'env> Renamer<'env> {
                 ..Resolution::default()
             };
         };
+        // A function view spells an external import as its rooted path, which no binding
+        // resolves.
+        if resolved.external.is_some() && !self.context && !self.observed {
+            return Resolution::default();
+        }
         let origin = if let Some(index) = resolved.target {
             let target = self.target_of(resolved.domain, index);
             if target.rooted {
@@ -1931,6 +1949,13 @@ impl<'env> Renamer<'env> {
         else {
             return;
         };
+        if let Some(external) = resolved
+            .external
+            .filter(|_| !self.context && !self.observed)
+        {
+            self.root_external(path, external);
+            return;
+        }
         if let Some(index) = resolved.target {
             let (rooted, start, mut rendered) = {
                 let target = self.target_of(resolved.domain, index);
@@ -1975,6 +2000,32 @@ impl<'env> Renamer<'env> {
                 path.segments.iter_mut().skip(1),
             );
         }
+    }
+
+    /// Spell a path whose first segment imports an external crate item as the item's rooted
+    /// path, `::` kept only where a binding in view takes the crate's name.
+    fn root_external(&self, path: &mut syn::Path, external: &[String]) {
+        let arguments = core::mem::replace(
+            &mut path
+                .segments
+                .first_mut()
+                .expect("a first segment")
+                .arguments,
+            syn::PathArguments::None,
+        );
+        let mut rendered: syn::punctuated::Punctuated<syn::PathSegment, syn::Token![::]> = external
+            .iter()
+            .map(|name| syn::PathSegment::from(Ident::new(name, Span::call_site())))
+            .collect();
+        rendered
+            .last_mut()
+            .expect("a rooted external path")
+            .arguments = arguments;
+        rendered.extend(core::mem::take(&mut path.segments).into_iter().skip(1));
+        path.segments = rendered;
+        path.leading_colon = Some(syn::token::PathSep::default());
+        let head = path.segments.first().map(|segment| segment.ident.clone());
+        self.unroot(&mut path.leading_colon, head.as_ref());
     }
 
     /// The rendered segments of an alias target, a local module step renamed.
@@ -2096,6 +2147,9 @@ impl<'env> Renamer<'env> {
         let Some(resolved) = self.lookup(root_ns, &name) else {
             return origins;
         };
+        if resolved.external.is_some() && !self.context && !self.observed {
+            return origins;
+        }
         let mut current: Option<(Domain, BindingId)> = None;
         let mut stepped = false;
         if let Some(index) = resolved.target {
@@ -2256,7 +2310,7 @@ impl<'env> Renamer<'env> {
         let first_name = first.ident.to_string();
         let resolved = if head_name == "crate" {
             let binding = self.frames.first()?.lookup(Ns::Type, &first_name)?;
-            Self::resolved(Domain::Local, Ns::Type, binding, None)
+            Self::resolved(Domain::Local, Ns::Type, binding, None, None)
         } else {
             self.lookup(root_ns, &first_name)?
         };

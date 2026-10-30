@@ -54,7 +54,10 @@ fn value_function_views_preserve_contextual_relations() {
         ",
     )
     .unwrap();
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let canonical = |name: &str| {
         let f = function(&source, name);
         view(&context, &f.sig, &f.block)
@@ -145,7 +148,10 @@ fn module_scoped_aliases_keep_their_value_relations() {
         ",
     )
     .unwrap();
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let scoped = |name: &str| {
         let f = module_function(&source, "scoped", name);
         view(&context, &f.sig, &f.block)
@@ -170,7 +176,10 @@ fn incomplete_glob_and_conditional_contexts_gate_the_value_folds() {
         ",
     )
     .unwrap();
-    let complete_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &complete)));
+    let complete_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &complete)),
+        syn_canon::Edition::E2021,
+    );
     let aliased = function(&complete, "aliased");
     let inlined = function(&complete, "inlined");
     assert_eq!(
@@ -186,8 +195,10 @@ fn incomplete_glob_and_conditional_contexts_gate_the_value_folds() {
         ",
     )
     .unwrap();
-    let incomplete_context =
-        syn_canon::SourceContext::new(core::iter::once((&[][..], &incomplete)));
+    let incomplete_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &incomplete)),
+        syn_canon::Edition::E2021,
+    );
     let aliased = function(&incomplete, "aliased");
     let inlined = function(&incomplete, "inlined");
     assert_ne!(
@@ -209,7 +220,10 @@ fn incomplete_glob_and_conditional_contexts_gate_the_value_folds() {
         ),
         form("mod plugin; use plugin::*; fn g(input: u32) -> u32 { (input & 15u32) ^ 3u32 }")
     );
-    let globbed_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &globbed)));
+    let globbed_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &globbed)),
+        syn_canon::Edition::E2021,
+    );
     let aliased = function(&globbed, "aliased");
     let inlined = function(&globbed, "inlined");
     assert_ne!(
@@ -225,8 +239,10 @@ fn incomplete_glob_and_conditional_contexts_gate_the_value_folds() {
         ",
     )
     .unwrap();
-    let conditional_context =
-        syn_canon::SourceContext::new(core::iter::once((&[][..], &conditional)));
+    let conditional_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &conditional)),
+        syn_canon::Edition::E2021,
+    );
     let aliased = function(&conditional, "aliased");
     let inlined = function(&conditional, "inlined");
     assert_ne!(
@@ -248,7 +264,10 @@ fn live_cfg_attributes_gate_the_value_folds_in_views() {
         ",
     )
     .unwrap();
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let canonical = |name: &str| {
         let f = function(&source, name);
         view(&context, &f.sig, &f.block)

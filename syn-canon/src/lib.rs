@@ -15,6 +15,8 @@ mod constants;
 mod context;
 mod disjunctions;
 mod drift;
+mod edition;
+mod externals;
 mod form;
 mod helpers;
 mod items;
@@ -31,6 +33,7 @@ use proc_macro2::{TokenStream, TokenTree};
 
 pub use blocks::{Context, ContextKind, ContextWork, contexts};
 pub use context::{FunctionView, SourceContext, wrapped};
+pub use edition::{Edition, UnknownEdition};
 pub use form::CanonicalForm;
 
 /// The canonical form of compiling syntax, equal across style folds, binder names and proven

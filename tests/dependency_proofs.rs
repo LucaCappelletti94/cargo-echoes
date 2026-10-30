@@ -17,8 +17,14 @@ fn identical_alias_spelling_retains_resolved_operation_width() {
     }";
     let narrow: syn::File = syn::parse_str(&format!("type Word = u32; {body}")).unwrap();
     let wide: syn::File = syn::parse_str(&format!("type Word = u64; {body}")).unwrap();
-    let narrow_context = SourceContext::new(core::iter::once((&[][..], &narrow)));
-    let wide_context = SourceContext::new(core::iter::once((&[][..], &wide)));
+    let narrow_context = SourceContext::new(
+        core::iter::once((&[][..], &narrow)),
+        syn_canon::Edition::E2021,
+    );
+    let wide_context = SourceContext::new(
+        core::iter::once((&[][..], &wide)),
+        syn_canon::Edition::E2021,
+    );
     let narrow = function(&narrow, "f");
     let wide = function(&wide, "f");
     assert_ne!(
@@ -39,8 +45,14 @@ fn identical_alias_spelling_retains_resolved_tail_type() {
         syn::parse_str("type Word = u32; fn f(input: Word) -> Word { input }").unwrap();
     let wide: syn::File =
         syn::parse_str("type Word = u64; fn f(input: Word) -> Word { input }").unwrap();
-    let narrow_context = SourceContext::new(core::iter::once((&[][..], &narrow)));
-    let wide_context = SourceContext::new(core::iter::once((&[][..], &wide)));
+    let narrow_context = SourceContext::new(
+        core::iter::once((&[][..], &narrow)),
+        syn_canon::Edition::E2021,
+    );
+    let wide_context = SourceContext::new(
+        core::iter::once((&[][..], &wide)),
+        syn_canon::Edition::E2021,
+    );
     let narrow = function(&narrow, "f");
     let wide = function(&wide, "f");
     assert_ne!(
@@ -69,8 +81,8 @@ fn imported_alias_sharing_a_value_name_retains_its_operation_width() {
     };
     let narrow = source(32);
     let wide = source(64);
-    let narrow_context = SourceContext::new([(&[][..], &narrow)]);
-    let wide_context = SourceContext::new([(&[][..], &wide)]);
+    let narrow_context = SourceContext::new([(&[][..], &narrow)], syn_canon::Edition::E2021);
+    let wide_context = SourceContext::new([(&[][..], &wide)], syn_canon::Edition::E2021);
     let narrow = function(&narrow, "f");
     let wide = function(&wide, "f");
     assert_ne!(
@@ -90,8 +102,8 @@ fn alias_width_pair_inequal(widths: [u32; 2], body: &str) {
         |width| syn::parse_str::<syn::File>(&format!("type Word = u{width}; {body}")).unwrap();
     let narrow = source(widths[0]);
     let wide = source(widths[1]);
-    let narrow_context = SourceContext::new([(&[][..], &narrow)]);
-    let wide_context = SourceContext::new([(&[][..], &wide)]);
+    let narrow_context = SourceContext::new([(&[][..], &narrow)], syn_canon::Edition::E2021);
+    let wide_context = SourceContext::new([(&[][..], &wide)], syn_canon::Edition::E2021);
     let narrow = function(&narrow, "f");
     let wide = function(&wide, "f");
     assert_ne!(
@@ -109,8 +121,8 @@ fn alias_width_pair_inequal(widths: [u32; 2], body: &str) {
 fn renamed_pair_equal(a: &str, b: &str) {
     let a: syn::File = syn::parse_str(a).unwrap();
     let b: syn::File = syn::parse_str(b).unwrap();
-    let a_context = SourceContext::new(core::iter::once((&[][..], &a)));
-    let b_context = SourceContext::new(core::iter::once((&[][..], &b)));
+    let a_context = SourceContext::new(core::iter::once((&[][..], &a)), syn_canon::Edition::E2021);
+    let b_context = SourceContext::new(core::iter::once((&[][..], &b)), syn_canon::Edition::E2021);
     let fa = function(&a, "f");
     let fb = function(&b, "f");
     assert_eq!(
@@ -284,8 +296,8 @@ fn renamed_long_macro_path_keeps_identical_form() {
         }",
     )
     .unwrap();
-    let a_context = SourceContext::new(core::iter::once((&[][..], &a)));
-    let b_context = SourceContext::new(core::iter::once((&[][..], &b)));
+    let a_context = SourceContext::new(core::iter::once((&[][..], &a)), syn_canon::Edition::E2021);
+    let b_context = SourceContext::new(core::iter::once((&[][..], &b)), syn_canon::Edition::E2021);
     let fa = function(&a, "f");
     let fb = function(&b, "f");
     assert_eq!(
@@ -436,8 +448,14 @@ fn chained_alias_swap_source(count: usize, swapped: bool) -> String {
 fn alias_chains_stop_at_the_sixteen_hop_bound() {
     let long: syn::File = syn::parse_str(&alias_chain(18)).unwrap();
     let bounded: syn::File = syn::parse_str(&alias_chain(16)).unwrap();
-    let long_context = SourceContext::new(core::iter::once((&[][..], &long)));
-    let bounded_context = SourceContext::new(core::iter::once((&[][..], &bounded)));
+    let long_context = SourceContext::new(
+        core::iter::once((&[][..], &long)),
+        syn_canon::Edition::E2021,
+    );
+    let bounded_context = SourceContext::new(
+        core::iter::once((&[][..], &bounded)),
+        syn_canon::Edition::E2021,
+    );
     let long_fn = function(&long, "f");
     let bounded_fn = function(&bounded, "f");
     assert_ne!(
@@ -456,8 +474,14 @@ fn alias_chains_stop_at_the_sixteen_hop_bound() {
 fn seventeen_hop_alias_chains_keep_their_primitive() {
     let chained: syn::File = syn::parse_str(&alias_chain(17)).unwrap();
     let bounded: syn::File = syn::parse_str(&alias_chain(16)).unwrap();
-    let chained_context = SourceContext::new(core::iter::once((&[][..], &chained)));
-    let bounded_context = SourceContext::new(core::iter::once((&[][..], &bounded)));
+    let chained_context = SourceContext::new(
+        core::iter::once((&[][..], &chained)),
+        syn_canon::Edition::E2021,
+    );
+    let bounded_context = SourceContext::new(
+        core::iter::once((&[][..], &bounded)),
+        syn_canon::Edition::E2021,
+    );
     let chained_fn = function(&chained, "f");
     let bounded_fn = function(&bounded, "f");
     assert_eq!(
@@ -477,8 +501,14 @@ fn two_hop_alias_chains_keep_their_primitive() {
     let chained: syn::File =
         syn::parse_str("type a1 = a2; type a2 = u32; fn f(x: a1) -> a1 { x }").unwrap();
     let direct: syn::File = syn::parse_str("type a1 = u32; fn f(x: a1) -> a1 { x }").unwrap();
-    let chained_context = SourceContext::new(core::iter::once((&[][..], &chained)));
-    let direct_context = SourceContext::new(core::iter::once((&[][..], &direct)));
+    let chained_context = SourceContext::new(
+        core::iter::once((&[][..], &chained)),
+        syn_canon::Edition::E2021,
+    );
+    let direct_context = SourceContext::new(
+        core::iter::once((&[][..], &direct)),
+        syn_canon::Edition::E2021,
+    );
     let chained_fn = function(&chained, "f");
     let direct_fn = function(&direct, "f");
     assert_eq!(
@@ -498,8 +528,14 @@ fn unrelated_types_do_not_block_alias_primitives() {
     let unrelated: syn::File =
         syn::parse_str("type a1 = u32; struct S; fn f(x: a1) -> a1 { x }").unwrap();
     let plain: syn::File = syn::parse_str("type a1 = u32; fn f(x: a1) -> a1 { x }").unwrap();
-    let unrelated_context = SourceContext::new(core::iter::once((&[][..], &unrelated)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let unrelated_context = SourceContext::new(
+        core::iter::once((&[][..], &unrelated)),
+        syn_canon::Edition::E2021,
+    );
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let unrelated_fn = function(&unrelated, "f");
     let plain_fn = function(&plain, "f");
     assert_eq!(
@@ -519,8 +555,14 @@ fn local_type_shadows_block_alias_primitives() {
     let shadowed: syn::File =
         syn::parse_str("type a1 = u32; struct u32; fn f(x: a1) -> a1 { x }").unwrap();
     let plain: syn::File = syn::parse_str("type a1 = u32; fn f(x: a1) -> a1 { x }").unwrap();
-    let shadowed_context = SourceContext::new(core::iter::once((&[][..], &shadowed)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let shadowed_context = SourceContext::new(
+        core::iter::once((&[][..], &shadowed)),
+        syn_canon::Edition::E2021,
+    );
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let shadowed_fn = function(&shadowed, "f");
     let plain_fn = function(&plain, "f");
     assert_ne!(
@@ -539,8 +581,12 @@ fn local_type_shadows_block_alias_primitives() {
 fn raw_alias_targets_keep_their_primitive() {
     let raw: syn::File = syn::parse_str("type a1 = r#u32; fn f(x: a1) -> a1 { x }").unwrap();
     let plain: syn::File = syn::parse_str("type a1 = u32; fn f(x: a1) -> a1 { x }").unwrap();
-    let raw_context = SourceContext::new(core::iter::once((&[][..], &raw)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let raw_context =
+        SourceContext::new(core::iter::once((&[][..], &raw)), syn_canon::Edition::E2021);
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let raw_fn = function(&raw, "f");
     let plain_fn = function(&plain, "f");
     assert_eq!(
@@ -560,8 +606,14 @@ fn cfg_attribution_blocks_alias_primitives() {
     let attributed: syn::File =
         syn::parse_str("#[cfg(unix)] type a1 = u32; fn f(x: a1) -> a1 { x }").unwrap();
     let plain: syn::File = syn::parse_str("type a1 = u32; fn f(x: a1) -> a1 { x }").unwrap();
-    let attributed_context = SourceContext::new(core::iter::once((&[][..], &attributed)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let attributed_context = SourceContext::new(
+        core::iter::once((&[][..], &attributed)),
+        syn_canon::Edition::E2021,
+    );
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let attributed_fn = function(&attributed, "f");
     let plain_fn = function(&plain, "f");
     assert_ne!(
@@ -581,7 +633,10 @@ fn prefix_distinguishes(prefix: &str, plain_form: &CanonicalForm) {
         "{prefix} type Word = u32; fn f(x: Word) -> Word {{ x }}"
     ))
     .unwrap();
-    let prefixed_context = SourceContext::new(core::iter::once((&[][..], &prefixed)));
+    let prefixed_context = SourceContext::new(
+        core::iter::once((&[][..], &prefixed)),
+        syn_canon::Edition::E2021,
+    );
     let prefixed_fn = function(&prefixed, "f");
     assert_ne!(
         prefixed_context
@@ -595,7 +650,10 @@ fn prefix_distinguishes(prefix: &str, plain_form: &CanonicalForm) {
 #[test]
 fn forward_type_shadows_block_alias_primitives() {
     let plain: syn::File = syn::parse_str("type Word = u32; fn f(x: Word) -> Word { x }").unwrap();
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let plain_fn = function(&plain, "f");
     let plain_form = plain_context
         .function(&plain_fn.sig, &plain_fn.block)
@@ -613,8 +671,14 @@ fn unrelated_imports_do_not_block_alias_primitives() {
     )
     .unwrap();
     let plain: syn::File = syn::parse_str("type Word = u32; fn f(x: Word) -> Word { x }").unwrap();
-    let imported_context = SourceContext::new(core::iter::once((&[][..], &imported)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let imported_context = SourceContext::new(
+        core::iter::once((&[][..], &imported)),
+        syn_canon::Edition::E2021,
+    );
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let imported_fn = function(&imported, "f");
     let plain_fn = function(&plain, "f");
     assert_eq!(
@@ -632,7 +696,10 @@ fn unrelated_imports_do_not_block_alias_primitives() {
 #[test]
 fn imports_claiming_the_target_block_alias_primitives() {
     let plain: syn::File = syn::parse_str("type Word = u32; fn f(x: Word) -> Word { x }").unwrap();
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let plain_fn = function(&plain, "f");
     let plain_form = plain_context
         .function(&plain_fn.sig, &plain_fn.block)
@@ -654,8 +721,14 @@ fn self_imports_claim_their_parent_name() {
             .unwrap();
     let plain: syn::File =
         syn::parse_str("use std::primitive::u32; fn f(x: u32) -> u32 { x }").unwrap();
-    let claimed_context = SourceContext::new(core::iter::once((&[][..], &claimed)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let claimed_context = SourceContext::new(
+        core::iter::once((&[][..], &claimed)),
+        syn_canon::Edition::E2021,
+    );
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let claimed_fn = function(&claimed, "f");
     let plain_fn = function(&plain, "f");
     assert_ne!(
@@ -680,8 +753,14 @@ fn alias_parameters_schedule_like_their_primitive() {
         "type Word = u32; struct S; fn f(input: Word) -> (Word, Word) { let high = input >> 4; let low = input & 15u32; (low, high) }",
     )
     .unwrap();
-    let original_context = SourceContext::new(core::iter::once((&[][..], &original)));
-    let swapped_context = SourceContext::new(core::iter::once((&[][..], &swapped)));
+    let original_context = SourceContext::new(
+        core::iter::once((&[][..], &original)),
+        syn_canon::Edition::E2021,
+    );
+    let swapped_context = SourceContext::new(
+        core::iter::once((&[][..], &swapped)),
+        syn_canon::Edition::E2021,
+    );
     let original_fn = function(&original, "f");
     let swapped_fn = function(&swapped, "f");
     assert_eq!(
@@ -701,8 +780,14 @@ fn cfg_attributed_modules_block_primitive_facts() {
     let body = "fn f(input: u32) -> (u32, u32) { let low = input & 15u32; let high = input >> 4; (low, high) }";
     let attributed: syn::File = syn::parse_str(&format!("#[cfg(unix)] mod m {{}} {body}")).unwrap();
     let plain: syn::File = syn::parse_str(body).unwrap();
-    let attributed_context = SourceContext::new(core::iter::once((&[][..], &attributed)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let attributed_context = SourceContext::new(
+        core::iter::once((&[][..], &attributed)),
+        syn_canon::Edition::E2021,
+    );
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let attributed_fn = function(&attributed, "f");
     let plain_fn = function(&plain, "f");
     assert_ne!(
@@ -722,8 +807,14 @@ fn extern_crates_block_primitive_facts() {
     let body = "fn f(input: u32) -> (u32, u32) { let low = input & 15u32; let high = input >> 4; (low, high) }";
     let declared: syn::File = syn::parse_str(&format!("extern crate alloc; {body}")).unwrap();
     let plain: syn::File = syn::parse_str(body).unwrap();
-    let declared_context = SourceContext::new(core::iter::once((&[][..], &declared)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let declared_context = SourceContext::new(
+        core::iter::once((&[][..], &declared)),
+        syn_canon::Edition::E2021,
+    );
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let declared_fn = function(&declared, "f");
     let plain_fn = function(&plain, "f");
     assert_ne!(
@@ -746,8 +837,14 @@ fn grouped_glob_imports_block_primitive_facts() {
     ))
     .unwrap();
     let plain: syn::File = syn::parse_str(body).unwrap();
-    let grouped_context = SourceContext::new(core::iter::once((&[][..], &grouped)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let grouped_context = SourceContext::new(
+        core::iter::once((&[][..], &grouped)),
+        syn_canon::Edition::E2021,
+    );
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let grouped_fn = function(&grouped, "f");
     let plain_fn = function(&plain, "f");
     assert_ne!(
@@ -769,8 +866,14 @@ fn local_shadows_block_primitive_crate_imports() {
             .unwrap();
     let plain: syn::File =
         syn::parse_str("use std::primitive::u32; fn f(x: u32) -> u32 { x }").unwrap();
-    let shadowed_context = SourceContext::new(core::iter::once((&[][..], &shadowed)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let shadowed_context = SourceContext::new(
+        core::iter::once((&[][..], &shadowed)),
+        syn_canon::Edition::E2021,
+    );
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let shadowed_fn = function(&shadowed, "f");
     let plain_fn = function(&plain, "f");
     assert_ne!(
@@ -792,8 +895,14 @@ fn raw_shadows_block_primitive_crate_imports() {
             .unwrap();
     let plain: syn::File =
         syn::parse_str("use core::primitive::u8; fn f(x: u8) -> u8 { x }").unwrap();
-    let shadowed_context = SourceContext::new(core::iter::once((&[][..], &shadowed)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let shadowed_context = SourceContext::new(
+        core::iter::once((&[][..], &shadowed)),
+        syn_canon::Edition::E2021,
+    );
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let shadowed_fn = function(&shadowed, "f");
     let plain_fn = function(&plain, "f");
     assert_ne!(
@@ -822,9 +931,18 @@ fn cast_targets_keep_their_resolved_identity() {
         "type Wide = u64; type Signed = i32; fn f(input: u32) -> (Wide, Signed) { let low = input & 15u32; let high = input >> 4; (low as Wide, high as Signed) }",
     )
     .unwrap();
-    let original_context = SourceContext::new(core::iter::once((&[][..], &original)));
-    let swapped_context = SourceContext::new(core::iter::once((&[][..], &swapped)));
-    let other_context = SourceContext::new(core::iter::once((&[][..], &other)));
+    let original_context = SourceContext::new(
+        core::iter::once((&[][..], &original)),
+        syn_canon::Edition::E2021,
+    );
+    let swapped_context = SourceContext::new(
+        core::iter::once((&[][..], &swapped)),
+        syn_canon::Edition::E2021,
+    );
+    let other_context = SourceContext::new(
+        core::iter::once((&[][..], &other)),
+        syn_canon::Edition::E2021,
+    );
     let original_fn = function(&original, "f");
     let swapped_fn = function(&swapped, "f");
     let other_fn = function(&other, "f");
@@ -862,9 +980,18 @@ fn nested_blocks_keep_their_captured_schedule() {
         "fn f(input: u32) -> (u32, u32) { let low = input & 15u32; let high = input >> 5; { (low, high) } }",
     )
     .unwrap();
-    let original_context = SourceContext::new(core::iter::once((&[][..], &original)));
-    let swapped_context = SourceContext::new(core::iter::once((&[][..], &swapped)));
-    let other_context = SourceContext::new(core::iter::once((&[][..], &other)));
+    let original_context = SourceContext::new(
+        core::iter::once((&[][..], &original)),
+        syn_canon::Edition::E2021,
+    );
+    let swapped_context = SourceContext::new(
+        core::iter::once((&[][..], &swapped)),
+        syn_canon::Edition::E2021,
+    );
+    let other_context = SourceContext::new(
+        core::iter::once((&[][..], &other)),
+        syn_canon::Edition::E2021,
+    );
     let original_fn = function(&original, "f");
     let swapped_fn = function(&swapped, "f");
     let other_fn = function(&other, "f");
@@ -898,8 +1025,14 @@ fn closure_captures_keep_their_lexical_order() {
         "fn f(input: u32) -> (u32, u32) { let high = input >> 4; let low = input & 15u32; let capture = || (low, high); std::hint::black_box(capture); (low, high) }",
     )
     .unwrap();
-    let original_context = SourceContext::new(core::iter::once((&[][..], &original)));
-    let swapped_context = SourceContext::new(core::iter::once((&[][..], &swapped)));
+    let original_context = SourceContext::new(
+        core::iter::once((&[][..], &original)),
+        syn_canon::Edition::E2021,
+    );
+    let swapped_context = SourceContext::new(
+        core::iter::once((&[][..], &swapped)),
+        syn_canon::Edition::E2021,
+    );
     let original_fn = function(&original, "f");
     let swapped_fn = function(&swapped, "f");
     assert_ne!(
@@ -934,8 +1067,14 @@ fn shallow_sibling_blocks_keep_their_schedule_near_the_depth_bound() {
     };
     let original: syn::File = syn::parse_str(&source(sibling)).unwrap();
     let swapped: syn::File = syn::parse_str(&source(swapped)).unwrap();
-    let original_context = SourceContext::new(core::iter::once((&[][..], &original)));
-    let swapped_context = SourceContext::new(core::iter::once((&[][..], &swapped)));
+    let original_context = SourceContext::new(
+        core::iter::once((&[][..], &original)),
+        syn_canon::Edition::E2021,
+    );
+    let swapped_context = SourceContext::new(
+        core::iter::once((&[][..], &swapped)),
+        syn_canon::Edition::E2021,
+    );
     let original_fn = function(&original, "f");
     let swapped_fn = function(&swapped, "f");
     assert_eq!(
@@ -975,7 +1114,8 @@ fn observed_impl_methods_freeze_their_bodies() {
     let observed_file: syn::File = syn::parse_str(&source("#[observer::inspect]")).unwrap();
     let plain_file: syn::File = syn::parse_str(&source("")).unwrap();
     let forms = |file: &syn::File| -> Vec<CanonicalForm> {
-        let context = SourceContext::new(core::iter::once((&[][..], file)));
+        let context =
+            SourceContext::new(core::iter::once((&[][..], file)), syn_canon::Edition::E2021);
         file.items
             .iter()
             .filter_map(|item| match item {
@@ -1008,7 +1148,8 @@ fn observed_trait_methods_freeze_their_bodies() {
     let observed_file: syn::File = syn::parse_str(&source("#[observer::inspect]")).unwrap();
     let plain_file: syn::File = syn::parse_str(&source("")).unwrap();
     let forms = |file: &syn::File| -> Vec<CanonicalForm> {
-        let context = SourceContext::new(core::iter::once((&[][..], file)));
+        let context =
+            SourceContext::new(core::iter::once((&[][..], file)), syn_canon::Edition::E2021);
         file.items
             .iter()
             .filter_map(|item| match item {
@@ -1067,8 +1208,14 @@ fn qself_paths_keep_their_non_primitive_identity() {
         "fn f(input: u32) -> (u32, u32) { let low = input & 15u32; let high = input >> 4; (low, high) }",
     )
     .unwrap();
-    let associated_context = SourceContext::new(core::iter::once((&[][..], &associated)));
-    let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
+    let associated_context = SourceContext::new(
+        core::iter::once((&[][..], &associated)),
+        syn_canon::Edition::E2021,
+    );
+    let plain_context = SourceContext::new(
+        core::iter::once((&[][..], &plain)),
+        syn_canon::Edition::E2021,
+    );
     let associated_fn = function(&associated, "f");
     let plain_fn = function(&plain, "f");
     assert_ne!(
@@ -1208,7 +1355,10 @@ fn observed_owners_drop_the_bool_parameter_proof() {
     };
     let method_form = |source: &str| {
         let file: syn::File = syn::parse_str(source).unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &file)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &file)),
+            syn_canon::Edition::E2021,
+        );
         let syn::Item::Impl(impl_item) = &file.items[1] else {
             unreachable!()
         };

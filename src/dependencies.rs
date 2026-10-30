@@ -112,6 +112,8 @@ struct Package {
     lib_rel: Option<String>,
     /// Library target name, `[lib].name` when declared.
     lib_name: Option<String>,
+    /// The edition the library target compiles under.
+    edition: syn_canon::Edition,
     /// Repository field of the package manifest, when declared.
     repository: Option<String>,
     /// Whether the package exposes an ordinary Rust-linkable library.
@@ -468,6 +470,7 @@ fn index_latest(
     latest_pkg.version.clone_from(&version);
     latest_pkg.lib_name = lib_name;
     latest_pkg.library = library;
+    latest_pkg.edition = manifest_edition(&value);
     let mut source = Source {
         root: latest_root,
         mutable: false,
@@ -774,6 +777,7 @@ impl Discovery {
                 deps,
                 lib_rel: Some(lib_rel),
                 lib_name,
+                edition: manifest_edition(&value),
                 repository,
                 library,
                 resolved: false,
@@ -873,6 +877,7 @@ impl Discovery {
                 deps,
                 lib_rel: Some(lib_rel),
                 lib_name,
+                edition: manifest_edition(&value),
                 repository,
                 library,
                 resolved: false,
@@ -1136,6 +1141,7 @@ impl Discovery {
             name: pkg.lib_name.clone().unwrap_or_else(|| pkg.name.clone()),
             files: tree.files,
             library: pkg.library,
+            edition: pkg.edition,
         };
         let root = src.root.to_string_lossy().into_owned();
         let scanned = |file: &crate::SourceFile| {
@@ -1191,6 +1197,7 @@ fn package_tree(
         src: root.join(lib_rel),
         doc: true,
         library: pkg.library,
+        edition: pkg.edition,
     };
     crate::discover::module_tree(&target, public.then_some(root))
 }
@@ -1634,6 +1641,9 @@ fn build_graph(metadata: &Metadata, targeted: &BTreeMap<String, Vec<ManifestDep>
                 deps,
                 lib_rel: lib.as_ref().map(|(rel, _)| rel.clone()),
                 lib_name: lib.as_ref().map(|(_, name)| name.clone()),
+                edition: crate::discover::edition(Some(
+                    lib_target.map_or(pkg.edition.as_str(), |target| target.edition.as_str()),
+                )),
                 repository: pkg.repository.clone(),
                 library: linkable.is_some(),
                 resolved: false,
@@ -1714,6 +1724,15 @@ fn manifest_library_info(
         }
     }
     Some((path.to_owned(), name, library))
+}
+
+/// The edition of a package's library from its raw manifest, a `[lib]` override first.
+fn manifest_edition(value: &toml::Value) -> syn_canon::Edition {
+    crate::discover::edition(
+        ["lib", "package"]
+            .iter()
+            .find_map(|table| value.get(table)?.get("edition")?.as_str()),
+    )
 }
 
 /// Manifest dependency edges of a package discovered from a raw manifest.
@@ -2180,6 +2199,7 @@ mod tests {
             name: crate_name.to_owned(),
             files: sources,
             library: true,
+            edition: syn_canon::Edition::E2021,
         };
         crate::context_index::extract(&scan, &dir.to_string_lossy(), &|_| true)
     }
@@ -2208,6 +2228,7 @@ mod tests {
                 },
             ],
             library: true,
+            edition: syn_canon::Edition::E2021,
         }]
     }
 
@@ -2592,6 +2613,7 @@ mod tests {
                 rustdoc: true,
             }],
             library: true,
+            edition: syn_canon::Edition::E2021,
         });
         let options = app_options(dir.path(), &cache, 1);
         let report = run(dir.path(), &local, &targets, &options);
@@ -3024,6 +3046,7 @@ mod tests {
                 rustdoc: true,
             }],
             library: true,
+            edition: syn_canon::Edition::E2021,
         }]
     }
 
@@ -4355,6 +4378,7 @@ iota = { version = "4", optional = true }
                 rustdoc: true,
             }],
             library: true,
+            edition: syn_canon::Edition::E2021,
         }];
         let options = app_options(dir.path(), &cache, 1);
         let report = run(dir.path(), &local, &targets, &options);

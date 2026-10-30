@@ -204,6 +204,8 @@ pub(crate) struct Frame {
     pub(crate) std_rebound: u64,
     /// The variant names, in declaration order, of each enum binding of the type namespace.
     enums: BTreeMap<BindingId, Vec<String>>,
+    /// The rooted path each import of an external crate item names, for function views.
+    externals: BTreeMap<BindingId, Vec<String>>,
 }
 
 impl Frame {
@@ -268,6 +270,16 @@ impl Frame {
     /// The variants of the enum `binding` names, when this frame declared one.
     pub(crate) fn variants(&self, binding: &Binding) -> Option<&[String]> {
         self.enums.get(&binding.id).map(Vec::as_slice)
+    }
+
+    /// Record the rooted external crate path the import `id` names.
+    pub(crate) fn set_external(&mut self, id: BindingId, path: Vec<String>) {
+        self.externals.insert(id, path);
+    }
+
+    /// The rooted external crate path `binding` names, when this frame imported one.
+    pub(crate) fn external(&self, binding: &Binding) -> Option<&[String]> {
+        self.externals.get(&binding.id).map(Vec::as_slice)
     }
 }
 

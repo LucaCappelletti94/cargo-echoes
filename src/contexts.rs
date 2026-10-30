@@ -163,6 +163,7 @@ mod tests {
         let target = TargetScan {
             name: "fixture".into(),
             library: true,
+            edition: syn_canon::Edition::E2021,
             files: vec![SourceFile {
                 path: "src/lib.rs".into(),
                 segments: vec![],
@@ -282,11 +283,13 @@ mod tests {
             TargetScan {
                 name: "one".into(),
                 library: true,
+                edition: syn_canon::Edition::E2021,
                 files: vec![file.clone()],
             },
             TargetScan {
                 name: "two".into(),
                 library: false,
+                edition: syn_canon::Edition::E2021,
                 files: vec![file],
             },
         ];
@@ -450,6 +453,7 @@ mod tests {
         let target = TargetScan {
             name: "fixture".into(),
             library: true,
+            edition: syn_canon::Edition::E2021,
             files: vec![SourceFile {
                 path: "src/lib.rs".into(),
                 segments: vec![],

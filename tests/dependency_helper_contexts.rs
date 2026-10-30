@@ -5,7 +5,7 @@ mod spans;
 
 use spans::reset_spans;
 fn context(file: &syn::File) -> syn_canon::SourceContext<'_> {
-    syn_canon::SourceContext::new(core::iter::once((&[][..], file)))
+    syn_canon::SourceContext::new(core::iter::once((&[][..], file)), syn_canon::Edition::E2021)
 }
 fn function<'a>(file: &'a syn::File, module: Option<&str>, name: &str) -> &'a syn::ItemFn {
     let inner = match module {

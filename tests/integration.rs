@@ -1964,6 +1964,39 @@ fn literal_tail_functions_group_by_their_return_type() {
     assert_eq!(function_groups(&scan(2)).len(), 0);
 }
 
+const IMPORTS_FIXTURE: &str = "tests/fixtures/importsws";
+
+#[test]
+fn imported_and_rooted_standard_paths_group_together() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(IMPORTS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec![
+        "importsws::imported",
+        "importsws::module",
+        "importsws::rooted",
+    ]];
+    for tokens in [0, 23] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(24)).len(), 0);
+}
+
+#[test]
+fn edition_2015_imports_keep_their_spelling() {
+    let report = Echoes::default()
+        .functions()
+        .fn_min_tokens(0)
+        .run("tests/fixtures/imports2015ws")
+        .unwrap();
+    assert_eq!(report.functions, 4);
+    assert_eq!(function_groups(&report).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

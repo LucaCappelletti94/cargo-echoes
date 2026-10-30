@@ -1946,7 +1946,7 @@ fn source_collector<'a, 's>(scopes: &'s Scopes<'a>) -> Collector<'a, 's> {
                 && scope.items().iter().all(
                     |item| !matches!(item, syn::Item::Use(item) if !use_tree_known(&item.tree, 0)),
                 );
-            let frame = seed_frame(&scopes.modules, path, &scope, known);
+            let frame = seed_frame(&scopes.modules, path, &scope, known, false);
             let environment = collector.environments.len();
             collector.environments.push(Environment {
                 frame,

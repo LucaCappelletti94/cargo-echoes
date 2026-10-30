@@ -78,6 +78,7 @@ pub fn functions(source: &str) -> Option<echoes::Report> {
         name: "c".into(),
         files: vec![file("a"), file("b")],
         library: true,
+        edition: echoes::Edition::E2021,
     };
     Some(
         echoes::Echoes::default()

@@ -171,7 +171,10 @@ fn boolean_function_views_preserve_contextual_relations() {
         ",
     )
     .unwrap();
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let canonical = |name: &str| {
         let function = function(&source, name);
         context
@@ -280,6 +283,7 @@ fn target(text: &str) -> TargetScan {
             rustdoc: true,
         }],
         library: true,
+        edition: syn_canon::Edition::E2021,
     }
 }
 

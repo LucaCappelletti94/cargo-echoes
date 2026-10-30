@@ -6,7 +6,10 @@ fn form(source: &str) -> syn_canon::CanonicalForm {
 
 fn view(source: &str) -> syn_canon::CanonicalForm {
     let file: syn::File = syn::parse_str(source).unwrap();
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], &file)));
+    let context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &file)),
+        syn_canon::Edition::E2021,
+    );
     let function = file
         .items
         .iter()
@@ -241,7 +244,10 @@ fn clone_retention_keeps_distinct_callee_origins() {
 fn borrowed_normalization_keeps_shared_original_metadata_reusable() {
     let file: syn::File =
         syn::parse_str(&local_module(FORWARD, "panic!(\"{x}\")", "x&15u32")).unwrap();
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], &file)));
+    let context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &file)),
+        syn_canon::Edition::E2021,
+    );
     let function = file
         .items
         .iter()

@@ -26,7 +26,10 @@ fn borrowed_views_compose_local_helpers_with_parameter_copies() {
         ",
     )
     .unwrap();
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let canonical = |name: &str| {
         let function = function(&source, name);
         context
@@ -56,7 +59,10 @@ fn borrowed_tied_local_helpers_compose_with_parameter_copies() {
         ",
     )
     .unwrap();
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let canonical = |name: &str| {
         let function = function(&source, name);
         context

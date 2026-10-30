@@ -6,7 +6,10 @@ use syn_canon::{CanonicalForm, SourceContext};
 /// The forms of every method named `f`, impl methods and trait defaults, in source order.
 fn forms(src: &str) -> Vec<CanonicalForm> {
     let file: syn::File = syn::parse_str(src).unwrap_or_else(|e| panic!("{src}: {e}"));
-    let context = SourceContext::new(core::iter::once((&[][..], &file)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &file)),
+        syn_canon::Edition::E2021,
+    );
     let view = |sig: &syn::Signature, block: &syn::Block| {
         (sig.ident == "f").then(|| context.function(sig, block).unwrap().canonicalize())
     };

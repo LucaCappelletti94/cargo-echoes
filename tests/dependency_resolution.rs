@@ -23,7 +23,7 @@ fn function_form(context: &SourceContext<'_>, function: &syn::ItemFn) -> syn_can
 }
 
 fn left_right_forms(source: &syn::File) -> (CanonicalForm, CanonicalForm) {
-    let context = SourceContext::new([(&[][..], source)]);
+    let context = SourceContext::new([(&[][..], source)], syn_canon::Edition::E2021);
     let canonical = |name| {
         let target = function(source, name);
         context
@@ -56,8 +56,14 @@ fn distinct_views_for_each_pair(pairs: &[(&str, &str)]) {
     for (left, right) in pairs {
         let left: syn::File = syn::parse_str(left).unwrap();
         let right: syn::File = syn::parse_str(right).unwrap();
-        let left_context = SourceContext::new(core::iter::once((&[][..], &left)));
-        let right_context = SourceContext::new(core::iter::once((&[][..], &right)));
+        let left_context = SourceContext::new(
+            core::iter::once((&[][..], &left)),
+            syn_canon::Edition::E2021,
+        );
+        let right_context = SourceContext::new(
+            core::iter::once((&[][..], &right)),
+            syn_canon::Edition::E2021,
+        );
         let left_fn = function(&left, "f");
         let right_fn = function(&right, "f");
         distinct_function_views(&left_context, left_fn, &right_context, right_fn);
@@ -69,7 +75,10 @@ fn function_views_require_the_exact_original_declaration() {
     let file: syn::File =
         syn::parse_str("fn a(input: u32) -> u32 { input } fn b(value: u32) -> u32 { value }")
             .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &file)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &file)),
+        syn_canon::Edition::E2021,
+    );
     let a = function(&file, "a");
     let b = function(&file, "b");
     let clone = a.clone();
@@ -99,7 +108,10 @@ fn contextual_method_calls_retain_inherited_helper_identity() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let callers: Vec<_> = source
         .items
         .iter()
@@ -133,7 +145,10 @@ fn imported_helpers_retain_their_qualified_definition_identity() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let canonical = |name| {
         let function = function(&source, name);
         context
@@ -163,7 +178,10 @@ fn owner_generic_dispatch_matches_across_owner_bounds() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let forms: Vec<_> = source
         .items
         .iter()
@@ -194,7 +212,7 @@ fn local_binding_names_do_not_inherit_shadowed_module_origins() {
         fn renamed()->u32 { let y=1u32; y }",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let original = function(&source, "original");
     let renamed = function(&source, "renamed");
     assert_eq!(
@@ -221,7 +239,7 @@ fn generated_names_cannot_capture_resolved_inherited_helpers() {
         fn generated()->u32 { __dejadoc_inherited_6669727374() }",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let resolved = function(&source, "resolved");
     let generated = function(&source, "generated");
     assert_ne!(
@@ -276,7 +294,7 @@ fn owner_self_names_resolve_through_the_module_environment() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_eq!(
         method_form(&context, &source, "left"),
         method_form(&context, &source, "right")
@@ -297,7 +315,7 @@ fn owner_self_names_mangle_compound_owner_types() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_ne!(
         method_form(&context, &source, "left"),
         method_form(&context, &source, "right")
@@ -316,7 +334,7 @@ fn external_primitive_crate_imports_share_one_spelling() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let canonical = |name| {
         let function = function(&source, name);
         context
@@ -339,7 +357,7 @@ fn renamed_primitive_crate_name_shadows_the_external_spelling() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let canonical = |name| {
         let function = function(&source, name);
         context
@@ -362,7 +380,7 @@ fn raw_spelled_struct_shadows_the_primitive_crates() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let canonical = |name| {
         let function = function(&source, name);
         context
@@ -384,7 +402,7 @@ fn leading_colon_imports_keep_the_external_spelling() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let canonical = |name| {
         let function = function(&source, name);
         context
@@ -407,7 +425,7 @@ fn crate_qualified_imports_resolve_through_the_module_map() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let canonical = |name| {
         let function = function(&source, name);
         context
@@ -430,7 +448,7 @@ fn self_qualified_imports_resolve_through_the_module_map() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let canonical = |name| {
         let function = function(&source, name);
         context
@@ -451,7 +469,7 @@ fn super_qualified_imports_resolve_from_the_importing_module() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_eq!(
         module_function(&context, &source, "left"),
         module_function(&context, &source, "right")
@@ -579,7 +597,7 @@ fn macro_calls_resolve_to_their_defining_module() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_ne!(
         module_function(&context, &source, "left"),
         module_function(&context, &source, "right")
@@ -598,7 +616,7 @@ fn external_item_named_like_a_primitive_crate_shadows_it() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let canonical = |name| {
         let function = function(&source, name);
         context
@@ -621,7 +639,7 @@ fn self_named_imports_shadow_the_primitive_crate() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let canonical = |name| {
         let function = function(&source, name);
         context
@@ -645,7 +663,7 @@ fn seeded_item_ids_keep_the_helpers_distinct() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let canonical = |name| {
         let function = function(&source, name);
         context
@@ -671,7 +689,7 @@ fn generic_type_ids_keep_the_parameters_distinct() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_eq!(
         method_form(&context, &source, "left"),
         method_form(&context, &source, "same")
@@ -697,7 +715,7 @@ fn generic_const_ids_keep_the_parameters_distinct() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_eq!(
         method_form(&context, &source, "left"),
         method_form(&context, &source, "same")
@@ -722,7 +740,7 @@ fn descending_generic_type_ids_do_not_capture_seed_items() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_ne!(
         method_form(&context, &source, "left"),
         method_form(&context, &source, "right")
@@ -741,7 +759,7 @@ fn descending_generic_const_ids_do_not_capture_seed_items() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_ne!(
         method_form(&context, &source, "left"),
         method_form(&context, &source, "right")
@@ -762,7 +780,7 @@ fn macro_literal_owner_spaces_keep_the_owners_distinct() {
     "#,
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_eq!(
         method_form(&context, &source, "left"),
         method_form(&context, &source, "renamed")
@@ -794,7 +812,7 @@ fn shared_alias_imports_bind_each_namespace_to_its_own_target() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_ne!(
         module_function(&context, &source, "left"),
         module_function(&context, &source, "right")
@@ -816,7 +834,7 @@ fn root_super_imports_resolve_to_their_own_aliases() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_ne!(
         function_form(&context, function(&source, "left")),
         function_form(&context, function(&source, "right"))
@@ -835,7 +853,7 @@ fn glob_imports_do_not_shadow_the_primitive_crates() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_eq!(
         function_form(&context, function(&source, "left")),
         function_form(&context, function(&source, "right"))
@@ -860,7 +878,7 @@ fn non_function_impl_members_leave_the_method_forms_alone() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     assert_eq!(
         method_form(&context, &source, "left"),
         method_form(&context, &source, "same")
@@ -883,7 +901,7 @@ fn super_from_an_unindexed_parent_module_stays_unresolved() {
     )
     .unwrap();
     let path = ["a".to_string()];
-    let context = SourceContext::new([(&path[..], &source)]);
+    let context = SourceContext::new([(&path[..], &source)], syn_canon::Edition::E2021);
     assert_ne!(
         function_form(&context, function(&source, "left")),
         function_form(&context, function(&source, "right"))
@@ -916,7 +934,7 @@ fn shared_alias_type_references_ignore_the_value_import() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let left = module_function(&context, &source, "left");
     assert_eq!(left, module_function(&context, &source, "same"));
     assert_ne!(left, module_function(&context, &source, "right"));
@@ -936,7 +954,7 @@ fn imported_unit_constructor_patterns_retain_their_reference_role() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let left = module_function(&context, &source, "left");
     assert_eq!(left, module_function(&context, &source, "same"));
     assert_ne!(left, module_function(&context, &source, "binding"));
@@ -962,7 +980,7 @@ fn an_import_can_supply_type_value_and_macro_namespaces() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     for (left, same) in [
         ("type_left", "type_same"),
         ("value_left", "value_same"),
@@ -993,7 +1011,7 @@ fn unknown_imports_leave_local_value_declarations_intact() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let left = module_function(&context, &source, "left");
     assert_eq!(left, module_function(&context, &source, "same"));
     assert_ne!(left, module_function(&context, &source, "right"));
@@ -1016,7 +1034,7 @@ fn ambiguous_unknown_imports_keep_the_alias_scoped_and_opaque() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let left = module_function(&context, &source, "left");
     assert_eq!(left, module_function(&context, &source, "same"));
     assert_ne!(left, module_function(&context, &source, "right"));
@@ -1045,7 +1063,7 @@ fn opaque_macro_arguments_retain_all_inherited_namespace_targets() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let left = module_function(&context, &source, "left");
     assert_eq!(left, module_function(&context, &source, "same"));
     assert_ne!(left, module_function(&context, &source, "right"));
@@ -1074,7 +1092,7 @@ fn struct_patterns_and_associated_paths_read_the_type_namespace() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     for (left, same) in [("pat_left", "pat_same"), ("path_left", "path_same")] {
         assert_eq!(
             module_function(&context, &source, left),
@@ -1102,7 +1120,7 @@ fn qualified_macro_paths_resolve_the_imported_module_namespace() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let left = module_function(&context, &source, "left");
     assert_eq!(left, module_function(&context, &source, "same"));
     assert_ne!(left, module_function(&context, &source, "right"));
@@ -1129,7 +1147,7 @@ fn opaque_raw_imports_retain_their_qualified_targets_and_spelling() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let left = module_function(&context, &source, "left");
     assert_eq!(left, module_function(&context, &source, "same"));
     assert_ne!(left, module_function(&context, &source, "right"));
@@ -1160,7 +1178,7 @@ fn opaque_single_namespace_imports_preserve_raw_binding_and_reference_spelling()
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let left = module_function(&context, &source, "left");
     assert_eq!(left, module_function(&context, &source, "same"));
     assert_ne!(left, module_function(&context, &source, "declared_raw"));
@@ -1187,8 +1205,8 @@ fn opaque_single_targets_share_their_qualified_identity_across_namespace_views()
         ",
     )
     .unwrap();
-    let type_context = SourceContext::new([(&[][..], &type_only)]);
-    let value_context = SourceContext::new([(&[][..], &value_only)]);
+    let type_context = SourceContext::new([(&[][..], &type_only)], syn_canon::Edition::E2021);
+    let value_context = SourceContext::new([(&[][..], &value_only)], syn_canon::Edition::E2021);
     assert_eq!(
         function_form(&type_context, function(&type_only, "f")),
         function_form(&value_context, function(&value_only, "f"))
@@ -1218,8 +1236,8 @@ fn opaque_shared_qualified_names_retain_each_visible_namespace() {
         ",
     )
     .unwrap();
-    let ambiguous_context = SourceContext::new([(&[][..], &ambiguous)]);
-    let value_context = SourceContext::new([(&[][..], &value_only)]);
+    let ambiguous_context = SourceContext::new([(&[][..], &ambiguous)], syn_canon::Edition::E2021);
+    let value_context = SourceContext::new([(&[][..], &value_only)], syn_canon::Edition::E2021);
     assert_ne!(
         function_form(&ambiguous_context, function(&ambiguous, "f")),
         function_form(&value_context, function(&value_only, "f"))
@@ -1246,7 +1264,7 @@ fn tuple_constructor_parameter_aliases_keep_their_value_reference_role() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let first = module_function(&context, &source, "first");
     assert_eq!(first, module_function(&context, &source, "renamed"));
     assert_ne!(first, module_function(&context, &source, "different"));
@@ -1274,7 +1292,7 @@ fn named_struct_imports_match_their_type_only_declarations() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     let direct = module_function(&context, &source, "direct");
     assert_eq!(direct, module_function(&context, &source, "imported"));
     assert_ne!(direct, module_function(&context, &source, "different"));
@@ -1298,7 +1316,7 @@ fn seeded_self_ids_do_not_capture_free_helpers() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     for (free, method) in [
         ("free_first", "first"),
         ("free_second", "second"),
@@ -1343,7 +1361,10 @@ fn marked_ident_owners_retain_their_seed_binding() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let forms = impl_forms(&context, &source);
     assert_eq!(forms[0], forms[1]);
 }
@@ -1358,7 +1379,10 @@ fn owner_literal_payloads_keep_distinct_owners_distinct() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let forms = impl_forms(&context, &source);
     assert_ne!(forms[0], forms[1]);
 }
@@ -1372,8 +1396,14 @@ fn self_type_views_retain_their_original_owner_binding() {
         "mod m { pub struct S; } use m::S; impl S { fn h() -> u32 { 1 } fn f() -> u32 { Self::h() } }",
     )
     .unwrap();
-    let local_context = SourceContext::new(core::iter::once((&[][..], &local)));
-    let imported_context = SourceContext::new(core::iter::once((&[][..], &imported)));
+    let local_context = SourceContext::new(
+        core::iter::once((&[][..], &local)),
+        syn_canon::Edition::E2021,
+    );
+    let imported_context = SourceContext::new(
+        core::iter::once((&[][..], &imported)),
+        syn_canon::Edition::E2021,
+    );
     assert_ne!(
         method_form(&local_context, &local, "f"),
         method_form(&imported_context, &imported, "f"),
@@ -1389,8 +1419,14 @@ fn underscored_self_types_keep_their_seed_binding() {
         "mod m { pub struct a_b; } use m::a_b; impl a_b { fn h() -> u32 { 1 } fn f() -> u32 { Self::h() } }",
     )
     .unwrap();
-    let local_context = SourceContext::new(core::iter::once((&[][..], &local)));
-    let imported_context = SourceContext::new(core::iter::once((&[][..], &imported)));
+    let local_context = SourceContext::new(
+        core::iter::once((&[][..], &local)),
+        syn_canon::Edition::E2021,
+    );
+    let imported_context = SourceContext::new(
+        core::iter::once((&[][..], &imported)),
+        syn_canon::Edition::E2021,
+    );
     assert_ne!(
         method_form(&local_context, &local, "f"),
         method_form(&imported_context, &imported, "f"),
@@ -1407,8 +1443,14 @@ fn unresolved_self_types_keep_their_injective_owner_text() {
         "struct X<T>(T); impl<T> X<T> { fn h() -> u32 { 1 } fn f() -> u32 { Self::h() } }",
     )
     .unwrap();
-    let left_context = SourceContext::new(core::iter::once((&[][..], &left)));
-    let right_context = SourceContext::new(core::iter::once((&[][..], &right)));
+    let left_context = SourceContext::new(
+        core::iter::once((&[][..], &left)),
+        syn_canon::Edition::E2021,
+    );
+    let right_context = SourceContext::new(
+        core::iter::once((&[][..], &right)),
+        syn_canon::Edition::E2021,
+    );
     assert_ne!(
         method_form(&left_context, &left, "f"),
         method_form(&right_context, &right, "f"),
@@ -1426,7 +1468,10 @@ fn dyn_trait_owners_keep_their_boundary_from_nominal_types() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let forms = impl_forms(&context, &source);
     assert_ne!(forms[0], forms[1]);
 }
@@ -1441,8 +1486,14 @@ fn absolute_paths_keep_their_root_under_local_shadows() {
         "mod std { pub mod mem { pub fn drop(_: u32) {} } } fn f() { std::mem::drop(1u32); }",
     )
     .unwrap();
-    let absolute_context = SourceContext::new(core::iter::once((&[][..], &absolute)));
-    let relative_context = SourceContext::new(core::iter::once((&[][..], &relative)));
+    let absolute_context = SourceContext::new(
+        core::iter::once((&[][..], &absolute)),
+        syn_canon::Edition::E2021,
+    );
+    let relative_context = SourceContext::new(
+        core::iter::once((&[][..], &relative)),
+        syn_canon::Edition::E2021,
+    );
     let absolute_fn = function(&absolute, "f");
     let relative_fn = function(&relative, "f");
     assert_ne!(
@@ -1548,8 +1599,14 @@ fn imported_helpers_keep_their_target_spelling() {
     for (left, right) in fn_pairs.into_iter().chain(const_pairs).chain(static_pairs) {
         let left: syn::File = syn::parse_str(&left).unwrap();
         let right: syn::File = syn::parse_str(&right).unwrap();
-        let left_context = SourceContext::new(core::iter::once((&[][..], &left)));
-        let right_context = SourceContext::new(core::iter::once((&[][..], &right)));
+        let left_context = SourceContext::new(
+            core::iter::once((&[][..], &left)),
+            syn_canon::Edition::E2021,
+        );
+        let right_context = SourceContext::new(
+            core::iter::once((&[][..], &right)),
+            syn_canon::Edition::E2021,
+        );
         let left_fn = function(&left, "f");
         let right_fn = function(&right, "f");
         assert_ne!(
@@ -1594,8 +1651,14 @@ fn crate_and_self_imports_resolve_to_the_same_item() {
         "mod m { pub struct T { pub v: u32 } } use self::m::T; fn f(t: T) -> u32 { t.v }",
     )
     .unwrap();
-    let crated_context = SourceContext::new(core::iter::once((&[][..], &crated)));
-    let selfed_context = SourceContext::new(core::iter::once((&[][..], &selfed)));
+    let crated_context = SourceContext::new(
+        core::iter::once((&[][..], &crated)),
+        syn_canon::Edition::E2021,
+    );
+    let selfed_context = SourceContext::new(
+        core::iter::once((&[][..], &selfed)),
+        syn_canon::Edition::E2021,
+    );
     let crated_fn = function(&crated, "f");
     let selfed_fn = function(&selfed, "f");
     assert_eq!(
@@ -1615,8 +1678,14 @@ fn external_import_canons_keep_their_path_depth() {
     let path = ["external".to_owned(), "a".to_owned(), "b".to_owned()];
     let keyed: syn::File = syn::parse_str("struct b; fn f(x: b) -> b { x }").unwrap();
     let imported: syn::File = syn::parse_str("use external::a::b; fn f(x: b) -> b { x }").unwrap();
-    let keyed_context = SourceContext::new(core::iter::once((&path[..], &keyed)));
-    let imported_context = SourceContext::new(core::iter::once((&[][..], &imported)));
+    let keyed_context = SourceContext::new(
+        core::iter::once((&path[..], &keyed)),
+        syn_canon::Edition::E2021,
+    );
+    let imported_context = SourceContext::new(
+        core::iter::once((&[][..], &imported)),
+        syn_canon::Edition::E2021,
+    );
     let keyed_fn = function(&keyed, "f");
     let imported_fn = function(&imported, "f");
     assert_ne!(
@@ -1645,7 +1714,10 @@ fn seed_binding_ids_keep_their_collision_free_identity() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let forms = impl_forms(&context, &source);
     assert_ne!(forms[0], forms[1]);
 }
@@ -1660,8 +1732,14 @@ fn generic_binding_ids_keep_their_collision_free_identity() {
         "trait Make { fn new(); } struct a; impl a { fn new() {} } fn g<T: Make>() { T::new(); }",
     )
     .unwrap();
-    let original_context = SourceContext::new(core::iter::once((&[][..], &original)));
-    let renamed_context = SourceContext::new(core::iter::once((&[][..], &renamed)));
+    let original_context = SourceContext::new(
+        core::iter::once((&[][..], &original)),
+        syn_canon::Edition::E2021,
+    );
+    let renamed_context = SourceContext::new(
+        core::iter::once((&[][..], &renamed)),
+        syn_canon::Edition::E2021,
+    );
     let original_fn = function(&original, "g");
     let renamed_fn = function(&renamed, "g");
     assert_ne!(
@@ -1686,8 +1764,14 @@ fn seed_item_ids_keep_their_collision_free_identity() {
         "struct X { v: u32 } struct Z { v: u32 } fn f(a: X, b: Z) -> u32 { a.v + b.v }",
     )
     .unwrap();
-    let original_context = SourceContext::new(core::iter::once((&[][..], &original)));
-    let renamed_context = SourceContext::new(core::iter::once((&[][..], &renamed)));
+    let original_context = SourceContext::new(
+        core::iter::once((&[][..], &original)),
+        syn_canon::Edition::E2021,
+    );
+    let renamed_context = SourceContext::new(
+        core::iter::once((&[][..], &renamed)),
+        syn_canon::Edition::E2021,
+    );
     let original_fn = function(&original, "f");
     let renamed_fn = function(&renamed, "f");
     assert_ne!(
@@ -1714,8 +1798,14 @@ fn type_generic_ids_keep_their_collision_free_identity() {
          impl<T, U> W<T, U> { fn f(x: Y) -> u32 { x.v } }",
     )
     .unwrap();
-    let original_context = SourceContext::new(core::iter::once((&[][..], &original)));
-    let renamed_context = SourceContext::new(core::iter::once((&[][..], &renamed)));
+    let original_context = SourceContext::new(
+        core::iter::once((&[][..], &original)),
+        syn_canon::Edition::E2021,
+    );
+    let renamed_context = SourceContext::new(
+        core::iter::once((&[][..], &renamed)),
+        syn_canon::Edition::E2021,
+    );
     let original_fn = &impl_forms(&original_context, &original)[0];
     let renamed_fn = &impl_forms(&renamed_context, &renamed)[0];
     assert_ne!(original_fn, renamed_fn,);
@@ -1733,8 +1823,14 @@ fn type_generic_ids_keep_their_successor_identity() {
          impl<T, U> W<T, U> { fn f(t: T, u: U) -> u32 { take::<T>() } }",
     )
     .unwrap();
-    let original_context = SourceContext::new(core::iter::once((&[][..], &original)));
-    let renamed_context = SourceContext::new(core::iter::once((&[][..], &renamed)));
+    let original_context = SourceContext::new(
+        core::iter::once((&[][..], &original)),
+        syn_canon::Edition::E2021,
+    );
+    let renamed_context = SourceContext::new(
+        core::iter::once((&[][..], &renamed)),
+        syn_canon::Edition::E2021,
+    );
     let original_fn = &impl_forms(&original_context, &original)[0];
     let renamed_fn = &impl_forms(&renamed_context, &renamed)[0];
     assert_ne!(original_fn, renamed_fn,);
@@ -1752,8 +1848,14 @@ fn const_generic_ids_keep_their_collision_free_identity() {
          impl<const N: u32, const M: u32> W<N, M> { fn f(x: Y) -> u32 { x.v } }",
     )
     .unwrap();
-    let original_context = SourceContext::new(core::iter::once((&[][..], &original)));
-    let renamed_context = SourceContext::new(core::iter::once((&[][..], &renamed)));
+    let original_context = SourceContext::new(
+        core::iter::once((&[][..], &original)),
+        syn_canon::Edition::E2021,
+    );
+    let renamed_context = SourceContext::new(
+        core::iter::once((&[][..], &renamed)),
+        syn_canon::Edition::E2021,
+    );
     let original_fn = &impl_forms(&original_context, &original)[0];
     let renamed_fn = &impl_forms(&renamed_context, &renamed)[0];
     assert_ne!(original_fn, renamed_fn,);
@@ -1771,8 +1873,14 @@ fn const_generic_ids_keep_their_successor_identity() {
          impl<const N: u32, const M: u32> W<N, M> { fn f() -> u32 { take::<W<M, N>>() } }",
     )
     .unwrap();
-    let original_context = SourceContext::new(core::iter::once((&[][..], &original)));
-    let renamed_context = SourceContext::new(core::iter::once((&[][..], &renamed)));
+    let original_context = SourceContext::new(
+        core::iter::once((&[][..], &original)),
+        syn_canon::Edition::E2021,
+    );
+    let renamed_context = SourceContext::new(
+        core::iter::once((&[][..], &renamed)),
+        syn_canon::Edition::E2021,
+    );
     let original_fn = &impl_forms(&original_context, &original)[0];
     let renamed_fn = &impl_forms(&renamed_context, &renamed)[0];
     assert_eq!(original_fn, renamed_fn);
@@ -1788,7 +1896,10 @@ fn imported_primitive_facts_select_the_named_alias() {
              fn value({parameter}: {alias}) -> {alias} {{ {parameter} }}"
         ))
         .unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         function_form(&context, function(&source, "value"))
     };
     let original = form("u32", "Word", "input");
@@ -1815,7 +1926,10 @@ fn impl_observers_preserve_literal_declaration_order() {
              }}"
         ))
         .unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         let forms = impl_forms(&context, &source);
         assert_eq!(forms[0], forms[2]);
         if attribute.is_empty() {
@@ -1844,7 +1958,10 @@ fn trait_observers_preserve_literal_declaration_order() {
              }}"
         ))
         .unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         let syn::Item::Trait(item) = &source.items[0] else {
             unreachable!()
         };
@@ -1898,7 +2015,10 @@ fn owner_observers_keep_methods_distinct_from_unobserved_bodies() {
                      }}"
                 ))
                 .unwrap();
-                let context = SourceContext::new(core::iter::once((&[][..], &source)));
+                let context = SourceContext::new(
+                    core::iter::once((&[][..], &source)),
+                    syn_canon::Edition::E2021,
+                );
                 if owner.starts_with("impl") {
                     impl_forms(&context, &source).remove(0)
                 } else if owner.starts_with("trait") {
@@ -1959,7 +2079,10 @@ fn owner_observers_keep_standard_macro_bodies_distinct() {
                 "struct Bag; {attribute} impl Bag {{ fn value() {{ {body} }} }}"
             ))
             .unwrap();
-            let context = SourceContext::new(core::iter::once((&[][..], &source)));
+            let context = SourceContext::new(
+                core::iter::once((&[][..], &source)),
+                syn_canon::Edition::E2021,
+            );
             impl_forms(&context, &source).remove(0)
         };
         let plain = form("");
@@ -1979,7 +2102,10 @@ fn anonymous_type_expansions_block_builtin_primitive_assumptions() {
              fn value({parameter}: u32) -> u32 {{ {parameter} }}"
         ))
         .unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         function_form(&context, function(&source, "value"))
     };
     let original = form("", "input");
@@ -2003,7 +2129,10 @@ fn owner_observers_keep_total_tails_distinct() {
                 "struct Bag; {attribute} impl Bag {{ fn value() -> {result} {{ {tail} }} }}"
             ))
             .unwrap();
-            let context = SourceContext::new(core::iter::once((&[][..], &source)));
+            let context = SourceContext::new(
+                core::iter::once((&[][..], &source)),
+                syn_canon::Edition::E2021,
+            );
             impl_forms(&context, &source).remove(0)
         };
         let plain = form("");
@@ -2033,7 +2162,10 @@ fn owner_observers_keep_transparent_scalar_groups_distinct() {
             group_token: syn::token::Group::default(),
             expr: Box::new(expression.clone()),
         });
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         impl_forms(&context, &source).remove(0)
     };
     let plain = form("");
@@ -2063,7 +2195,10 @@ fn owner_observers_keep_item_shaped_observations_distinct() {
             mac: statement.mac.clone(),
             semi_token: statement.semi_token,
         }));
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         impl_forms(&context, &source).remove(0)
     };
     let plain = form("");
@@ -2076,7 +2211,10 @@ fn parameter_shadows_preserve_renamed_local_proofs() {
     let form = |body: &str| {
         let source: syn::File =
             syn::parse_str(&format!("fn value(input: u32) -> u32 {{ {body} }}")).unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         function_form(&context, function(&source, "value"))
     };
     assert_eq!(
@@ -2096,7 +2234,10 @@ fn unrelated_bindings_preserve_renamed_producer_proofs() {
             "fn value() -> u32 {{ let {binding} = 3u32; let other = (); {binding} }}"
         ))
         .unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         function_form(&context, function(&source, "value"))
     };
     assert_eq!(form("value"), form("xyzzy"));
@@ -2115,7 +2256,10 @@ fn nested_scalar_proofs_preserve_the_owner_observer_boundary() {
             "}".repeat(63),
         ))
         .unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         impl_forms(&context, &source).remove(0)
     };
     let plain = form("", "value");
@@ -2136,7 +2280,10 @@ fn qualified_assignments_do_not_invalidate_same_named_local_proofs() {
              }}"
         ))
         .unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         function_form(&context, function(&source, "value"))
     };
     assert_eq!(form("storage"), form("local"));
@@ -2167,7 +2314,10 @@ fn borrowed_loop_patterns_preserve_shadowed_producer_identity() {
                  }}"
             ))
             .unwrap();
-            let context = SourceContext::new(core::iter::once((&[][..], &source)));
+            let context = SourceContext::new(
+                core::iter::once((&[][..], &source)),
+                syn_canon::Edition::E2021,
+            );
             function_form(&context, function(&source, "f"))
         };
         assert_eq!(form("value"), form("result"), "{pattern}");
@@ -2191,7 +2341,10 @@ fn borrowed_match_patterns_preserve_shadowed_producer_identity() {
                  }}"
             ))
             .unwrap();
-            let context = SourceContext::new(core::iter::once((&[][..], &source)));
+            let context = SourceContext::new(
+                core::iter::once((&[][..], &source)),
+                syn_canon::Edition::E2021,
+            );
             function_form(&context, function(&source, "f"))
         };
         assert_eq!(form("value"), form("result"), "{pattern}");
@@ -2212,7 +2365,10 @@ fn borrowed_closure_patterns_preserve_shadowed_producer_identity() {
                  }}"
             ))
             .unwrap();
-            let context = SourceContext::new(core::iter::once((&[][..], &source)));
+            let context = SourceContext::new(
+                core::iter::once((&[][..], &source)),
+                syn_canon::Edition::E2021,
+            );
             function_form(&context, function(&source, "f"))
         };
         assert_eq!(form("value"), form("result"), "{pattern}");
@@ -2232,7 +2388,10 @@ fn unproven_shadowing_locals_invalidate_the_previous_primitive_proof() {
              }}"
         ))
         .unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         function_form(&context, function(&source, "value"))
     };
     assert_eq!(form("value"), form("unused"));
@@ -2275,7 +2434,10 @@ fn mixed_primitive_overloads_keep_their_unproven_owner_tails() {
                  }}"
             ))
             .unwrap();
-            let context = SourceContext::new(core::iter::once((&[][..], &source)));
+            let context = SourceContext::new(
+                core::iter::once((&[][..], &source)),
+                syn_canon::Edition::E2021,
+            );
             impl_forms(&context, &source).pop().unwrap()
         };
         let plain = form("", tail, "argument");
@@ -2299,7 +2461,10 @@ fn overflowing_literal_shifts_keep_their_unproven_owner_tails() {
              }}"
         ))
         .unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         impl_forms(&context, &source).pop().unwrap()
     };
     for count in [32, 33] {
@@ -2340,7 +2505,10 @@ fn primitive_parameter_tails_preserve_owner_proof_boundaries() {
                 elem: Box::new(elem),
             });
         }
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         impl_forms(&context, &source).pop().unwrap()
     };
     for (prefix, ty) in [
@@ -2381,7 +2549,10 @@ fn unmodeled_macro_calls_keep_owner_bodies_opaque() {
              }}"
         ))
         .unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         impl_forms(&context, &source).pop().unwrap()
     };
     let imported = "mod observers {
@@ -2454,7 +2625,10 @@ fn cfg_exclusive_modules_resolve_their_own_items() {
         // The view of `speculate` contains the modules only when they are nested in its body.
         if nested {
             let view = |source: &syn::File| {
-                let context = SourceContext::new(core::iter::once((&[][..], source)));
+                let context = SourceContext::new(
+                    core::iter::once((&[][..], source)),
+                    syn_canon::Edition::E2021,
+                );
                 function_form(&context, function(source, "speculate"))
             };
             assert_eq!(view(&original), view(&renamed));
@@ -2480,7 +2654,10 @@ fn nested_functions(items: &[syn::Item]) -> Vec<&syn::ItemFn> {
 
 /// The view of the last `run` among `files`, each indexed at its module path.
 fn last_run(files: &[(Vec<String>, syn::File)]) -> CanonicalForm {
-    let context = SourceContext::new(files.iter().map(|(path, file)| (path.as_slice(), file)));
+    let context = SourceContext::new(
+        files.iter().map(|(path, file)| (path.as_slice(), file)),
+        syn_canon::Edition::E2021,
+    );
     let run = files
         .iter()
         .flat_map(|(_, file)| nested_functions(&file.items))
@@ -2543,7 +2720,7 @@ fn cfg_exclusive_imports_of_one_alias_stay_ambiguous() {
             modules[0], modules[1]
         ))
         .unwrap();
-        let context = SourceContext::new([(&[][..], &source)]);
+        let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
         function_form(&context, function(&source, "f"))
     };
     let both = "#[cfg(unix)] use crate::left::N; #[cfg(not(unix))] use crate::right::N;";
@@ -2573,7 +2750,7 @@ fn paths_into_repeated_modules_resolve_through_every_declaration() {
             "{modules} use crate::m::{item}; fn f() -> u32 {{ {item} }}"
         ))
         .unwrap();
-        let context = SourceContext::new([(&[][..], &source)]);
+        let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
         function_form(&context, function(&source, "f"))
     };
     let repeated = "#[cfg(unix)] mod m { pub const A: u32 = 1; } #[cfg(not(unix))] mod m { pub const B: u32 = 2; }";
@@ -2600,8 +2777,10 @@ fn repeated_module_aliases_prove_primitives_only_when_every_declaration_agrees()
                     )),
                 ),
             ];
-            let context =
-                SourceContext::new(files.iter().map(|(path, file)| (path.as_slice(), file)));
+            let context = SourceContext::new(
+                files.iter().map(|(path, file)| (path.as_slice(), file)),
+                syn_canon::Edition::E2021,
+            );
             function_form(&context, function(&files[3].1, "g"))
         };
         form("a ^ b") == form("b ^ a")
@@ -2622,7 +2801,7 @@ fn repeated_module_reader(first: &str, rest: &str, name: &str) -> CanonicalForm 
          use crate::m::{name}; fn f() -> u32 {{ {name} }}"
     ))
     .unwrap();
-    let context = SourceContext::new([(&[][..], &source)]);
+    let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
     function_form(&context, function(&source, "f"))
 }
 
@@ -2676,7 +2855,7 @@ fn repeated_module_routes_resolve_only_when_every_declaration_agrees() {
              {imports} fn f() -> u32 {{ X }}"
         ))
         .unwrap();
-        let context = SourceContext::new([(&[][..], &source)]);
+        let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
         function_form(&context, function(&source, "f"))
     };
     let routed = |first: &str, second: &str| {
@@ -2700,7 +2879,10 @@ fn a_file_registered_twice_stays_one_declaration() {
     )
     .unwrap();
     let reorders = |copies: usize| {
-        let context = SourceContext::new(core::iter::repeat_n((&[][..], &file), copies));
+        let context = SourceContext::new(
+            core::iter::repeat_n((&[][..], &file), copies),
+            syn_canon::Edition::E2021,
+        );
         function_form(&context, function(&file, "f"))
             == function_form(&context, function(&file, "g"))
     };
@@ -2716,7 +2898,7 @@ fn gated_local_and_external_imports_of_one_alias_stay_ambiguous() {
              {imports} fn f(x: N) -> u32 {{ x.v }}"
         ))
         .unwrap();
-        let context = SourceContext::new([(&[][..], &source)]);
+        let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
         function_form(&context, function(&source, "f"))
     };
     let local = "use crate::left::N;";
@@ -2741,7 +2923,7 @@ fn gated_mixed_aliases_read_from_another_module_stay_ambiguous() {
              use crate::reexport::N; fn f(x: N) -> u32 {{ x.v }}"
         ))
         .unwrap();
-        let context = SourceContext::new([(&[][..], &source)]);
+        let context = SourceContext::new([(&[][..], &source)], syn_canon::Edition::E2021);
         function_form(&context, function(&source, "f"))
     };
     let gated = "#[cfg(unix)] pub use crate::left::N; #[cfg(not(unix))] pub use external::N;";

@@ -66,7 +66,7 @@ pub use reuse::{
     ContextAccess, DependencyCandidate, DependencyCoverage, DependencySearch, ExistingIssue,
     ReuseAction, ReuseGroup, ReuseReport,
 };
-pub use syn_canon::ContextKind;
+pub use syn_canon::{ContextKind, Edition};
 
 /// Scan parameters. In `run`, unset values fall back to `.echoes.toml`,
 /// then to defaults.
@@ -326,12 +326,14 @@ impl Echoes {
                     name: target.name.clone(),
                     files,
                     library: target.library,
+                    edition: target.edition,
                 });
             }
             targets.push(TargetScan {
                 name: target.name.clone(),
                 files: linked,
                 library: target.library,
+                edition: target.edition,
             });
         }
         let mut report = scan.scan(
@@ -473,6 +475,7 @@ impl Echoes {
                         .files
                         .iter()
                         .map(|file| (file.segments.as_slice(), &file.parsed)),
+                    target.edition,
                 );
                 target
                     .files
@@ -762,6 +765,8 @@ pub struct TargetScan {
     pub files: Vec<SourceFile>,
     /// Whether the target is a Rust library, whose public functions other crates may call.
     pub library: bool,
+    /// The edition the target compiles under, which decides how its `use` paths resolve.
+    pub edition: syn_canon::Edition,
 }
 
 /// One file of a target.
@@ -1362,6 +1367,7 @@ fn organization_targets(
                     name: target.name.clone(),
                     files: qualify(linked),
                     library: target.library,
+                    edition: target.edition,
                 });
             }
             if let Some(files) = every {
@@ -1369,6 +1375,7 @@ fn organization_targets(
                     name: target.name.clone(),
                     files: qualify(files),
                     library: target.library,
+                    edition: target.edition,
                 });
             }
         }
@@ -1750,6 +1757,7 @@ mod tests {
                 rustdoc: true,
             }],
             library: true,
+            edition: syn_canon::Edition::E2021,
         }
     }
 
@@ -2729,6 +2737,7 @@ mod tests {
             src: std::path::PathBuf::from("src/lib.rs"),
             doc: true,
             library: true,
+            edition: syn_canon::Edition::E2021,
         };
         let requested = |scan: Echoes| scan.context_target_requested(&target, "root");
         assert!(requested(Echoes::default()));

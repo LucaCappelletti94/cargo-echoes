@@ -227,11 +227,14 @@ fn function_views_follow_the_crate_root_and_module_chain() {
     );
     let plain_path = [String::from("plain")];
     let bare_path = [String::from("bare")];
-    let context = syn_canon::SourceContext::new([
-        (&[][..], &root),
-        (&plain_path[..], &plain),
-        (&bare_path[..], &bare),
-    ]);
+    let context = syn_canon::SourceContext::new(
+        [
+            (&[][..], &root),
+            (&plain_path[..], &plain),
+            (&bare_path[..], &bare),
+        ],
+        syn_canon::Edition::E2021,
+    );
     let form = |file: &syn::File, index: usize| {
         let syn::Item::Fn(function) = &file.items[index] else {
             panic!("a function item");

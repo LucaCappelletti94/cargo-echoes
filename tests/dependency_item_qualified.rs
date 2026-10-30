@@ -226,8 +226,14 @@ fn borrowed_views_match_the_standalone_qualified_partition_fold() {
         "mod m { pub struct S; } impl m::S { fn one() -> u32 { 1 } fn two() -> u32 { 2 } }",
     )
     .unwrap();
-    let split_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &split)));
-    let combined_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &combined)));
+    let split_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &split)),
+        syn_canon::Edition::E2021,
+    );
+    let combined_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &combined)),
+        syn_canon::Edition::E2021,
+    );
     assert_eq!(
         method_form(&split_context, &split, "one"),
         method_form(&combined_context, &combined, "one"),
@@ -244,8 +250,14 @@ fn borrowed_views_fold_under_module_shadow() {
         "struct S; mod m { pub struct S; } impl m::S { fn one() -> u32 { let _s = m::S; 1 } fn two() -> u32 { 2 } }",
     )
     .unwrap();
-    let split_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &split)));
-    let combined_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &combined)));
+    let split_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &split)),
+        syn_canon::Edition::E2021,
+    );
+    let combined_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &combined)),
+        syn_canon::Edition::E2021,
+    );
     assert_eq!(
         method_form(&split_context, &split, "one"),
         method_form(&combined_context, &combined, "one"),
@@ -262,8 +274,14 @@ fn borrowed_views_keep_module_provenance_separate() {
         "struct S; mod m { pub struct S; } impl S { fn f() -> u32 { let _s = m::S; 1 } }",
     )
     .unwrap();
-    let root_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &root_ref)));
-    let module_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &module_ref)));
+    let root_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &root_ref)),
+        syn_canon::Edition::E2021,
+    );
+    let module_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &module_ref)),
+        syn_canon::Edition::E2021,
+    );
     assert_ne!(
         method_form(&root_context, &root_ref, "f"),
         method_form(&module_context, &module_ref, "f"),
@@ -280,8 +298,14 @@ fn borrowed_views_keep_crate_owner_spelling_distinct() {
         "mod m { pub struct S; } impl m::S { fn one() -> u32 { Self::two() } fn two() -> u32 { 2 } }",
     )
     .unwrap();
-    let crate_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &crate_spelling)));
-    let bare_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &bare_spelling)));
+    let crate_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &crate_spelling)),
+        syn_canon::Edition::E2021,
+    );
+    let bare_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &bare_spelling)),
+        syn_canon::Edition::E2021,
+    );
     assert_ne!(
         method_form(&crate_context, &crate_spelling, "one"),
         method_form(&bare_context, &bare_spelling, "one"),
