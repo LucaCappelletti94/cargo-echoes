@@ -171,16 +171,10 @@ fn calls_of_other_callees_keep_their_literal() {
 
 #[test]
 fn other_shapes_keep_the_spelling() {
-    for (written, canonical) in [
-        ("\"a\".into()", "\"a\".to_string()"),
-        ("x.to_owned()", "x.to_string()"),
-        ("String::from(x)", "x.to_string()"),
-    ] {
-        separate(
-            &format!("fn f(x: &str) -> String {{ {written} }}"),
-            &format!("fn f(x: &str) -> String {{ {canonical} }}"),
-        );
-    }
+    separate(
+        "fn f(x: &str) -> String { \"a\".into() }",
+        "fn f(x: &str) -> String { \"a\".to_string() }",
+    );
     separate(
         "fn f() -> Vec<u8> { b\"a\".to_owned() }",
         "fn f() -> Vec<u8> { b\"a\".to_vec() }",

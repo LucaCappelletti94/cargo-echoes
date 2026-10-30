@@ -1,9 +1,13 @@
-//! Iteration and emptiness tests over bindings of proven standard collection types.
+//! Iteration, emptiness tests and string copies over bindings of proven standard collection
+//! types.
 //!
 //! A binding declared as `Vec<T>`, `[T; N]`, `[T]`, `String` or `str`, behind at most one
 //! reference, reaches the standard `iter`, `iter_mut`, `into_iter`, `len` and `is_empty` when no
 //! trait in view declares those names. `for x in v.iter()` then walks what `for x in &v` walks,
-//! and `v.len() == 0` holds exactly when `v.is_empty()` does.
+//! and `v.len() == 0` holds exactly when `v.is_empty()` does. A `&str` binding reaches the
+//! standard `to_string` and `to_owned`, and a `String` or `&String` binding also `clone` and
+//! `as_str`, when no trait in view declares those names and the prelude traits keep their names.
+//! Each copy then allocates the length of the text, so every spelling reads as `s.to_string()`.
 
 use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, BTreeSet};
@@ -20,10 +24,23 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, sig: &syn::Signature, block: &mut
     let mut claims = Claims::default();
     syn::visit::Visit::visit_block(&mut claims, block);
     let unclaimed = |name: &str| !claims.names.contains(name) && renamer.type_unclaimed(name);
+    let named: BTreeSet<Kind> = [
+        (Kind::Vec, "Vec"),
+        (Kind::String, "String"),
+        (Kind::Str, "str"),
+    ]
+    .into_iter()
+    .filter(|(_, name)| !claims.glob && unclaimed(name))
+    .map(|(kind, _)| kind)
+    .collect();
     let mut fold = Fold {
-        vectors: !claims.glob && unclaimed("Vec"),
-        strings: !claims.glob && unclaimed("String"),
-        slices: !claims.glob && unclaimed("str"),
+        copies: named.contains(&Kind::String)
+            && renamer.owned_methods()
+            && renamer.clone_free()
+            && ["ToString", "ToOwned", "Clone"]
+                .iter()
+                .all(|name| unclaimed(name)),
+        named,
         scopes: alloc::vec![BTreeMap::new()],
     };
     for input in &sig.inputs {
@@ -68,7 +85,7 @@ impl syn::visit::Visit<'_> for Claims {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Kind {
     Vec,
     Array,
@@ -91,9 +108,11 @@ struct Collection {
 }
 
 struct Fold {
-    vectors: bool,
-    strings: bool,
-    slices: bool,
+    /// The kinds whose type names resolve to the standard `Vec`, `String` and `str`.
+    named: BTreeSet<Kind>,
+    /// Whether the standard copy methods answer to `to_string`, `to_owned`, `clone` and
+    /// `as_str`, and `String` names the standard type.
+    copies: bool,
     /// The bindings in view, a proven collection or `None` for any other binding.
     scopes: Vec<BTreeMap<String, Option<Collection>>>,
 }
@@ -115,16 +134,18 @@ impl Fold {
                 let [segment] = path.path.segments.iter().collect::<Vec<_>>()[..] else {
                     return None;
                 };
-                match (ident_name(&segment.ident).as_str(), &segment.arguments) {
-                    ("Vec", syn::PathArguments::AngleBracketed(args))
-                        if self.vectors && args.args.len() == 1 =>
-                    {
+                let kind = match (ident_name(&segment.ident).as_str(), &segment.arguments) {
+                    ("Vec", syn::PathArguments::AngleBracketed(args)) if args.args.len() == 1 => {
                         Kind::Vec
                     }
-                    ("String", syn::PathArguments::None) if self.strings => Kind::String,
-                    ("str", syn::PathArguments::None) if self.slices => Kind::Str,
+                    ("String", syn::PathArguments::None) => Kind::String,
+                    ("str", syn::PathArguments::None) => Kind::Str,
                     _ => return None,
+                };
+                if !self.named.contains(&kind) {
+                    return None;
                 }
+                kind
             }
             _ => return None,
         };
@@ -265,6 +286,76 @@ impl Fold {
         .then(|| call.receiver.as_ref().clone())
     }
 
+    /// Read `s.to_owned()` and `String::from(s)` over a `&str` binding, and `s.to_owned()`,
+    /// `s.clone()` and `String::from(s.as_str())` over a `String` or `&String` binding, as
+    /// `s.to_string()`.
+    fn copy(&self, expr: &mut syn::Expr) {
+        if !self.copies {
+            return;
+        }
+        let receiver = match expr {
+            syn::Expr::MethodCall(call) if bare_call(call) => {
+                let copies = matches!(
+                    (
+                        self.copied(&call.receiver),
+                        ident_name(&call.method).as_str()
+                    ),
+                    (Some(Kind::Str), "to_owned") | (Some(Kind::String), "to_owned" | "clone")
+                );
+                if !copies {
+                    return;
+                }
+                call.receiver.as_mut()
+            }
+            syn::Expr::Call(call)
+                if call.attrs.is_empty() && call.args.len() == 1 && string_from(&call.func) =>
+            {
+                let text = &mut call.args[0];
+                if self.copied(text) == Some(Kind::Str) {
+                    text
+                } else if let syn::Expr::MethodCall(inner) = text
+                    && bare_call(inner)
+                    && inner.method == "as_str"
+                    && self.copied(&inner.receiver) == Some(Kind::String)
+                {
+                    inner.receiver.as_mut()
+                } else {
+                    return;
+                }
+            }
+            _ => return,
+        };
+        let receiver = core::mem::replace(
+            receiver,
+            syn::Expr::Verbatim(proc_macro2::TokenStream::new()),
+        );
+        *expr = syn::Expr::MethodCall(syn::ExprMethodCall {
+            attrs: Vec::new(),
+            receiver: Box::new(receiver),
+            dot_token: syn::token::Dot::default(),
+            method: syn::Ident::new("to_string", proc_macro2::Span::call_site()),
+            turbofish: None,
+            paren_token: syn::token::Paren::default(),
+            args: syn::punctuated::Punctuated::new(),
+        });
+    }
+
+    /// The kind of a binding whose copies share one reading, a `&str`, a `String` or a
+    /// `&String`.
+    fn copied(&self, expr: &syn::Expr) -> Option<Kind> {
+        match self.binding(expr)? {
+            Collection {
+                kind: Kind::Str,
+                access: Access::Shared,
+            } => Some(Kind::Str),
+            Collection {
+                kind: Kind::String,
+                access: Access::Owned | Access::Shared,
+            } => Some(Kind::String),
+            _ => None,
+        }
+    }
+
     fn scoped(&mut self, visit: impl FnOnce(&mut Self)) {
         self.scopes.push(BTreeMap::new());
         visit(self);
@@ -289,6 +380,28 @@ fn small_literal(expr: &syn::Expr) -> Option<u8> {
         (true, "1") => Some(1),
         _ => None,
     }
+}
+
+/// Whether `call` is an unattributed method call without arguments or turbofish.
+fn bare_call(call: &syn::ExprMethodCall) -> bool {
+    call.attrs.is_empty() && call.turbofish.is_none() && call.args.is_empty()
+}
+
+/// Whether `func` is the unattributed relative path `String::from`.
+fn string_from(func: &syn::Expr) -> bool {
+    let syn::Expr::Path(path) = func else {
+        return false;
+    };
+    let [owner, name] = path.path.segments.iter().collect::<Vec<_>>()[..] else {
+        return false;
+    };
+    path.attrs.is_empty()
+        && path.qself.is_none()
+        && path.path.leading_colon.is_none()
+        && owner.arguments.is_none()
+        && name.arguments.is_none()
+        && owner.ident == "String"
+        && name.ident == "from"
 }
 
 impl VisitMut for Fold {
@@ -373,6 +486,7 @@ impl VisitMut for Fold {
         }
         syn::visit_mut::visit_expr_mut(self, expr);
         self.emptiness(expr);
+        self.copy(expr);
     }
 }
 
