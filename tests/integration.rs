@@ -1997,6 +1997,50 @@ fn edition_2015_imports_keep_their_spelling() {
     assert_eq!(function_groups(&report).len(), 0);
 }
 
+const REF_BINDINGS_FIXTURE: &str = "tests/fixtures/refbindingsws";
+
+#[test]
+fn ref_binding_doctests_group_with_their_borrowed_spelling() {
+    let report = Echoes::default().run(REF_BINDINGS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["refbindingsws::Ergonomic", "refbindingsws::Explicit"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(40)
+        .run(REF_BINDINGS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(41)
+        .run(REF_BINDINGS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn ref_binding_functions_group_apart_from_moves() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(REF_BINDINGS_FIXTURE)
+            .unwrap()
+    };
+    let both = [
+        vec![
+            "refbindingsws::Config::ergonomic",
+            "refbindingsws::Config::explicit",
+        ],
+        vec!["refbindingsws::borrowed", "refbindingsws::label"],
+    ];
+    for tokens in [0, 10] {
+        assert_eq!(function_groups(&scan(tokens)), both);
+    }
+    assert_eq!(function_groups(&scan(11)), both[..1]);
+    assert_eq!(function_groups(&scan(15)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

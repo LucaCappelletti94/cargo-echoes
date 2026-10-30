@@ -1,0 +1,200 @@
+[
+  {
+    "id": "rb_match",
+    "family": "ref_bindings",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o: Option<D>) -> usize { let _l = D(\"local\"); match o { Some(ref d) => d.0.len(), None => 0 } } fn main(){ println!(\"{}\", f(Some(D(\"pay\")))); }",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o: Option<D>) -> usize { let _l = D(\"local\"); match &o { Some(d) => d.0.len(), None => 0 } } fn main(){ println!(\"{}\", f(Some(D(\"pay\")))); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\ndrop pay\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\ndrop pay\n3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\ndrop pay\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\ndrop pay\n3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rb_let_else",
+    "family": "ref_bindings",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o: Option<D>) -> usize { let Some(ref d) = o else { return 0 }; let _l = D(\"local\"); d.0.len() } fn main(){ println!(\"{}\", f(Some(D(\"pay\")))); }",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o: Option<D>) -> usize { let Some(d) = &o else { return 0 }; let _l = D(\"local\"); d.0.len() } fn main(){ println!(\"{}\", f(Some(D(\"pay\")))); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\ndrop pay\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\ndrop pay\n3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\ndrop pay\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\ndrop pay\n3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rb_ref_mut",
+    "family": "ref_bindings",
+    "a": "fn f(mut o: Option<String>) -> String { if let Some(ref mut s) = o { s.push('!') } o.unwrap_or_default() } fn main(){ println!(\"{}\", f(Some(String::from(\"a\")))); }",
+    "b": "fn f(mut o: Option<String>) -> String { if let Some(s) = &mut o { s.push('!') } o.unwrap_or_default() } fn main(){ println!(\"{}\", f(Some(String::from(\"a\")))); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a!\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a!\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a!\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a!\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rb_deref_self",
+    "family": "ref_bindings",
+    "a": "struct S { v: Option<String> } impl S { fn f(&self) -> usize { match *self { S { v: Some(ref s) } => s.len(), _ => 0 } } } fn main(){ println!(\"{}\", S { v: Some(String::from(\"abc\")) }.f()); }",
+    "b": "struct S { v: Option<String> } impl S { fn f(&self) -> usize { match self { S { v: Some(s) } => s.len(), _ => 0 } } } fn main(){ println!(\"{}\", S { v: Some(String::from(\"abc\")) }.f()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rb_while_let",
+    "family": "ref_bindings",
+    "a": "fn f(o: Option<u32>) -> u32 { let mut n = 0; while let Some(ref x) = o { n += *x; if n > 9 { break; } } n } fn main(){ println!(\"{}\", f(Some(4))); }",
+    "b": "fn f(o: Option<u32>) -> u32 { let mut n = 0; while let Some(x) = &o { n += *x; if n > 9 { break; } } n } fn main(){ println!(\"{}\", f(Some(4))); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "12\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "12\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "12\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "12\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "rb_move",
+    "family": "ref_bindings",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o: Option<D>) -> usize { let _l = D(\"local\"); match o { Some(d) => d.0.len(), None => 0 } } fn main(){ println!(\"{}\", f(Some(D(\"pay\")))); }",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} fn f(o: Option<D>) -> usize { let _l = D(\"local\"); match &o { Some(d) => d.0.len(), None => 0 } } fn main(){ println!(\"{}\", f(Some(D(\"pay\")))); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop pay\ndrop local\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop pay\ndrop local\n3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\ndrop pay\n3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop local\ndrop pay\n3\n"
+        }
+      }
+    }
+  }
+]
