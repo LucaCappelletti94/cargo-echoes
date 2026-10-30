@@ -1,0 +1,167 @@
+[
+  {
+    "id": "ip_module_import",
+    "family": "import_paths",
+    "a": "use std::mem; fn f(a:&mut u32,b:&mut u32){mem::swap(a,b)} fn main(){let (mut x,mut y)=(1u32,2u32);f(&mut x,&mut y);println!(\"{} {}\",x,y);}",
+    "b": "fn f(a:&mut u32,b:&mut u32){std::mem::swap(a,b)} fn main(){let (mut x,mut y)=(1u32,2u32);f(&mut x,&mut y);println!(\"{} {}\",x,y);}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ip_item_import",
+    "family": "import_paths",
+    "a": "use std::mem::swap; fn f(a:&mut u32,b:&mut u32){swap(a,b)} fn main(){let (mut x,mut y)=(1u32,2u32);f(&mut x,&mut y);println!(\"{} {}\",x,y);}",
+    "b": "fn f(a:&mut u32,b:&mut u32){std::mem::swap(a,b)} fn main(){let (mut x,mut y)=(1u32,2u32);f(&mut x,&mut y);println!(\"{} {}\",x,y);}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ip_grouped_rename",
+    "family": "import_paths",
+    "a": "use std::{cmp::max as larger, mem}; fn f(a:u32,b:u32)->u32{larger(a,b)} fn main(){let _=mem::size_of::<u8>();println!(\"{}\",f(3,u32::MAX));}",
+    "b": "fn f(a:u32,b:u32)->u32{std::cmp::max(a,b)} fn main(){println!(\"{}\",f(3,u32::MAX));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "4294967295\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ip_generic_type",
+    "family": "import_paths",
+    "a": "use std::collections::BTreeMap; fn f(k:u32)->usize{let mut m=BTreeMap::<u32,u32>::new();m.insert(k,k);m.len()} fn main(){println!(\"{}\",f(7));}",
+    "b": "fn f(k:u32)->usize{let mut m=std::collections::BTreeMap::<u32,u32>::new();m.insert(k,k);m.len()} fn main(){println!(\"{}\",f(7));}",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ip_local_module",
+    "family": "import_paths",
+    "a": "mod mem { pub fn swap(a:&mut u32,_b:&mut u32){*a=0;} } use mem::swap; fn f(a:&mut u32,b:&mut u32){swap(a,b)} fn main(){let (mut x,mut y)=(1u32,2u32);f(&mut x,&mut y);println!(\"{} {}\",x,y);}",
+    "b": "mod mem { pub fn swap(a:&mut u32,_b:&mut u32){*a=0;} } fn f(a:&mut u32,b:&mut u32){std::mem::swap(a,b)} fn main(){let (mut x,mut y)=(1u32,2u32);f(&mut x,&mut y);println!(\"{} {}\",x,y);}",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 1\n"
+        }
+      }
+    }
+  }
+]

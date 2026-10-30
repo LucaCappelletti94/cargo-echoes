@@ -44,7 +44,8 @@ fn fn_ref<'a>(item: &'a syn::Item, name: &str) -> Option<(&'a syn::Signature, &'
 }
 
 fn context_form(file: &syn::File, name: &str) -> syn_canon::CanonicalForm {
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], file)));
+    let context =
+        syn_canon::SourceContext::new(core::iter::once((&[][..], file)), syn_canon::Edition::E2021);
     let (sig, block) = file
         .items
         .iter()
@@ -319,7 +320,10 @@ fn ancestor_live_attributes_disable_constant_folds() {
     let syn::Item::Trait(trait_) = &file.items[0] else {
         unreachable!()
     };
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], &file)));
+    let context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &file)),
+        syn_canon::Edition::E2021,
+    );
     let forms = trait_method_forms(&context, trait_);
     assert_ne!(forms[0], forms[1]);
 }

@@ -90,6 +90,7 @@ fn corpus(dir: &Path, organization: &str, repos: &[RepoSpec]) -> Corpus {
                     src: root.join(rel),
                     doc: true,
                     library: true,
+                    edition: syn_canon::Edition::E2021,
                 })
                 .collect();
             package_sources.push(PackageSource { package, targets });
@@ -125,6 +126,7 @@ fn local_target(name: &str, path: &str, src: &str) -> TargetScan {
             rustdoc: true,
         }],
         library: true,
+        edition: syn_canon::Edition::E2021,
     }
 }
 

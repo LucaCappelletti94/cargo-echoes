@@ -140,6 +140,8 @@ Equal forms mean approximate duplication, since the normalization cannot see wha
 
 Macro input retains significant commas unless lexical resolution proves a supported standard grammar. Enclosing macros and live attributes preserve comma spelling.
 
+A function view from `SourceContext` under Rust 2018 or later reads a file-level import of an external crate item as the item's rooted path wherever the import is in view, so `use std::mem;` then `mem::swap` matches `std::mem::swap`. The module must declare and import no other item of the crate's name. Whole-file keys, imports inside function bodies, observed functions and Rust 2015 keep the written spelling.
+
 ## Stability
 
 `CanonicalForm` keys and hashes are comparable within a semver-compatible release series. Before `1.0`, each minor version defines a series, such as `0.5.x`. Incompatible normalization requires a new series.

@@ -144,6 +144,7 @@ fn dependency_function_groups_respect_original_module_scopes() {
             rustdoc: true,
         }],
         library: true,
+        edition: syn_canon::Edition::E2021,
     };
     let report =
         Echoes::default()

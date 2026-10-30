@@ -21,6 +21,17 @@ pub(crate) struct Target {
     pub(crate) doc: bool,
     /// Whether it is a Rust library, whose public functions other crates may call.
     pub(crate) library: bool,
+    /// The edition the target compiles under.
+    pub(crate) edition: syn_canon::Edition,
+}
+
+/// The edition a manifest's `edition` value names. Cargo reads an absent key as Rust 2015,
+/// and a value naming no edition this crate knows reads as 2015 too, the edition under which
+/// no reading relies on how `use` paths resolve.
+pub(crate) fn edition(value: Option<&str>) -> syn_canon::Edition {
+    value
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(syn_canon::Edition::E2015)
 }
 
 /// A resolved workspace root and the targets to scan.
@@ -62,6 +73,7 @@ pub(crate) fn workspace(
                 src: target.src_path.clone().into(),
                 doc: scan_target(&target.kind, all_targets),
                 library: library_target(&target.kind),
+                edition: edition(Some(target.edition.as_str())),
             });
         }
     }
@@ -535,6 +547,7 @@ mod tests {
             src: src.to_path_buf(),
             doc: true,
             library: true,
+            edition: syn_canon::Edition::E2021,
         }
     }
 

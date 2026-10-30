@@ -30,6 +30,7 @@ fn original_module_files_supply_primitive_alias_facts() {
     let target = TargetScan {
         name: "sample".to_owned(),
         library: true,
+        edition: syn_canon::Edition::E2021,
         files: vec![
             file("src/lib.rs", &[], "type Word = u32; mod child;"),
             file(
@@ -80,7 +81,10 @@ fn contextual_primitive_operations_cannot_merge_with_shadowed_overloads() {
         }}
         {body}"
     );
-    let native_context = SourceContext::new(core::iter::once((&[][..], &native)));
+    let native_context = SourceContext::new(
+        core::iter::once((&[][..], &native)),
+        syn_canon::Edition::E2021,
+    );
     let native = function(&native, "f");
     let native = native_context
         .function(&native.sig, &native.block)
@@ -91,7 +95,10 @@ fn contextual_primitive_operations_cannot_merge_with_shadowed_overloads() {
         source.replace("struct u32(", "struct r#u32("),
     ] {
         let overloaded: syn::File = syn::parse_str(&source).unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &overloaded)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &overloaded)),
+            syn_canon::Edition::E2021,
+        );
         let overloaded = function(&overloaded, "f");
         assert_ne!(
             native,
@@ -119,7 +126,10 @@ fn enclosing_attribute_observers_freeze_contextual_declarations() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let syn::Item::Mod(module) = &source.items[0] else {
         unreachable!()
     };
@@ -144,6 +154,7 @@ fn inline_modules_resolve_their_own_imported_aliases() {
     let target = TargetScan {
         name: "sample".to_owned(),
         library: true,
+        edition: syn_canon::Edition::E2021,
         files: vec![file(
             "src/lib.rs",
             &[],
@@ -202,7 +213,10 @@ fn inline_modules_preserve_their_own_primitive_shadowing() {
     ",
     )
     .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let native = function(&source, "native");
     let syn::Item::Mod(module) = &source.items[1] else {
         unreachable!()
@@ -250,7 +264,10 @@ fn enclosing_generic_parameters_cannot_seed_native_operations() {
         ",
     )
     .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let syn::Item::Impl(owner) = &source.items[1] else {
         unreachable!()
     };
@@ -313,7 +330,10 @@ fn imported_primitive_paths_preserve_relative_and_absolute_resolution() {
                 relative.clone()
             };
             let parsed: syn::File = syn::parse_str(&code).unwrap();
-            let context = SourceContext::new(core::iter::once((&[][..], &parsed)));
+            let context = SourceContext::new(
+                core::iter::once((&[][..], &parsed)),
+                syn_canon::Edition::E2021,
+            );
             let original = function(&parsed, "original");
             let scheduled = function(&parsed, "scheduled");
             let original = context
@@ -348,7 +368,10 @@ fn nested_relative_imports_ignore_unrelated_root_aliases() {
             ",
         ))
         .unwrap();
-        let context = SourceContext::new(core::iter::once((&[][..], &source)));
+        let context = SourceContext::new(
+            core::iter::once((&[][..], &source)),
+            syn_canon::Edition::E2021,
+        );
         let syn::Item::Mod(child) = &source.items[1] else {
             unreachable!()
         };
@@ -422,7 +445,10 @@ fn assert_incomplete_type_scope_retains_order(declarations: &str, ty: &str) {
         }}",
     ))
     .unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let original = function(&source, "original");
     let scheduled = function(&source, "scheduled");
     assert_ne!(
@@ -487,7 +513,10 @@ fn inherited_alias_tail_form(body: &str, width: &str) -> syn_canon::CanonicalFor
         "mod helper {{ pub type W = {width}; pub const WORD: W = 0; }} use helper::{{WORD, W}}; {body}"
     );
     let source: syn::File = syn::parse_str(&code).unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &source)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &source)),
+        syn_canon::Edition::E2021,
+    );
     let f = function(&source, "f");
     context.function(&f.sig, &f.block).unwrap().canonicalize()
 }
@@ -508,7 +537,10 @@ fn inherited_alias_tuple_tails_retain_their_resolved_element_types() {
 
 fn function_form(source: &str) -> syn_canon::CanonicalForm {
     let parsed: syn::File = syn::parse_str(source).unwrap();
-    let context = SourceContext::new(core::iter::once((&[][..], &parsed)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &parsed)),
+        syn_canon::Edition::E2021,
+    );
     let value = function(&parsed, "value");
     context
         .function(&value.sig, &value.block)

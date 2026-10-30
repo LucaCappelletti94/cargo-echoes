@@ -7,7 +7,10 @@ use syn_canon::{CanonicalForm, SourceContext};
 /// The view of the function `f`, free or in an impl, canonicalized in its source context.
 fn view(source: &str) -> CanonicalForm {
     let file: syn::File = syn::parse_str(source).unwrap_or_else(|e| panic!("{source}: {e}"));
-    let context = SourceContext::new(core::iter::once((&[][..], &file)));
+    let context = SourceContext::new(
+        core::iter::once((&[][..], &file)),
+        syn_canon::Edition::E2021,
+    );
     let (sig, block) = file
         .items
         .iter()
@@ -73,7 +76,10 @@ fn module_view(root: &str, module: &str) -> CanonicalForm {
     };
     let (root, module) = (parse(&format!("mod m;\n{root}")), parse(module));
     let path = [String::from("m")];
-    let context = SourceContext::new([(&[][..], &root), (&path[..], &module)]);
+    let context = SourceContext::new(
+        [(&[][..], &root), (&path[..], &module)],
+        syn_canon::Edition::E2021,
+    );
     let f = module
         .items
         .iter()

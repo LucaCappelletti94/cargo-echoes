@@ -178,8 +178,14 @@ fn primitive_parameter_views_stay_distinct_from_struct_shadows() {
         let plain: syn::File = syn::parse_str(&format!("fn f(x: {prim}) {{ x; }}")).unwrap();
         let shadowed: syn::File =
             syn::parse_str(&format!("struct {prim}; fn f(x: {prim}) {{ x; }}")).unwrap();
-        let plain_context = SourceContext::new(core::iter::once((&[][..], &plain)));
-        let shadowed_context = SourceContext::new(core::iter::once((&[][..], &shadowed)));
+        let plain_context = SourceContext::new(
+            core::iter::once((&[][..], &plain)),
+            syn_canon::Edition::E2021,
+        );
+        let shadowed_context = SourceContext::new(
+            core::iter::once((&[][..], &shadowed)),
+            syn_canon::Edition::E2021,
+        );
         let plain = function(&plain, "f");
         let shadowed = function(&shadowed, "f");
         assert_ne!(

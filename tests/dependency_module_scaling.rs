@@ -35,7 +35,8 @@ fn references(count: usize) -> syn::File {
 
 /// The shortest of three timings of every function view of `file`.
 fn every_view(file: &syn::File) -> Duration {
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], file)));
+    let context =
+        syn_canon::SourceContext::new(core::iter::once((&[][..], file)), syn_canon::Edition::E2021);
     (0..3)
         .map(|_| {
             let start = Instant::now();

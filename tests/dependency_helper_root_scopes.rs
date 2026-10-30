@@ -1,7 +1,8 @@
 //! Original transitive helper budgets follow lexical binding lifetimes.
 
 fn borrowed_form(file: &syn::File) -> syn_canon::CanonicalForm {
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], file)));
+    let context =
+        syn_canon::SourceContext::new(core::iter::once((&[][..], file)), syn_canon::Edition::E2021);
     let function = file
         .items
         .iter()

@@ -535,8 +535,14 @@ fn borrowed_views_match_the_standalone_item_order_fold() {
         "fn two() -> u32 { 2 } fn one() -> u32 { 1 } fn probe() -> (u32, u32) { (one(), two()) }",
     )
     .unwrap();
-    let first_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &first)));
-    let second_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &second)));
+    let first_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &first)),
+        syn_canon::Edition::E2021,
+    );
+    let second_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &second)),
+        syn_canon::Edition::E2021,
+    );
     assert_eq!(
         function_form(&first_context, function(&first, "probe")),
         function_form(&second_context, function(&second, "probe"))
@@ -553,8 +559,14 @@ fn borrowed_views_match_the_standalone_partition_fold() {
         "struct S; impl S { fn one() -> u32 { 1 } fn two() -> u32 { 2 } } fn probe() -> (u32, u32) { (S::one(), S::two()) }",
     )
     .unwrap();
-    let split_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &split)));
-    let combined_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &combined)));
+    let split_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &split)),
+        syn_canon::Edition::E2021,
+    );
+    let combined_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &combined)),
+        syn_canon::Edition::E2021,
+    );
     assert_eq!(
         function_form(&split_context, function(&split, "probe")),
         function_form(&combined_context, function(&combined, "probe"))
@@ -571,8 +583,14 @@ fn borrowed_views_fold_local_helper_order() {
         "fn high(input: u32) -> u32 { input >> 2u32 } fn probe(input: u32) -> u32 { low(input) ^ high(input) } fn low(input: u32) -> u32 { input & 15u32 }",
     )
     .unwrap();
-    let first_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &first)));
-    let second_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &second)));
+    let first_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &first)),
+        syn_canon::Edition::E2021,
+    );
+    let second_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &second)),
+        syn_canon::Edition::E2021,
+    );
     assert_eq!(
         function_form(&first_context, function(&first, "probe")),
         function_form(&second_context, function(&second, "probe"))
@@ -588,8 +606,14 @@ fn borrowed_method_views_fold_across_partitions() {
     let combined: syn::File =
         syn::parse_file("struct S; impl S { fn one() -> u32 { 1 } fn two() -> u32 { 2 } }")
             .unwrap();
-    let split_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &split)));
-    let combined_context = syn_canon::SourceContext::new(core::iter::once((&[][..], &combined)));
+    let split_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &split)),
+        syn_canon::Edition::E2021,
+    );
+    let combined_context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &combined)),
+        syn_canon::Edition::E2021,
+    );
     assert_eq!(
         method_form(&split_context, &split, "one"),
         method_form(&combined_context, &combined, "one")

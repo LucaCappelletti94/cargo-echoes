@@ -38,6 +38,7 @@ fn target(text: &str) -> TargetScan {
             rustdoc: true,
         }],
         library: true,
+        edition: syn_canon::Edition::E2021,
     }
 }
 
@@ -179,7 +180,7 @@ fn structure_threshold_uses_public_canonical_sizes() {
     let text = include_str!("fixtures/structurews/src/lib.rs");
     let file = syn::parse_file(text).unwrap();
     let entries: [(&[String], &syn::File); 1] = [(&[], &file)];
-    let context = syn_canon::SourceContext::new(entries);
+    let context = syn_canon::SourceContext::new(entries, syn_canon::Edition::E2021);
     let target = target(text);
     let base = Echoes::default().functions().fn_min_tokens(0).run_targets(
         "",

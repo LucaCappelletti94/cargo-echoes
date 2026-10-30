@@ -40,6 +40,7 @@ fn target(text: &str) -> TargetScan {
             rustdoc: true,
         }],
         library: true,
+        edition: syn_canon::Edition::E2021,
     }
 }
 
@@ -124,7 +125,10 @@ fn helper_ws_fixture_preserves_exact_function_and_doctest_members() {
     }
     // The borrowed views select the same boundary the report groups.
     let parsed = syn::parse_file(text).unwrap();
-    let context = syn_canon::SourceContext::new(core::iter::once((&[][..], &parsed)));
+    let context = syn_canon::SourceContext::new(
+        core::iter::once((&[][..], &parsed)),
+        syn_canon::Edition::E2021,
+    );
     let left = parsed
         .items
         .iter()

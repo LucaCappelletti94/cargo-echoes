@@ -14,6 +14,7 @@ use quote::ToTokens;
 use syn::visit::Visit;
 
 use crate::alpha;
+use crate::edition::Edition;
 use crate::form::{self, OWNER_PARAMETER};
 use crate::scope::{Binding, BindingId, Frame, Ns, Origin, PrimTy, ident_name, unraw};
 
@@ -75,6 +76,8 @@ struct Module {
     prelude: bool,
     /// Every `use` of the module imports from `std`, `core` or `alloc`.
     standard_imports: bool,
+    /// The seed's aliases of external crate items with their rooted paths.
+    externals: BTreeMap<String, Vec<String>>,
 }
 
 /// One original declaration and its module environment.
@@ -146,6 +149,13 @@ impl FunctionView<'_> {
             block: Box::new(self.block.clone()),
         };
         let helpers = transfer_helpers(&self.ctx.helpers, self.sig, self.block, &mut item);
+        if !self.entry.observed && !self.entry.enclosing_observed {
+            crate::externals::root(
+                &mut item,
+                &self.ctx.modules[self.entry.module.0].externals,
+                generics,
+            );
+        }
         let file = syn::File {
             shebang: None,
             frontmatter: None,
@@ -202,7 +212,10 @@ impl<'a> SourceContext<'a> {
 
     /// Index every module's top-level seed and every function it declares,
     /// inline modules under their own path, seed, and glob uncertainty.
-    pub fn new<I>(files: I) -> Self
+    ///
+    /// `edition` is the edition the files compile under, which decides how a `use` path's
+    /// first segment resolves.
+    pub fn new<I>(files: I, edition: Edition) -> Self
     where
         I: IntoIterator<Item = (&'a [String], &'a syn::File)>,
     {
@@ -233,8 +246,16 @@ impl<'a> SourceContext<'a> {
                 .map(|scope| {
                     let prim_fallback = scope_primitives_known(scope.items());
                     let id = ModuleId(modules.len());
+                    let seed = seed_frame(
+                        &scopes,
+                        path,
+                        &scope,
+                        prim_fallback,
+                        edition.uses_extern_prelude(),
+                    );
                     modules.push(Module {
-                        seed: seed_frame(&scopes, path, &scope, prim_fallback),
+                        externals: crate::externals::aliases(&seed),
+                        seed,
                         prim_fallback,
                         std_names: !crate_rebound && std_names_kept(&scopes, path, &scope),
                         observed: ancestry.observed,
@@ -641,10 +662,13 @@ pub(crate) struct ImportedTarget {
     pub(crate) prim: Option<PrimTy>,
     module: Option<Vec<String>>,
     macro_resolution: Option<crate::macros::MacroResolution>,
+    /// The rooted path of an external crate item a function view spells in full.
+    external: Option<Vec<String>>,
 }
 
 impl ImportedTarget {
-    /// The facts `self` shares with `other`, `None` when they name different items.
+    /// The facts `self` shares with `other`, `None` when they name different items. Only
+    /// resolved items of the crate merge, and those name no external crate item.
     fn agree(self, other: &Self) -> Option<Self> {
         (self.canon == other.canon).then(|| Self {
             prim: self.prim.filter(|prim| other.prim == Some(*prim)),
@@ -654,8 +678,20 @@ impl ImportedTarget {
             module: self
                 .module
                 .filter(|module| other.module.as_ref() == Some(module)),
+            external: None,
             canon: self.canon,
         })
+    }
+
+    /// The module-scoped opaque alias of `alias` in the module at `from`.
+    fn opaque(from: &[String], alias: &str) -> Self {
+        Self {
+            canon: qualified_name(from, alias),
+            prim: None,
+            module: None,
+            macro_resolution: None,
+            external: None,
+        }
     }
 }
 
@@ -706,12 +742,7 @@ impl ImportedName {
             return;
         }
         for slot in self.resolved.iter_mut().filter(|slot| slot.is_some()) {
-            *slot = Some(ImportedTarget {
-                canon: qualified_name(from, alias),
-                prim: None,
-                module: None,
-                macro_resolution: None,
-            });
+            *slot = Some(ImportedTarget::opaque(from, alias));
         }
         self.unknown = UnknownImport::Ambiguous;
     }
@@ -752,6 +783,9 @@ struct UseBinder<'a> {
     depth: usize,
     active: Option<&'a ImportPath<'a>>,
     steps: &'a Cell<usize>,
+    /// The edition resolves the first `use` segment through the extern prelude, so an
+    /// external crate item records its rooted path.
+    extern_prelude: bool,
 }
 
 fn import_slots(
@@ -789,12 +823,9 @@ fn merge_import_slots(
         }
         *slot = Some(match slot.take() {
             None => target.clone(),
-            Some(current) => current.agree(target).unwrap_or_else(|| ImportedTarget {
-                canon: qualified_name(from, alias),
-                prim: None,
-                module: None,
-                macro_resolution: None,
-            }),
+            Some(current) => current
+                .agree(target)
+                .unwrap_or_else(|| ImportedTarget::opaque(from, alias)),
         });
     }
 }
@@ -810,12 +841,7 @@ fn bind_imports(
         let unknown = match imported.unknown {
             UnknownImport::None => None,
             UnknownImport::Unique(target) => Some(target),
-            UnknownImport::Ambiguous => Some(ImportedTarget {
-                canon: qualified_name(from, &alias),
-                prim: None,
-                module: None,
-                macro_resolution: None,
-            }),
+            UnknownImport::Ambiguous => Some(ImportedTarget::opaque(from, &alias)),
         };
         if let Some(target) = unknown {
             let mut unclaimed = [false; 5];
@@ -827,11 +853,12 @@ fn bind_imports(
         }
         for ns in IMPORT_NAMESPACES {
             if let Some(target) = imported.resolved[ns as usize].take() {
+                let id = BindingId(*next_id);
                 frame.bind(
                     ns,
                     &alias,
                     Binding {
-                        id: BindingId(*next_id),
+                        id,
                         canon: target.canon,
                         origin: Origin::Use,
                         prim: if ns == Ns::Type { target.prim } else { None },
@@ -843,6 +870,9 @@ fn bind_imports(
                         macro_resolution: target.macro_resolution,
                     },
                 );
+                if let Some(path) = target.external {
+                    frame.set_external(id, path);
+                }
                 *next_id += 1;
             }
         }
@@ -908,7 +938,7 @@ fn bind_use_name(binder: &mut UseBinder<'_>, path: &[String], alias: &str) {
         binder.imports.entry(alias.to_string()).or_default()
     };
     imported.gated |= cfg_gated(&binder.import.attrs);
-    let target = match target {
+    let external = match target {
         UseTarget::Item(target, namespaces) => {
             if imported.resolved.iter().all(Option::is_none) {
                 import_slots(&mut imported.resolved, namespaces, target);
@@ -923,29 +953,64 @@ fn bind_use_name(binder: &mut UseBinder<'_>, path: &[String], alias: &str) {
             }
             return;
         }
-        UseTarget::External => ImportedTarget {
+        UseTarget::External => true,
+        UseTarget::Unresolved => {
+            binder.extern_prelude && extern_root(binder.scopes, binder.from, unraw(&path[0]))
+        }
+    };
+    let target = if external {
+        let prim = external_prim(path).filter(|_| {
+            binder
+                .scopes
+                .get(binder.from)
+                .expect("indexed importing module")
+                .primitives_known()
+        });
+        ImportedTarget {
             canon: qualified_name(&path[..path.len() - 1], &path[path.len() - 1]),
-            prim: external_prim(path).filter(|_| {
-                binder
-                    .scopes
-                    .get(binder.from)
-                    .expect("indexed importing module")
-                    .primitives_known()
-            }),
+            prim,
             module: None,
             macro_resolution: crate::macros::MacroResolution::external_path(path),
-        },
-        UseTarget::Unresolved => ImportedTarget {
-            canon: qualified_name(binder.from, alias),
-            prim: None,
-            module: None,
-            macro_resolution: None,
-        },
+            external: (binder.extern_prelude && prim.is_none()).then(|| path.to_vec()),
+        }
+    } else {
+        ImportedTarget::opaque(binder.from, alias)
     };
     imported.unknown = match imported.unknown {
         UnknownImport::None => UnknownImport::Unique(target),
         UnknownImport::Unique(_) | UnknownImport::Ambiguous => UnknownImport::Ambiguous,
     };
+}
+
+/// Whether `first`, the first segment of a `use` path in the module at `from`, names a crate
+/// of the extern prelude. Rust 2018 and later report an ambiguity error when an item, an
+/// import, a glob or a macro-expanded item of the module supplies the same name, so a
+/// compiling module that declares and imports no such name reaches the crate. An
+/// `extern crate` renamed at the crate root adds its alias to the extern prelude, and one
+/// renamed in the module binds its alias there.
+fn extern_root(scopes: &ModuleMap<'_>, from: &[String], first: &str) -> bool {
+    if matches!(first, "crate" | "self" | "super" | "Self") {
+        return false;
+    }
+    let claims = |ident: &syn::Ident| ident_name(ident) == first;
+    let renames = |item: &syn::Item| {
+        matches!(item, syn::Item::ExternCrate(krate)
+            if krate.rename.as_ref().is_some_and(|(_, alias)| *alias != krate.ident && claims(alias)))
+    };
+    let declared = scopes.get(from).is_some_and(|declarations| {
+        declarations.iter().any(|scope| {
+            scope.items().iter().any(|item| {
+                alpha::type_item_ident(item).is_some_and(claims)
+                    || renames(item)
+                    || matches!(item, syn::Item::Use(import)
+                        if alpha::imported_name_matches(&import.tree, claims))
+            })
+        })
+    });
+    let rooted = scopes
+        .get(&[][..])
+        .is_some_and(|root| root.iter().any(|scope| scope.items().iter().any(renames)));
+    !declared && !rooted
 }
 
 /// Resolve a use path against the module map, `from` the importing module,
@@ -1009,6 +1074,7 @@ fn resolve_use_at(
                 prim: None,
                 macro_resolution: None,
                 module: Some(base.clone()),
+                external: None,
             },
             [false, true, false, false, false],
         );
@@ -1161,6 +1227,7 @@ fn resolve_declared(
                 canon: qualified_name(module, name),
                 prim,
                 macro_resolution: None,
+                external: None,
                 module: items.iter().find_map(|item| {
                     if let syn::Item::Mod(item) = item
                         && ident_name(&item.ident) == name
@@ -1211,6 +1278,7 @@ fn resolve_imported_item(
                     depth: depth + 1,
                     active: Some(&query),
                     steps,
+                    extern_prelude: false,
                 },
                 &[],
                 &import.tree,
@@ -1478,14 +1546,23 @@ fn item_seed<'a>(
 }
 
 /// The seed frame of one module scope: its items at their identity
-/// spelling, the prims its type aliases and use imports prove.
+/// spelling, the prims its type aliases and use imports prove. With `extern_prelude`, an
+/// import of an external crate item records its rooted path for function views.
 pub(crate) fn seed_frame(
     scopes: &ModuleMap<'_>,
     path: &[String],
     scope: &ModuleScope<'_>,
     prim_fallback: bool,
+    extern_prelude: bool,
 ) -> Frame {
-    seed_scope(scopes, path, &scope.items().iter(), None, prim_fallback)
+    seed_scope(
+        scopes,
+        path,
+        &scope.items().iter(),
+        None,
+        prim_fallback,
+        extern_prelude,
+    )
 }
 
 pub(crate) fn seed_items(
@@ -1501,6 +1578,7 @@ pub(crate) fn seed_items(
         &items.iter().copied(),
         Some(outer),
         prim_fallback,
+        false,
     )
 }
 
@@ -1510,6 +1588,7 @@ fn seed_scope<'a>(
     items: &(impl Iterator<Item = &'a syn::Item> + Clone),
     outer: Option<&Frame>,
     prim_fallback: bool,
+    extern_prelude: bool,
 ) -> Frame {
     let mut frame = outer.cloned().unwrap_or_default();
     let mut next_id = frame.next_id();
@@ -1554,6 +1633,7 @@ fn seed_scope<'a>(
                         depth: 0,
                         active: None,
                         steps: &steps,
+                        extern_prelude,
                     },
                     &[],
                     &use_item.tree,

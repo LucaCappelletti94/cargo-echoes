@@ -19,6 +19,7 @@ fn target(text: &str) -> TargetScan {
             rustdoc: true,
         }],
         library: true,
+        edition: syn_canon::Edition::E2021,
     }
 }
 

@@ -556,3 +556,16 @@ jobs:
         with:
           name: return-literal-typing-witnesses
           path: ${{ runner.temp }}/return-literal-typing-witnesses.json
+      - name: Verify import path witnesses
+        id: import_paths_witnesses
+        run: >-
+          python3 -B tests/dependency_constants_witnesses.py
+          --cases tests/fixtures/dependency/import_paths_cases.json
+          --request-id "DG-CI-IMPORTS-${{ github.run_id }}-${{ github.run_attempt }}"
+          --output "${{ runner.temp }}/import-paths-witnesses.json"
+          --timeout 600
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && steps.import_paths_witnesses.outcome != 'skipped'
+        with:
+          name: import-paths-witnesses
+          path: ${{ runner.temp }}/import-paths-witnesses.json

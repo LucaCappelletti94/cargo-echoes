@@ -1903,6 +1903,7 @@ mod tests {
         TargetScan {
             name: "app".into(),
             library,
+            edition: syn_canon::Edition::E2021,
             files: files.to_vec(),
         }
     }
@@ -2466,11 +2467,13 @@ mod tests {
         let first_target = TargetScan {
             name: "one".into(),
             library: true,
+            edition: syn_canon::Edition::E2021,
             files: vec![file.clone()],
         };
         let two = TargetScan {
             name: "two".into(),
             library: true,
+            edition: syn_canon::Edition::E2021,
             files: vec![file],
         };
         let first = extract(&first_target, "", &|_| true);

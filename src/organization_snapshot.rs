@@ -162,6 +162,7 @@ fn package_targets(
                 src,
                 doc: crate::discover::scan_target(&target.kind, all_targets),
                 library: crate::discover::library_target(&target.kind),
+                edition: crate::discover::edition(Some(target.edition.as_str())),
             }),
             _ => failures.push(qualify(
                 root,
