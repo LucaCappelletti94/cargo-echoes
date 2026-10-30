@@ -1,0 +1,200 @@
+[
+  {
+    "id": "op_is_none_eq",
+    "family": "option_predicates",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} impl PartialEq for D { fn eq(&self, _: &Self) -> bool { println!(\"eq\"); true } } fn f(o: Option<D>) -> bool { o.is_none() } fn main(){ println!(\"{} {}\", f(Some(D(\"a\"))), f(None)); }",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} impl PartialEq for D { fn eq(&self, _: &Self) -> bool { println!(\"eq\"); true } } fn f(o: Option<D>) -> bool { o == None } fn main(){ println!(\"{} {}\", f(Some(D(\"a\"))), f(None)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop a\nfalse true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop a\nfalse true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop a\nfalse true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop a\nfalse true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "op_not_is_some",
+    "family": "option_predicates",
+    "a": "fn f(o: Option<u32>) -> bool { !o.is_some() } fn main(){ println!(\"{} {}\", f(Some(1)), f(None)); }",
+    "b": "fn f(o: Option<u32>) -> bool { matches!(o, None) } fn main(){ println!(\"{} {}\", f(Some(1)), f(None)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "op_is_err",
+    "family": "option_predicates",
+    "a": "fn f(r: Result<u32, u8>) -> bool { r.is_err() } fn main(){ println!(\"{} {}\", f(Ok(1)), f(Err(2))); }",
+    "b": "fn f(r: Result<u32, u8>) -> bool { !r.is_ok() } fn main(){ println!(\"{} {}\", f(Ok(1)), f(Err(2))); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "false true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "op_unwrap_or",
+    "family": "option_predicates",
+    "a": "fn f(o: Option<u32>) -> u32 { o.unwrap_or(7) } fn main(){ println!(\"{} {}\", f(Some(3)), f(None)); }",
+    "b": "fn f(o: Option<u32>) -> u32 { match o { Some(v) => v, None => 7 } } fn main(){ println!(\"{} {}\", f(Some(3)), f(None)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 7\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 7\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "op_take",
+    "family": "option_predicates",
+    "a": "fn f(o: &mut Option<String>) -> Option<String> { std::mem::replace(o, None) } fn main(){ let mut o = Some(String::from(\"x\")); let t = f(&mut o); println!(\"{:?} {:?}\", t, o); }",
+    "b": "fn f(o: &mut Option<String>) -> Option<String> { o.take() } fn main(){ let mut o = Some(String::from(\"x\")); let t = f(&mut o); println!(\"{:?} {:?}\", t, o); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(\"x\") None\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(\"x\") None\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(\"x\") None\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(\"x\") None\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "op_ok_drop",
+    "family": "option_predicates",
+    "a": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} impl PartialEq for D { fn eq(&self, _: &Self) -> bool { println!(\"eq\"); true } } fn f(r: Result<u32, D>) -> Option<u32> { let _b = D(\"later\"); r.ok() } fn main(){ println!(\"{:?}\", f(Err(D(\"payload\")))); }",
+    "b": "struct D(&'static str); impl Drop for D{fn drop(&mut self){println!(\"drop {}\",self.0);}} impl PartialEq for D { fn eq(&self, _: &Self) -> bool { println!(\"eq\"); true } } fn f(r: Result<u32, D>) -> Option<u32> { let _b = D(\"later\"); match r { Ok(v) => Some(v), Err(_) => None } } fn main(){ println!(\"{:?}\", f(Err(D(\"payload\")))); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop payload\ndrop later\nNone\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop payload\ndrop later\nNone\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop later\ndrop payload\nNone\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop later\ndrop payload\nNone\n"
+        }
+      }
+    }
+  }
+]

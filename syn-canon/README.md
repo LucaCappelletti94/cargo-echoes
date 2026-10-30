@@ -148,6 +148,8 @@ In compiling mode, `let y = e; y` and `let y = e; return y;` at the end of a tai
 
 In compiling mode, a standard `matches!(e, P)` reads as `match e { P => true, _ => false }`, with a guard kept, and `!match e { … }` whose every arm yields a `bool` literal reads with each literal negated. A body that declares its own `matches!` macro keeps the call.
 
+In compiling mode, with the standard prelude names unclaimed, a binding declared as `Option<T>` or `Result<T, E>`, owned or behind one reference, reads `is_some`, `is_none`, `is_ok` and `is_err` as the `match` they perform, and `o == None` or `o != None` as `is_none` or `is_some`. A written `match` whose first arm is `None` or `Err(_)` and whose second is `_` reads with `Some(_)` or `Ok(_)` leading, so `matches!(o, None)` meets `o.is_none()`. On an owned `Option`, `unwrap_or(c)` and `unwrap_or_else(|| c)` with a literal or primitive binding `c` read as their `match`, and `match o { Some(v) => Some(v), None => None }` reads as `o`. `std::mem::replace(o, None)` over a `&mut Option` reads as `o.take()`, and `Option::Some`, `Option::None`, `Result::Ok` and `Result::Err` read as their bare names.
+
 ## Stability
 
 `CanonicalForm` keys and hashes are comparable within a semver-compatible release series. Before `1.0`, each minor version defines a series, such as `0.5.x`. Incompatible normalization requires a new series.

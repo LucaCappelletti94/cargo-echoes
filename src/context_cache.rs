@@ -260,6 +260,9 @@ pub mod alpha {
     pub fn present(value: Option<u32>) -> bool {
         !matches!(value, Some(_))
     }
+    pub fn absent(value: Option<u32>) -> bool {
+        value == None
+    }
 }
 mod custom {
     macro_rules! vec {

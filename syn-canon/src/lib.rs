@@ -21,6 +21,7 @@ mod form;
 mod helpers;
 mod items;
 mod macros;
+mod options;
 mod prelude;
 mod reference;
 mod schedule;
