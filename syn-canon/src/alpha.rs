@@ -326,6 +326,11 @@ pub(crate) struct Renamer<'env> {
     in_type: bool,
     /// A bare `<T>` was just visited, so the next path names associated items of `T`.
     after_bare_qself: bool,
+    /// A `<T as Trait>` was just visited, so the next path's segments are counted from the
+    /// qualified self.
+    after_qself: bool,
+    /// The path being resolved follows a qualified self, whose segment count it must keep.
+    in_qualified_path: bool,
     /// Raw-involved identifiers in macro input keep their token spelling.
     opaque_tokens: bool,
     macro_punctuation_observed: bool,
@@ -401,6 +406,8 @@ impl<'env> Renamer<'env> {
             self_owner: None,
             in_type: false,
             after_bare_qself: false,
+            after_qself: false,
+            in_qualified_path: false,
             opaque_tokens: false,
             macro_punctuation_observed: false,
             macro_supported: true,
@@ -950,7 +957,7 @@ impl<'env> Renamer<'env> {
         };
         // A function view spells an external import as its rooted path, which no binding
         // resolves.
-        if resolved.external.is_some() && !self.context && !self.observed {
+        if self.external_spelling(&resolved).is_some() {
             return Resolution::default();
         }
         let origin = if let Some(index) = resolved.target {
@@ -1949,10 +1956,7 @@ impl<'env> Renamer<'env> {
         else {
             return;
         };
-        if let Some(external) = resolved
-            .external
-            .filter(|_| !self.context && !self.observed)
-        {
+        if let Some(external) = self.external_spelling(&resolved) {
             self.root_external(path, external);
             return;
         }
@@ -2000,6 +2004,17 @@ impl<'env> Renamer<'env> {
                 path.segments.iter_mut().skip(1),
             );
         }
+    }
+
+    /// The rooted path a function view spells for `resolved`, an inherited import of an
+    /// external crate item, unless a glob import in a scope between may shadow the name.
+    fn external_spelling<'r>(&self, resolved: &Resolved<'r>) -> Option<&'r [String]> {
+        resolved.external.filter(|_| {
+            !self.context
+                && !self.observed
+                && !self.in_qualified_path
+                && !self.frames.iter().any(|frame| frame.glob)
+        })
     }
 
     /// Spell a path whose first segment imports an external crate item as the item's rooted
@@ -2147,7 +2162,7 @@ impl<'env> Renamer<'env> {
         let Some(resolved) = self.lookup(root_ns, &name) else {
             return origins;
         };
-        if resolved.external.is_some() && !self.context && !self.observed {
+        if self.external_spelling(&resolved).is_some() {
             return origins;
         }
         let mut current: Option<(Domain, BindingId)> = None;
@@ -4173,6 +4188,7 @@ impl VisitMut for Renamer<'_> {
         // syn visits every qualified path's `<T>` right before its path.
         syn::visit_mut::visit_qself_mut(self, qself);
         self.after_bare_qself = qself.position == 0;
+        self.after_qself = qself.position > 0;
     }
 
     fn visit_path_mut(&mut self, path: &mut syn::Path) {
@@ -4180,7 +4196,10 @@ impl VisitMut for Renamer<'_> {
         // Only the first segment names a local binder, and a leading
         // colon always names an extern crate.
         if !core::mem::take(&mut self.after_bare_qself) {
+            let qualified = core::mem::take(&mut self.after_qself);
+            let outer = core::mem::replace(&mut self.in_qualified_path, qualified);
             self.resolve_path(path);
+            self.in_qualified_path = outer;
         }
         self.visit_path_arguments(path);
         self.helper_syntax.put_path(path, handles);

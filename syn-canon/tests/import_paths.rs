@@ -120,6 +120,87 @@ fn standard_readings_reach_imported_paths() {
 }
 
 #[test]
+fn nested_declarations_shadow_only_their_namespaces() {
+    let pair = |item: &str| {
+        (
+            lone(
+                &format!(
+                    "use std::mem;\nfn f(a: &mut u32, b: &mut u32) {{ {item} mem::swap(a, b) }}"
+                ),
+                Edition::E2021,
+            ),
+            lone(
+                &format!("fn f(a: &mut u32, b: &mut u32) {{ {item} std::mem::swap(a, b) }}"),
+                Edition::E2021,
+            ),
+        )
+    };
+    for item in [
+        "enum mem {}",
+        "extern crate mem;",
+        "extern crate other as mem;",
+        "struct mem;",
+        "trait mem {}",
+        "trait mem = Sized;",
+        "type mem = u8;",
+        "union mem { a: u8 }",
+        "mod mem {}",
+        "use other::mem;",
+        "use other::thing as mem;",
+        "use other::*;",
+    ] {
+        let (imported, rooted) = pair(item);
+        assert_ne!(imported, rooted, "{item}");
+    }
+    for item in [
+        "const mem: u8 = 0;",
+        "static mem: u8 = 0;",
+        "fn mem() {}",
+        "macro_rules! mem { () => {} }",
+        "let mem = 1u8;",
+    ] {
+        let (imported, rooted) = pair(item);
+        assert_eq!(imported, rooted, "{item}");
+    }
+}
+
+#[test]
+fn qualified_paths_root_their_trait_path() {
+    for (imported, rooted) in [
+        (
+            "use std::fmt;\nfn f<T: fmt::Debug>(t: &T, w: &mut fmt::Formatter<'_>) -> fmt::Result { <T as fmt::Debug>::fmt(t, w) }",
+            "fn f<T: std::fmt::Debug>(t: &T, w: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { <T as std::fmt::Debug>::fmt(t, w) }",
+        ),
+        (
+            "use std::iter;\nfn f<I: iter::Iterator>(i: I) -> Option<<I as iter::Iterator>::Item> { None }",
+            "fn f<I: std::iter::Iterator>(i: I) -> Option<<I as std::iter::Iterator>::Item> { None }",
+        ),
+        (
+            "use serde::de;\nfn f<S>(s: S) -> u8 { let <S as de::Tr>::Out { a } = s; a }",
+            "fn f<S>(s: S) -> u8 { let <S as serde::de::Tr>::Out { a } = s; a }",
+        ),
+        (
+            "use serde::de;\nfn f<S>(s: S) -> u8 { let <S as de::Tr>::Out(a) = s; a }",
+            "fn f<S>(s: S) -> u8 { let <S as serde::de::Tr>::Out(a) = s; a }",
+        ),
+        (
+            "use serde::de;\nfn f<S>() -> u8 { <S as de::Tr>::Out { a: 1 }.a }",
+            "fn f<S>() -> u8 { <S as serde::de::Tr>::Out { a: 1 }.a }",
+        ),
+        (
+            "use std::mem::swap;\nfn f<T: Tr>() { <T>::swap() }",
+            "fn f<T: Tr>() { <T>::swap() }",
+        ),
+    ] {
+        assert_eq!(
+            lone(imported, Edition::E2021),
+            lone(rooted, Edition::E2021),
+            "{imported}\n{rooted}"
+        );
+    }
+}
+
+#[test]
 fn imports_in_different_modules_meet() {
     let files: [(&[&str], &str); 3] = [
         (&[], "mod a;\nmod b;"),
@@ -224,7 +305,10 @@ fn editions_parse_from_manifest_spellings() {
     ] {
         assert_eq!(text.parse::<Edition>(), Ok(edition));
     }
-    assert!("2019".parse::<Edition>().is_err());
+    assert_eq!(
+        "2019".parse::<Edition>().unwrap_err().to_string(),
+        "unknown Rust edition"
+    );
     assert!(!Edition::E2015.uses_extern_prelude());
     assert!(Edition::E2018.uses_extern_prelude());
 }

@@ -667,7 +667,8 @@ pub(crate) struct ImportedTarget {
 }
 
 impl ImportedTarget {
-    /// The facts `self` shares with `other`, `None` when they name different items.
+    /// The facts `self` shares with `other`, `None` when they name different items. Only
+    /// resolved items of the crate merge, and those name no external crate item.
     fn agree(self, other: &Self) -> Option<Self> {
         (self.canon == other.canon).then(|| Self {
             prim: self.prim.filter(|prim| other.prim == Some(*prim)),
@@ -677,9 +678,7 @@ impl ImportedTarget {
             module: self
                 .module
                 .filter(|module| other.module.as_ref() == Some(module)),
-            external: self
-                .external
-                .filter(|external| other.external.as_ref() == Some(external)),
+            external: None,
             canon: self.canon,
         })
     }
@@ -956,7 +955,7 @@ fn bind_use_name(binder: &mut UseBinder<'_>, path: &[String], alias: &str) {
         }
         UseTarget::External => true,
         UseTarget::Unresolved => {
-            binder.extern_prelude && extern_root(binder.scopes, binder.from, path)
+            binder.extern_prelude && extern_root(binder.scopes, binder.from, unraw(&path[0]))
         }
     };
     let target = if external {
@@ -983,16 +982,13 @@ fn bind_use_name(binder: &mut UseBinder<'_>, path: &[String], alias: &str) {
     };
 }
 
-/// Whether the first segment of the `use` path `path` in the module at `from` names a crate
+/// Whether `first`, the first segment of a `use` path in the module at `from`, names a crate
 /// of the extern prelude. Rust 2018 and later report an ambiguity error when an item, an
 /// import, a glob or a macro-expanded item of the module supplies the same name, so a
 /// compiling module that declares and imports no such name reaches the crate. An
 /// `extern crate` renamed at the crate root adds its alias to the extern prelude, and one
 /// renamed in the module binds its alias there.
-fn extern_root(scopes: &ModuleMap<'_>, from: &[String], path: &[String]) -> bool {
-    let Some(first) = path.first().map(|name| unraw(name)) else {
-        return false;
-    };
+fn extern_root(scopes: &ModuleMap<'_>, from: &[String], first: &str) -> bool {
     if matches!(first, "crate" | "self" | "super" | "Self") {
         return false;
     }

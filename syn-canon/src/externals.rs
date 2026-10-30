@@ -102,11 +102,41 @@ impl Visit<'_> for Bound {
 
 struct Root<'a> {
     aliases: BTreeMap<&'a str, &'a [String]>,
+    /// The next path follows a bare `<T>`, so its head names an associated item of `T`.
+    keep_head: bool,
+}
+
+impl Root<'_> {
+    /// Visit `node`, whose path may follow a qualified self. The trait path of
+    /// `<T as Trait>::item` roots like any path, with the qualified self still counting the
+    /// trait path's segments, and `<T>::item` keeps its head.
+    fn qualified<N>(
+        &mut self,
+        node: &mut N,
+        parts: fn(&mut N) -> (&mut Option<syn::QSelf>, &mut syn::Path),
+        visit: fn(&mut Self, &mut N),
+    ) {
+        let (slot, path) = parts(node);
+        let Some(mut qself) = slot.take() else {
+            visit(self, node);
+            return;
+        };
+        let before = path.segments.len();
+        self.keep_head = qself.position == 0;
+        visit(self, node);
+        let (slot, path) = parts(node);
+        if qself.position > 0 {
+            qself.position += path.segments.len() - before;
+        }
+        self.visit_qself_mut(&mut qself);
+        *slot = Some(qself);
+    }
 }
 
 impl VisitMut for Root<'_> {
     fn visit_path_mut(&mut self, path: &mut syn::Path) {
-        if path.leading_colon.is_none()
+        if !core::mem::take(&mut self.keep_head)
+            && path.leading_colon.is_none()
             && let Some(first) = path.segments.first()
             && let Some(external) = self.aliases.get(ident_name(&first.ident).as_str())
         {
@@ -130,35 +160,44 @@ impl VisitMut for Root<'_> {
         syn::visit_mut::visit_path_mut(self, path);
     }
 
-    // A qualified self counts the path's segments, so those paths keep their spelling.
     fn visit_expr_path_mut(&mut self, expr: &mut syn::ExprPath) {
-        if expr.qself.is_none() {
-            syn::visit_mut::visit_expr_path_mut(self, expr);
-        }
+        self.qualified(
+            expr,
+            |expr| (&mut expr.qself, &mut expr.path),
+            syn::visit_mut::visit_expr_path_mut,
+        );
     }
 
     fn visit_type_path_mut(&mut self, ty: &mut syn::TypePath) {
-        if ty.qself.is_none() {
-            syn::visit_mut::visit_type_path_mut(self, ty);
-        }
+        self.qualified(
+            ty,
+            |ty| (&mut ty.qself, &mut ty.path),
+            syn::visit_mut::visit_type_path_mut,
+        );
     }
 
     fn visit_expr_struct_mut(&mut self, expr: &mut syn::ExprStruct) {
-        if expr.qself.is_none() {
-            syn::visit_mut::visit_expr_struct_mut(self, expr);
-        }
+        self.qualified(
+            expr,
+            |expr| (&mut expr.qself, &mut expr.path),
+            syn::visit_mut::visit_expr_struct_mut,
+        );
     }
 
     fn visit_pat_struct_mut(&mut self, pat: &mut syn::PatStruct) {
-        if pat.qself.is_none() {
-            syn::visit_mut::visit_pat_struct_mut(self, pat);
-        }
+        self.qualified(
+            pat,
+            |pat| (&mut pat.qself, &mut pat.path),
+            syn::visit_mut::visit_pat_struct_mut,
+        );
     }
 
     fn visit_pat_tuple_struct_mut(&mut self, pat: &mut syn::PatTupleStruct) {
-        if pat.qself.is_none() {
-            syn::visit_mut::visit_pat_tuple_struct_mut(self, pat);
-        }
+        self.qualified(
+            pat,
+            |pat| (&mut pat.qself, &mut pat.path),
+            syn::visit_mut::visit_pat_tuple_struct_mut,
+        );
     }
 
     // Attribute and macro paths resolve through their own namespaces and readings.
@@ -200,7 +239,10 @@ pub(crate) fn root(
     if aliases.is_empty() {
         return;
     }
-    let mut visitor = Root { aliases };
+    let mut visitor = Root {
+        aliases,
+        keep_head: false,
+    };
     visitor.visit_signature_mut(&mut function.sig);
     visitor.visit_block_mut(&mut function.block);
 }
