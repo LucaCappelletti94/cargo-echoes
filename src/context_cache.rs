@@ -247,6 +247,12 @@ pub mod alpha {
         let width = 2u32 * 4u32;
         return value << width;
     }
+    pub fn named(name: Option<String>) -> usize {
+        match name {
+            Some(ref text) => text.len(),
+            None => 0,
+        }
+    }
 }
 mod custom {
     macro_rules! vec {

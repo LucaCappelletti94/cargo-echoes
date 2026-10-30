@@ -1,11 +1,13 @@
-//! `if let` over a place and the arms of a `match` under resolution.
+//! `if let` over a place, `ref` bindings and the arms of a `match` under resolution.
 //!
 //! A place scrutinee creates no temporary, so `if let P = e { a } else { b }` and
-//! `match e { P => { a } _ => { b } }` drop the same values at the same points. With the prelude
-//! `Option` in view, `None` after `Some(p)` for an irrefutable `p` matches exactly what `_` does
-//! there, and `None` binds nothing, so equal arms join around it. A `match` runs the one arm
-//! whose pattern matches, so arms of distinct literals or of distinct variants of one enum read
-//! the same in any order.
+//! `match e { P => { a } _ => { b } }` drop the same values at the same points. A pattern whose
+//! every binding is `ref` borrows the parts of a place it binds, which the same pattern without
+//! `ref` does over a borrow of the place, since a non-reference pattern meeting a reference
+//! switches the default binding mode to `ref`. With the prelude `Option` in view, `None` after
+//! `Some(p)` for an irrefutable `p` matches exactly what `_` does there, and `None` binds
+//! nothing, so equal arms join around it. A `match` runs the one arm whose pattern matches, so
+//! arms of distinct literals or of distinct variants of one enum read the same in any order.
 
 use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, BTreeSet};
@@ -19,13 +21,51 @@ use crate::scope::{Origin, ident_name};
 /// The prelude variants of `Option` and `Result`, each with its declaration position.
 const PRELUDE_VARIANTS: [(&str, usize); 4] = [("None", 0), ("Some", 1), ("Ok", 0), ("Err", 1)];
 
-/// Read the `if let` expressions and `match` arms of the body `block`, nested items aside.
-pub(crate) fn normalize(renamer: &Renamer<'_>, block: &mut syn::Block) {
+/// Read the `if let` expressions, `ref` bindings and `match` arms of the body `block` of a
+/// function with the signature `sig`, nested items aside.
+pub(crate) fn normalize(renamer: &Renamer<'_>, sig: &syn::Signature, block: &mut syn::Block) {
+    let references = sig
+        .inputs
+        .iter()
+        .filter_map(|input| match input {
+            syn::FnArg::Receiver(receiver) => match &receiver.kind {
+                syn::ReceiverKind::Reference(_, _, None) => Some(String::from("self")),
+                syn::ReceiverKind::Typed(_, ty) if shared_reference(ty) => {
+                    Some(String::from("self"))
+                }
+                _ => None,
+            },
+            syn::FnArg::Typed(typed) => match typed.pat.as_ref() {
+                syn::Pat::Ident(ident)
+                    if ident.attrs.is_empty()
+                        && ident.by_ref.is_none()
+                        && ident.subpat.is_none()
+                        && shared_reference(&typed.ty) =>
+                {
+                    Some(ident_name(&ident.ident))
+                }
+                _ => None,
+            },
+        })
+        .collect();
     let mut fold = Fold {
         renamer,
         scopes: Vec::new(),
+        references,
     };
     fold.visit_block_mut(block);
+}
+
+/// Whether `ty` is a shared reference type.
+fn shared_reference(ty: &syn::Type) -> bool {
+    matches!(ty, syn::Type::Reference(reference) if reference.mutability.is_none())
+}
+
+/// How every binding of a pattern borrows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Borrow {
+    Shared,
+    Unique,
 }
 
 /// The names a block, closure, arm or condition declares.
@@ -81,6 +121,8 @@ enum Key {
 struct Fold<'a, 'env> {
     renamer: &'a Renamer<'env>,
     scopes: Vec<Scope>,
+    /// The parameters, `self` included, the signature declares as shared references.
+    references: BTreeSet<String>,
 }
 
 impl Fold<'_, '_> {
@@ -195,6 +237,190 @@ impl Fold<'_, '_> {
         )
     }
 
+    /// Whether `expr` is a place a binding or `self` roots, through fields, derefs and
+    /// parentheses, so reading it creates no temporary.
+    fn rooted_place(&self, expr: &syn::Expr) -> bool {
+        match expr {
+            syn::Expr::Path(path)
+                if path.attrs.is_empty() && path.qself.is_none() && path.path.is_ident("self") =>
+            {
+                true
+            }
+            syn::Expr::Path(_) => self.place(expr),
+            syn::Expr::Field(field) => field.attrs.is_empty() && self.rooted_place(&field.base),
+            syn::Expr::Paren(paren) => paren.attrs.is_empty() && self.rooted_place(&paren.expr),
+            syn::Expr::Unary(unary) => {
+                unary.attrs.is_empty()
+                    && matches!(unary.op, syn::UnOp::Deref(_))
+                    && self.rooted_place(&unary.expr)
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether a plain name in a pattern can only read as a constant, unit struct or unit
+    /// variant, never as a fresh binding.
+    fn constant(&self, ident: &syn::PatIdent) -> bool {
+        if bare_none(ident) {
+            return self.prelude();
+        }
+        let name = ident_name(&ident.ident);
+        for scope in self.scopes.iter().rev() {
+            if let Some(&binding) = scope.values.get(&name) {
+                return !binding;
+            }
+            if scope.open {
+                return false;
+            }
+        }
+        matches!(
+            self.renamer.value_origin(&name),
+            Some(Origin::Item | Origin::Use)
+        )
+    }
+
+    /// Whether every binding of `pat` is a `ref` binding, or every one a `ref mut` binding,
+    /// with no reference pattern, recording that borrow in `borrow`.
+    fn borrows(&self, pat: &syn::Pat, borrow: &mut Option<Borrow>) -> bool {
+        match pat {
+            syn::Pat::Ident(ident) if ident.attrs.is_empty() => {
+                let own = match (ident.by_ref.is_some(), ident.mutability.is_some()) {
+                    (true, false) => Borrow::Shared,
+                    (true, true) => Borrow::Unique,
+                    (false, false) if ident.subpat.is_none() => return self.constant(ident),
+                    (false, _) => return false,
+                };
+                if borrow.is_some_and(|known| known != own) {
+                    return false;
+                }
+                *borrow = Some(own);
+                ident
+                    .subpat
+                    .as_ref()
+                    .is_none_or(|(_, subpat)| self.borrows(subpat, borrow))
+            }
+            syn::Pat::Wild(wild) => wild.attrs.is_empty(),
+            syn::Pat::Rest(rest) => rest.attrs.is_empty(),
+            syn::Pat::Lit(lit) => lit.attrs.is_empty(),
+            syn::Pat::Range(range) => range.attrs.is_empty(),
+            syn::Pat::Path(path) => path.attrs.is_empty(),
+            syn::Pat::Paren(paren) => paren.attrs.is_empty() && self.borrows(&paren.pat, borrow),
+            syn::Pat::Guard(guard) => guard.attrs.is_empty() && self.borrows(&guard.pat, borrow),
+            syn::Pat::Or(or) => {
+                or.attrs.is_empty() && or.cases.iter().all(|case| self.borrows(case, borrow))
+            }
+            syn::Pat::Tuple(tuple) => {
+                tuple.attrs.is_empty() && tuple.elems.iter().all(|elem| self.borrows(elem, borrow))
+            }
+            syn::Pat::TupleStruct(tuple) => {
+                tuple.attrs.is_empty() && tuple.elems.iter().all(|elem| self.borrows(elem, borrow))
+            }
+            syn::Pat::Slice(slice) => {
+                slice.attrs.is_empty() && slice.elems.iter().all(|elem| self.borrows(elem, borrow))
+            }
+            syn::Pat::Struct(r#struct) => {
+                r#struct.attrs.is_empty()
+                    && r#struct
+                        .rest
+                        .as_ref()
+                        .is_none_or(|rest| rest.attrs.is_empty())
+                    && r#struct
+                        .fields
+                        .iter()
+                        .all(|field| field.attrs.is_empty() && self.borrows(&field.pat, borrow))
+            }
+            _ => false,
+        }
+    }
+
+    /// The borrow under which every pattern of `pats` binds, when each binds by `ref` alone and
+    /// at least one binds.
+    fn uniform_borrow(&self, pats: &[&mut syn::Pat]) -> Option<Borrow> {
+        let mut borrow = None;
+        pats.iter()
+            .all(|pat| self.borrows(pat, &mut borrow))
+            .then_some(borrow)
+            .flatten()
+    }
+
+    /// Read `pats`, whose every binding is `ref` or every one `ref mut`, over the place
+    /// `scrutinee` as the same patterns without `ref` over a borrow of the place, then a
+    /// reborrow of a shared reference parameter as the parameter.
+    fn borrow_place(&self, scrutinee: &mut syn::Expr, pats: &mut [&mut syn::Pat]) {
+        if self.rooted_place(scrutinee)
+            && let Some(borrow) = self.uniform_borrow(pats)
+        {
+            for pat in pats.iter_mut() {
+                strip_ref(pat);
+            }
+            let place = core::mem::replace(scrutinee, placeholder());
+            *scrutinee = syn::Expr::Reference(syn::ExprReference {
+                attrs: Vec::new(),
+                and_token: syn::token::And::default(),
+                mutability: (borrow == Borrow::Unique).then(syn::token::Mut::default),
+                expr: Box::new(place),
+            });
+        }
+        self.reborrow(scrutinee);
+    }
+
+    /// Read `&*r` as `r` for a shared reference parameter `r` that no binding shadows.
+    fn reborrow(&self, expr: &mut syn::Expr) {
+        let syn::Expr::Reference(reference) = expr else {
+            return;
+        };
+        let syn::Expr::Unary(unary) = reference.expr.as_mut() else {
+            return;
+        };
+        let parameter = matches!(
+            unary.expr.as_ref(),
+            syn::Expr::Path(path)
+                if path.attrs.is_empty()
+                    && path.qself.is_none()
+                    && path.path.get_ident().is_some_and(|ident| self.shared_parameter(&ident_name(ident)))
+        );
+        if reference.attrs.is_empty()
+            && reference.mutability.is_none()
+            && unary.attrs.is_empty()
+            && matches!(unary.op, syn::UnOp::Deref(_))
+            && parameter
+        {
+            *expr = core::mem::replace(unary.expr.as_mut(), placeholder());
+        }
+    }
+
+    /// Whether `name` is a parameter the signature declares as a shared reference and no
+    /// binding in view shadows.
+    fn shared_parameter(&self, name: &str) -> bool {
+        self.references.contains(name)
+            && self
+                .scopes
+                .iter()
+                .all(|scope| !scope.open && !scope.values.contains_key(name))
+    }
+
+    /// Read the `ref` bindings of a `match`, `if let` or `while let` over a place.
+    fn ref_bindings(&self, expr: &mut syn::Expr) {
+        match expr {
+            syn::Expr::Match(expr_match)
+                if expr_match.arms.iter().all(|arm| arm.attrs.is_empty()) =>
+            {
+                let mut pats: Vec<&mut syn::Pat> =
+                    expr_match.arms.iter_mut().map(|arm| &mut arm.pat).collect();
+                self.borrow_place(&mut expr_match.expr, &mut pats);
+            }
+            syn::Expr::If(syn::ExprIf { cond, .. })
+            | syn::Expr::While(syn::ExprWhile { cond, .. }) => {
+                if let syn::Expr::Let(binding) = cond.as_mut()
+                    && binding.attrs.is_empty()
+                {
+                    self.borrow_place(&mut binding.expr, &mut [binding.pat.as_mut()]);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Whether `pat` matches every value of its type: a wildcard, a fresh binding, or a tuple or
     /// reference of such patterns.
     fn irrefutable(&self, pat: &syn::Pat) -> bool {
@@ -220,8 +446,8 @@ impl Fold<'_, '_> {
         }
     }
 
-    /// Read `if let P = e { a } else { b }` over a place `e` as `match e { P => { a } _ => b }`,
-    /// the missing `else` as the unit block.
+    /// Read `if let P = e { a } else { b }` over a place `e`, or a borrow of one, as
+    /// `match e { P => { a } _ => b }`, the missing `else` as the unit block.
     fn if_let(&self, expr: &mut syn::Expr) {
         let syn::Expr::If(branch) = expr else {
             return;
@@ -229,7 +455,11 @@ impl Fold<'_, '_> {
         let syn::Expr::Let(binding) = branch.cond.as_mut() else {
             return;
         };
-        if !binding.attrs.is_empty() || !self.place(&binding.expr) {
+        let borrowed = matches!(
+            binding.expr.as_ref(),
+            syn::Expr::Reference(reference) if reference.attrs.is_empty() && self.place(&reference.expr)
+        );
+        if !binding.attrs.is_empty() || !(self.place(&binding.expr) || borrowed) {
             return;
         }
         let scrutinee = core::mem::replace(&mut binding.expr, Box::new(placeholder()));
@@ -388,6 +618,7 @@ impl VisitMut for Fold<'_, '_> {
         if local.attrs.is_empty()
             && let Some(init) = &mut local.init
         {
+            self.borrow_place(&mut init.expr, &mut [&mut local.pat]);
             self.visit_expr_mut(&mut init.expr);
             if let Some((_, diverge)) = &mut init.diverge {
                 self.visit_expr_mut(diverge);
@@ -447,6 +678,7 @@ impl VisitMut for Fold<'_, '_> {
         if !crate::drift::expr_attrs(expr).is_empty() {
             return;
         }
+        self.ref_bindings(expr);
         self.if_let(expr);
         syn::visit_mut::visit_expr_mut(self, expr);
         if let syn::Expr::Match(expr_match) = expr {
@@ -490,6 +722,22 @@ fn literal_key(lit: &syn::Lit) -> Option<Key> {
         syn::Lit::ByteStr(value) => Key::Bytes(value.value()),
         _ => return None,
     })
+}
+
+/// Remove `ref` and `ref mut` from every binding of `pat`.
+fn strip_ref(pat: &mut syn::Pat) {
+    struct Strip;
+    impl VisitMut for Strip {
+        fn visit_pat_ident_mut(&mut self, ident: &mut syn::PatIdent) {
+            if ident.by_ref.take().is_some() {
+                ident.mutability = None;
+            }
+            syn::visit_mut::visit_pat_ident_mut(self, ident);
+        }
+
+        fn visit_expr_mut(&mut self, _: &mut syn::Expr) {}
+    }
+    Strip.visit_pat_mut(pat);
 }
 
 /// Whether `ident` is the unattributed bare pattern `None`.

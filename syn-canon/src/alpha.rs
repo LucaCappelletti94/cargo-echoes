@@ -2727,7 +2727,7 @@ impl<'env> Renamer<'env> {
         syn::visit_mut::visit_return_type_mut(self, &mut sig.output);
         if let Some(body) = body {
             if self.arms_allowed() {
-                crate::arms::normalize(self, body);
+                crate::arms::normalize(self, sig, body);
             }
             if self.collections_allowed() {
                 crate::collections::normalize(self, sig, body);
