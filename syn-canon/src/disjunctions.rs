@@ -73,7 +73,7 @@ pub(crate) fn expansion(
         .reduce(|left, right| binary(left, syn::BinOp::Or(syn::token::OrOr::default()), right))
 }
 
-/// The proven integer or `char` type of the single-identifier binding `place`.
+/// The proven primitive type of the single-identifier binding `place`.
 fn place_prim(env: &Env<'_>, place: &syn::Expr) -> Option<PrimTy> {
     let syn::Expr::Path(path) = place else {
         return None;
@@ -83,9 +83,7 @@ fn place_prim(env: &Env<'_>, place: &syn::Expr) -> Option<PrimTy> {
         .get_ident()
         .filter(|_| path.attrs.is_empty() && path.qself.is_none())?;
     let name = crate::scope::unraw(&ident.to_string()).to_string();
-    env.get(&name)?
-        .prim
-        .filter(|prim| matches!(prim, PrimTy::Int { .. } | PrimTy::Char))
+    env.get(&name)?.prim
 }
 
 /// The inclusive code ranges the ASCII predicate called by the unattributed, argument-free

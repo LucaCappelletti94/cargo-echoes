@@ -167,6 +167,18 @@ fn unlisted_predicates_unproven_receivers_and_calls_stay_apart() {
             "trait Digit { fn is_ascii_digit(self) -> bool; }\nfn f(c: char) -> bool { c.is_ascii_digit() }".to_owned(),
             "trait Digit { fn is_ascii_digit(self) -> bool; }\nfn f(c: char) -> bool { matches!(c, '0'..='9') }".to_owned(),
         ),
+        (
+            function("c: char", "bool", "c == 97char"),
+            function("c: char", "bool", "c == 'a'"),
+        ),
+        (
+            function("x: u16", "bool", "x.is_ascii_digit()"),
+            function("x: u16", "bool", "matches!(x, 48..=57)"),
+        ),
+        (
+            function("b: bool", "bool", "(0..=1).contains(&b)"),
+            function("b: bool", "bool", "b >= 0 && b <= 1"),
+        ),
     ] {
         separate(&left, &right);
     }

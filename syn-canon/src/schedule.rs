@@ -1157,7 +1157,7 @@ fn label_lit(lit: &syn::Lit) -> Lbl {
             let prim = crate::scope::primitive_suffix(integer.suffix());
             match integer.base10_parse::<u128>() {
                 Ok(value)
-                    if prim.is_none_or(|prim| prim != PrimTy::Char && value <= largest(prim)) =>
+                    if prim.is_none_or(|prim| value <= largest(prim) && prim != PrimTy::Char) =>
                 {
                     Lbl::Int(value, prim)
                 }
