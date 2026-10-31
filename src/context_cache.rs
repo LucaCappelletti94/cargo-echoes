@@ -292,6 +292,9 @@ pub mod alpha {
         }
         total
     }
+    pub fn shown(total: u32) -> String {
+        format!("{0}/{0}", total)
+    }
 }
 mod custom {
     macro_rules! vec {

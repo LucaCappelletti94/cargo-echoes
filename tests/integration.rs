@@ -2403,6 +2403,43 @@ fn breaking_match_functions_group_with_their_while_let() {
     assert_eq!(function_groups(&scan(18)).len(), 0);
 }
 
+const FORMATS_FIXTURE: &str = "tests/fixtures/formatsws";
+
+#[test]
+fn trailing_newline_doctests_group_with_their_line_macro() {
+    let report = Echoes::default().run(FORMATS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["formatsws::Line", "formatsws::Printed"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(11)
+        .run(FORMATS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(12)
+        .run(FORMATS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn indexed_format_functions_group_with_their_inline_arguments() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(FORMATS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["formatsws::inline", "formatsws::labelled"]];
+    for tokens in [0, 3] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(4)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

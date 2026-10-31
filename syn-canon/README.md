@@ -164,6 +164,8 @@ In compiling mode, a `let` annotation that repeats the type its initializer fixe
 
 In compiling mode, an unlabelled `loop` whose only content is `match e { P => body, _ => break }` reads as `while let P = e { body }`, the loop `while let` lowers to, so the scrutinee temporary lives through `body` in both. A `None => break` arm counts as `_ => break` where the prelude reads it so. A guarded first arm, a `body` that breaks the loop with a value, a labelled loop and the `let`-`else` spelling, which drops the scrutinee temporary before the body, keep their form.
 
+In compiling mode, a standard `print!`, `eprint!` or `write!` whose non-raw format string ends in one `\n`, after no other `\n` or `\r`, reads as `println!`, `eprintln!` or `writeln!` with the newline removed, and `println!("")`, `eprintln!("")` and `writeln!(w, "")` read as `println!()`, `eprintln!()` and `writeln!(w)`. The line macros append the newline to the format string, so both write the same bytes. Explicit indices such as `{0}` read inline when every positional argument is an identifier, and a named argument `a = x` passing an identifier reads as `{x}` in its placeholders. A line macro shadowed by a local macro keeps the written call.
+
 ## Stability
 
 `CanonicalForm` keys and hashes are comparable within a semver-compatible release series. Before `1.0`, each minor version defines a series, such as `0.5.x`. Incompatible normalization requires a new series.
