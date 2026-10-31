@@ -2831,12 +2831,13 @@ fn std_format_operand(path: &syn::Path, rebound: u64) -> Option<(usize, bool)> {
 }
 
 /// Move identifier arguments of a std formatting macro into its format string,
-/// `println!("{}", x)` becoming `println!("{x}")`, and with `literals` the unsuffixed string
-/// literal arguments of plain `{}` placeholders, braces doubled, in `mac` and in every proven
-/// formatting call among its arguments, with `rebound` the std names the scopes around `mac`
-/// bind to something else. Any other macro keeps its tokens as written. Returns whether `mac`
-/// changed.
-fn inline_format_args(mac: &mut syn::Macro, rebound: u64, literals: bool) -> bool {
+/// `println!("{}", x)` becoming `println!("{x}")`, in `mac` and in every proven formatting call
+/// among its arguments, with `rebound` the std names the scopes around `mac` bind to something
+/// else. With `compiles`, also move the unsuffixed string literal arguments of plain `{}`
+/// placeholders, braces doubled, the identifier arguments of explicit indices and named
+/// arguments, and read a trailing newline or an empty format string as the line macro. Any
+/// other macro keeps its tokens as written. Returns whether `mac` changed.
+fn inline_format_args(mac: &mut syn::Macro, rebound: u64, compiles: bool) -> bool {
     use syn::parse::Parser;
 
     let Some((at, panic)) = std_format_operand(&mac.path, rebound) else {
@@ -2848,17 +2849,78 @@ fn inline_format_args(mac: &mut syn::Macro, rebound: u64, literals: bool) -> boo
     };
     let mut nested = NestedFormat {
         rebound,
-        literals,
+        literals: compiles,
         changed: false,
     };
     for arg in &mut args {
         nested.visit_expr_mut(arg);
     }
-    let inlined = !panic && inline_positional(at, &mut args, literals);
-    if nested.changed || inlined {
+    let inlined = !panic && inline_positional(at, &mut args, compiles);
+    let lined = !panic && compiles && line_macro(&mut mac.path, at, &mut args, rebound);
+    if nested.changed || inlined || lined {
         mac.tokens = args.to_token_stream();
     }
-    nested.changed || inlined
+    nested.changed || inlined || lined
+}
+
+/// Read `print!("…\n", args)`, `eprint!` and `write!(w, "…\n", args)`, whose non-raw format
+/// string ends in one newline, as the line macro of the format string without it, and
+/// `println!("")`, `eprintln!("")` and `writeln!(w, "")` as the line macro without the empty
+/// format string. The line macros append the newline to the format string, so both write the
+/// same bytes in one call. The line macro's own name must be free when the call spells it bare.
+fn line_macro(
+    path: &mut syn::Path,
+    at: usize,
+    args: &mut syn::punctuated::Punctuated<syn::Expr, syn::Token![,]>,
+    rebound: u64,
+) -> bool {
+    let bare = path.leading_colon.is_none() && path.segments.len() == 1;
+    let (
+        Some(last),
+        Some(syn::Expr::Lit(syn::ExprLit {
+            attrs,
+            lit: syn::Lit::Str(format),
+        })),
+    ) = (path.segments.last_mut(), args.iter_mut().nth(at))
+    else {
+        return false;
+    };
+    if !attrs.is_empty()
+        || !format.suffix().is_empty()
+        || format.token().to_string().starts_with('r')
+    {
+        return false;
+    }
+    let line = match last.ident.to_string().as_str() {
+        "print" => Some("println"),
+        "eprint" => Some("eprintln"),
+        "write" => Some("writeln"),
+        _ => None,
+    };
+    let value = format.value();
+    let mut changed = false;
+    if let Some(line) = line
+        && let Some(text) = value.strip_suffix('\n')
+        && !text.ends_with(['\n', '\r'])
+        && (!bare || rebound & std_name_bit(line) == 0)
+    {
+        *format = syn::LitStr::new(text, format.span());
+        last.ident = proc_macro2::Ident::new(line, last.ident.span());
+        changed = true;
+    }
+    let empty = format.value().is_empty();
+    if empty
+        && args.len() == at + 1
+        && matches!(
+            last.ident.to_string().as_str(),
+            "println" | "eprintln" | "writeln"
+        )
+    {
+        args.pop();
+        args.pop_punct();
+        changed = true;
+    }
+    changed
 }
 
 /// Inlines the proven formatting calls inside a macro's arguments, which the drift visit never
@@ -2905,24 +2967,32 @@ enum Inline {
 }
 
 /// Inline the identifier arguments after the format string at `at` among `args`, and with
-/// `literals` the string literal arguments of plain placeholders. Returns whether anything
+/// `compiles` the string literal arguments of plain placeholders, the identifier arguments of
+/// explicit indices and the named arguments that pass an identifier. Returns whether anything
 /// moved.
 fn inline_positional(
     at: usize,
     args: &mut syn::punctuated::Punctuated<syn::Expr, syn::Token![,]>,
-    literals: bool,
+    compiles: bool,
 ) -> bool {
-    let positional: Vec<&syn::Expr> = args.iter().skip(at + 1).collect();
-    if positional
-        .iter()
-        .any(|arg| matches!(arg, syn::Expr::Assign(_)))
-    {
-        return false;
+    let mut inlines = Vec::new();
+    let mut names = Vec::new();
+    for arg in args.iter().skip(at + 1) {
+        if let syn::Expr::Assign(assign) = arg {
+            let (true, Inline::Name(name), Inline::Name(value)) = (
+                compiles && assign.attrs.is_empty(),
+                inline_argument(&assign.left, false),
+                inline_argument(&assign.right, false),
+            ) else {
+                return false;
+            };
+            names.push((name, value));
+        } else if names.is_empty() {
+            inlines.push(inline_argument(arg, compiles));
+        } else {
+            return false;
+        }
     }
-    let inlines: Vec<Inline> = positional
-        .into_iter()
-        .map(|arg| inline_argument(arg, literals))
-        .collect();
     let Some(syn::Expr::Lit(syn::ExprLit {
         lit: syn::Lit::Str(format),
         ..
@@ -2930,14 +3000,15 @@ fn inline_positional(
     else {
         return false;
     };
-    let Some((text, moved)) = inline_placeholders(&format.value(), &inlines) else {
+    let Some((text, moved)) = inline_placeholders(&format.value(), &inlines, &names, compiles)
+    else {
         return false;
     };
     *format = syn::LitStr::new(&text, format.span());
     let kept = core::mem::take(args)
         .into_iter()
         .enumerate()
-        .filter(|(index, _)| *index <= at || !moved[index - at - 1])
+        .filter(|(index, _)| *index <= at || moved.get(index - at - 1) == Some(&false))
         .map(|(_, arg)| arg);
     args.extend(kept);
     true
@@ -2966,14 +3037,25 @@ fn inline_argument(arg: &syn::Expr, literals: bool) -> Inline {
     }
 }
 
-/// `format` with each implicit `{}` or `{:spec}` placeholder whose argument in `inlines` is an
-/// identifier spelled inline, and each plain `{}` whose argument is a literal replaced by the
-/// literal's text with its braces doubled, with the arguments that moved. `None` when nothing
-/// moves, or when an explicit index, a `$` or `*` spec or a count mismatch makes the argument
-/// order matter.
-fn inline_placeholders(format: &str, inlines: &[Inline]) -> Option<(String, Vec<bool>)> {
+/// `format` with each placeholder whose argument in `inlines` is an identifier spelled inline,
+/// and each plain implicit `{}` whose argument is a literal replaced by the literal's text with
+/// its braces doubled, with the positional arguments that moved. `names` holds each named
+/// argument with the identifier it passes, which its placeholders spell instead. With
+/// `explicit`, an explicit index whose argument is an identifier reads inline too, once every
+/// positional argument moves, so no index left behind changes meaning. `None` when nothing
+/// moves, or when an index left in place, a `$` or `*` spec or an unreferenced argument makes
+/// the argument order matter.
+fn inline_placeholders(
+    format: &str,
+    inlines: &[Inline],
+    names: &[(String, String)],
+    explicit: bool,
+) -> Option<(String, Vec<bool>)> {
     let mut out = String::with_capacity(format.len());
-    let mut moved = Vec::with_capacity(inlines.len());
+    let mut moved = alloc::vec![false; inlines.len()];
+    let mut used = alloc::vec![false; inlines.len()];
+    let mut next = 0;
+    let mut indexed = false;
     let mut chars = format.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
@@ -2993,29 +3075,45 @@ fn inline_placeholders(format: &str, inlines: &[Inline]) -> Option<(String, Vec<
                 let (arg, spec) = body
                     .split_once(':')
                     .map_or((body.as_str(), None), |(a, s)| (a, Some(s)));
-                let explicit_index = !arg.is_empty() && arg.bytes().all(|b| b.is_ascii_digit());
-                if explicit_index || spec.is_some_and(|spec| spec.contains(['$', '*'])) {
+                if spec.is_some_and(|spec| spec.contains(['$', '*'])) {
                     return None;
                 }
-                if arg.is_empty()
-                    && spec.is_none()
-                    && let Inline::Text(text) = inlines.get(moved.len())?
-                {
-                    out.push_str(&text.replace('{', "{{").replace('}', "}}"));
-                    moved.push(true);
-                    continue;
-                }
-                out.push('{');
-                if arg.is_empty() {
-                    let name = match inlines.get(moved.len())? {
-                        Inline::Name(name) => Some(name.as_str()),
-                        _ => None,
-                    };
-                    out.push_str(name.unwrap_or_default());
-                    moved.push(name.is_some());
+                let index = if arg.is_empty() {
+                    next += 1;
+                    Some(next - 1)
+                } else if arg.bytes().all(|b| b.is_ascii_digit()) {
+                    if !explicit {
+                        return None;
+                    }
+                    indexed = true;
+                    Some(arg.parse::<usize>().ok()?)
                 } else {
-                    out.push_str(arg);
-                }
+                    None
+                };
+                let name = match index {
+                    Some(index) => {
+                        *used.get_mut(index)? = true;
+                        match &inlines[index] {
+                            Inline::Text(text) if arg.is_empty() && spec.is_none() => {
+                                out.push_str(&text.replace('{', "{{").replace('}', "}}"));
+                                moved[index] = true;
+                                continue;
+                            }
+                            Inline::Name(name) => {
+                                moved[index] = true;
+                                name.as_str()
+                            }
+                            _ if arg.is_empty() => "",
+                            _ => return None,
+                        }
+                    }
+                    None => names
+                        .iter()
+                        .find(|(named, _)| named == arg)
+                        .map_or(arg, |(_, value)| value.as_str()),
+                };
+                out.push('{');
+                out.push_str(name);
                 if let Some(spec) = spec {
                     out.push(':');
                     out.push_str(spec);
@@ -3026,5 +3124,6 @@ fn inline_placeholders(format: &str, inlines: &[Inline]) -> Option<(String, Vec<
             c => out.push(c),
         }
     }
-    (moved.len() == inlines.len() && moved.contains(&true)).then_some((out, moved))
+    let settled = used.iter().all(|used| *used) && (!indexed || moved.iter().all(|moved| *moved));
+    (settled && (moved.contains(&true) || !names.is_empty())).then_some((out, moved))
 }

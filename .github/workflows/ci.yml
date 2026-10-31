@@ -712,3 +712,16 @@ jobs:
         with:
           name: loop-while-let-witnesses
           path: ${{ runner.temp }}/loop-while-let-witnesses.json
+      - name: Verify formatting macro witnesses
+        id: format_spellings_witnesses
+        run: >-
+          python3 -B tests/dependency_constants_witnesses.py
+          --cases tests/fixtures/dependency/format_spellings_cases.json
+          --request-id "DG-CI-FORMATS-${{ github.run_id }}-${{ github.run_attempt }}"
+          --output "${{ runner.temp }}/format-spellings-witnesses.json"
+          --timeout 900
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && steps.format_spellings_witnesses.outcome != 'skipped'
+        with:
+          name: format-spellings-witnesses
+          path: ${{ runner.temp }}/format-spellings-witnesses.json

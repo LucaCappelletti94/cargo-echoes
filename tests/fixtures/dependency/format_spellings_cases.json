@@ -1,0 +1,200 @@
+[
+  {
+    "id": "fs_print",
+    "family": "format_spellings",
+    "a": "fn main() { let x = 3; let y = \"z\"; print!(\"{} {}\\n\", x, y); print!(\"\\n\"); println!(\"end\"); }",
+    "b": "fn main() { let x = 3; let y = \"z\"; println!(\"{} {}\", x, y); println!(); println!(\"end\"); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 z\n\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 z\n\nend\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 z\n\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 z\n\nend\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "fs_write",
+    "family": "format_spellings",
+    "a": "use std::io::Write; fn main() { let mut w: Vec<u8> = Vec::new(); write!(w, \"{:>4}\\n\", 7).unwrap(); writeln!(w, \"\").unwrap(); write!(w, \"{{x}}\\n\").unwrap(); println!(\"{:?}\", w); }",
+    "b": "use std::io::Write; fn main() { let mut w: Vec<u8> = Vec::new(); writeln!(w, \"{:>4}\", 7).unwrap(); writeln!(w).unwrap(); writeln!(w, \"{{x}}\").unwrap(); println!(\"{:?}\", w); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[32, 32, 32, 55, 10, 10, 123, 120, 125, 10]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[32, 32, 32, 55, 10, 10, 123, 120, 125, 10]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[32, 32, 32, 55, 10, 10, 123, 120, 125, 10]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[32, 32, 32, 55, 10, 10, 123, 120, 125, 10]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "fs_eprint",
+    "family": "format_spellings",
+    "a": "use std::io::Write; fn main() { let mut w: Vec<u8> = Vec::new(); let n = 5; write!(w, \"{n}\\t\\n\").unwrap(); println!(\"{:?}\", w); eprint!(\"warn\\n\"); }",
+    "b": "use std::io::Write; fn main() { let mut w: Vec<u8> = Vec::new(); let n = 5; writeln!(w, \"{n}\\t\").unwrap(); println!(\"{:?}\", w); eprintln!(\"warn\"); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[53, 9, 10]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[53, 9, 10]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[53, 9, 10]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[53, 9, 10]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "fs_positional",
+    "family": "format_spellings",
+    "a": "fn main() { let a = 1; let b = \"q\"; let s = format!(\"{0}-{1}-{0:?}\", a, b); println!(\"{}\", s); }",
+    "b": "fn main() { let a = 1; let b = \"q\"; let s = format!(\"{a}-{b}-{a:?}\"); println!(\"{}\", s); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1-q-1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1-q-1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1-q-1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "1-q-1\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "fs_named",
+    "family": "format_spellings",
+    "a": "fn main() { let a = 7; let b = 'c'; let s = format!(\"{v:>3}|{w}|{}\", a, v = a, w = b); println!(\"{}\", s); }",
+    "b": "fn main() { let a = 7; let b = 'c'; let s = format!(\"{a:>3}|{b}|{a}\"); println!(\"{}\", s); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "  7|c|7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "  7|c|7\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "  7|c|7\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "  7|c|7\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "fs_double_newline",
+    "family": "format_spellings",
+    "a": "fn main() { print!(\"a\\n\\n\"); println!(\"end\"); }",
+    "b": "fn main() { println!(\"a\"); println!(\"end\"); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\n\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\n\nend\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "a\nend\n"
+        }
+      }
+    }
+  }
+]
