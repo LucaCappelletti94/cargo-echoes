@@ -777,6 +777,7 @@ impl VisitMut for Fold<'_, '_> {
         if let syn::Expr::Match(expr_match) = expr {
             self.arms(expr_match);
         }
+        loop_match(expr);
     }
 }
 
@@ -887,6 +888,97 @@ fn bare_none(ident: &syn::PatIdent) -> bool {
 /// Whether `arm` is the unattributed arm `None`.
 fn none_arm(arm: &syn::Arm) -> bool {
     arm.attrs.is_empty() && matches!(&arm.pat, syn::Pat::Ident(ident) if bare_none(ident))
+}
+
+/// Read `loop { match e { P => body, _ => break } }` as `while let P = e { body }`, the loop
+/// `while let` lowers to, when the loop is unlabelled, the `match` is its only content, the
+/// first arm has no guard and `body` breaks the loop with no value.
+fn loop_match(expr: &mut syn::Expr) {
+    let syn::Expr::Loop(plain) = expr else {
+        return;
+    };
+    let [syn::Stmt::Expr(syn::Expr::Match(expr_match), None)] = plain.body.stmts.as_mut_slice()
+    else {
+        return;
+    };
+    let [first, second] = expr_match.arms.as_slice() else {
+        return;
+    };
+    if !plain.attrs.is_empty()
+        || plain.label.is_some()
+        || !expr_match.attrs.is_empty()
+        || !first.attrs.is_empty()
+        || matches!(first.pat, syn::Pat::Guard(_))
+        || !breaks(second)
+        || valued_break(&first.body)
+    {
+        return;
+    }
+    let scrutinee = core::mem::replace(&mut expr_match.expr, Box::new(placeholder()));
+    let first = expr_match.arms.swap_remove(0);
+    let body = match *first.body {
+        syn::Expr::Block(block) if block.attrs.is_empty() && block.label.is_none() => block.block,
+        other => syn::Block {
+            brace_token: syn::token::Brace::default(),
+            stmts: alloc::vec![syn::Stmt::Expr(other, None)],
+        },
+    };
+    *expr = syn::Expr::While(syn::ExprWhile {
+        attrs: Vec::new(),
+        label: None,
+        while_token: syn::token::While::default(),
+        cond: Box::new(syn::Expr::Let(syn::ExprLet {
+            attrs: Vec::new(),
+            let_token: syn::token::Let::default(),
+            pat: Box::new(first.pat),
+            eq_token: syn::token::Eq::default(),
+            expr: scrutinee,
+        })),
+        body,
+    });
+}
+
+/// Whether `arm` is the unattributed, unguarded `_ => break` that leaves the enclosing loop
+/// with no value, its body bare or a block of the `break` alone.
+fn breaks(arm: &syn::Arm) -> bool {
+    let plain_break = |expr: &syn::Expr| {
+        matches!(expr, syn::Expr::Break(jump)
+            if jump.attrs.is_empty() && jump.label.is_none() && jump.expr.is_none())
+    };
+    let body = match arm.body.as_ref() {
+        syn::Expr::Block(block) if block.attrs.is_empty() && block.label.is_none() => {
+            match block.block.stmts.as_slice() {
+                [syn::Stmt::Expr(body, _)] => body,
+                _ => return false,
+            }
+        }
+        body => body,
+    };
+    arm.attrs.is_empty()
+        && matches!(&arm.pat, syn::Pat::Wild(wild) if wild.attrs.is_empty())
+        && plain_break(body)
+}
+
+/// Whether `body` leaves the loop around it by an unlabelled `break` with a value, nested
+/// loops, closures, async blocks and items aside.
+fn valued_break(body: &syn::Expr) -> bool {
+    struct Search(bool);
+    impl syn::visit::Visit<'_> for Search {
+        fn visit_expr_break(&mut self, jump: &syn::ExprBreak) {
+            self.0 |= jump.label.is_none() && jump.expr.is_some();
+            syn::visit::visit_expr_break(self, jump);
+        }
+
+        fn visit_expr_loop(&mut self, _: &syn::ExprLoop) {}
+        fn visit_expr_while(&mut self, _: &syn::ExprWhile) {}
+        fn visit_expr_for_loop(&mut self, _: &syn::ExprForLoop) {}
+        fn visit_expr_closure(&mut self, _: &syn::ExprClosure) {}
+        fn visit_expr_async(&mut self, _: &syn::ExprAsync) {}
+        fn visit_item(&mut self, _: &syn::Item) {}
+    }
+    let mut search = Search(false);
+    syn::visit::Visit::visit_expr(&mut search, body);
+    search.0
 }
 
 fn placeholder() -> syn::Expr {

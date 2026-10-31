@@ -1,0 +1,167 @@
+[
+  {
+    "id": "lw_temporary",
+    "family": "loop_while_let",
+    "a": "struct T(u32); impl Drop for T { fn drop(&mut self) { println!(\"drop {}\", self.0); } } impl T { fn value(&self) -> Option<u32> { (self.0 < 3).then_some(self.0) } } fn make(n: &mut u32) -> T { *n += 1; T(*n) } fn main() { let mut n = 0; loop { match make(&mut n).value() { Some(v) => println!(\"body {}\", v), None => break } } println!(\"end\"); }",
+    "b": "struct T(u32); impl Drop for T { fn drop(&mut self) { println!(\"drop {}\", self.0); } } impl T { fn value(&self) -> Option<u32> { (self.0 < 3).then_some(self.0) } } fn make(n: &mut u32) -> T { *n += 1; T(*n) } fn main() { let mut n = 0; while let Some(v) = make(&mut n).value() { println!(\"body {}\", v) } println!(\"end\"); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 1\ndrop 1\nbody 2\ndrop 2\ndrop 3\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 1\ndrop 1\nbody 2\ndrop 2\ndrop 3\nend\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 1\ndrop 1\nbody 2\ndrop 2\ndrop 3\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 1\ndrop 1\nbody 2\ndrop 2\ndrop 3\nend\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lw_wildcard_first",
+    "family": "loop_while_let",
+    "a": "struct T(u32); impl Drop for T { fn drop(&mut self) { println!(\"drop {}\", self.0); } } impl T { fn value(&self) -> Option<u32> { (self.0 < 3).then_some(self.0) } } fn make(n: &mut u32) -> T { *n += 1; T(*n) } fn main() { let mut n = 0; loop { match make(&mut n).value() { None => break, Some(v) => { println!(\"body {}\", v); } } } println!(\"end\"); }",
+    "b": "struct T(u32); impl Drop for T { fn drop(&mut self) { println!(\"drop {}\", self.0); } } impl T { fn value(&self) -> Option<u32> { (self.0 < 3).then_some(self.0) } } fn make(n: &mut u32) -> T { *n += 1; T(*n) } fn main() { let mut n = 0; while let Some(v) = make(&mut n).value() { println!(\"body {}\", v); } println!(\"end\"); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 1\ndrop 1\nbody 2\ndrop 2\ndrop 3\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 1\ndrop 1\nbody 2\ndrop 2\ndrop 3\nend\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 1\ndrop 1\nbody 2\ndrop 2\ndrop 3\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 1\ndrop 1\nbody 2\ndrop 2\ndrop 3\nend\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lw_jumps",
+    "family": "loop_while_let",
+    "a": "struct T(u32); impl Drop for T { fn drop(&mut self) { println!(\"drop {}\", self.0); } } impl T { fn value(&self) -> Option<u32> { (self.0 < 3).then_some(self.0) } } fn make(n: &mut u32) -> T { *n += 1; T(*n) } fn main() { let mut n = 0; loop { match make(&mut n).value() { Some(v) => { if v == 1 { continue; } println!(\"body {}\", v); if v == 2 { break; } } _ => break } } println!(\"end\"); }",
+    "b": "struct T(u32); impl Drop for T { fn drop(&mut self) { println!(\"drop {}\", self.0); } } impl T { fn value(&self) -> Option<u32> { (self.0 < 3).then_some(self.0) } } fn make(n: &mut u32) -> T { *n += 1; T(*n) } fn main() { let mut n = 0; while let Some(v) = make(&mut n).value() { if v == 1 { continue; } println!(\"body {}\", v); if v == 2 { break; } } println!(\"end\"); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop 1\nbody 2\ndrop 2\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop 1\nbody 2\ndrop 2\nend\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop 1\nbody 2\ndrop 2\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop 1\nbody 2\ndrop 2\nend\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lw_place",
+    "family": "loop_while_let",
+    "a": "struct T(u32); impl Drop for T { fn drop(&mut self) { println!(\"drop {}\", self.0); } } impl T { fn value(&self) -> Option<u32> { (self.0 < 3).then_some(self.0) } } fn make(n: &mut u32) -> T { *n += 1; T(*n) } fn main() { let mut o = Some(3u32); loop { match o { Some(x) => { println!(\"body {}\", x); o = x.checked_sub(1).filter(|v| *v > 0); } None => break } } println!(\"end\"); }",
+    "b": "struct T(u32); impl Drop for T { fn drop(&mut self) { println!(\"drop {}\", self.0); } } impl T { fn value(&self) -> Option<u32> { (self.0 < 3).then_some(self.0) } } fn make(n: &mut u32) -> T { *n += 1; T(*n) } fn main() { let mut o = Some(3u32); while let Some(x) = o { println!(\"body {}\", x); o = x.checked_sub(1).filter(|v| *v > 0); } println!(\"end\"); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 3\nbody 2\nbody 1\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 3\nbody 2\nbody 1\nend\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 3\nbody 2\nbody 1\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 3\nbody 2\nbody 1\nend\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "lw_let_else",
+    "family": "loop_while_let",
+    "a": "struct T(u32); impl Drop for T { fn drop(&mut self) { println!(\"drop {}\", self.0); } } impl T { fn value(&self) -> Option<u32> { (self.0 < 3).then_some(self.0) } } fn make(n: &mut u32) -> T { *n += 1; T(*n) } fn main() { let mut n = 0; loop { let Some(v) = make(&mut n).value() else { break }; println!(\"body {}\", v); } println!(\"end\"); }",
+    "b": "struct T(u32); impl Drop for T { fn drop(&mut self) { println!(\"drop {}\", self.0); } } impl T { fn value(&self) -> Option<u32> { (self.0 < 3).then_some(self.0) } } fn make(n: &mut u32) -> T { *n += 1; T(*n) } fn main() { let mut n = 0; while let Some(v) = make(&mut n).value() { println!(\"body {}\", v); } println!(\"end\"); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop 1\nbody 1\ndrop 2\nbody 2\ndrop 3\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "drop 1\nbody 1\ndrop 2\nbody 2\ndrop 3\nend\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 1\ndrop 1\nbody 2\ndrop 2\ndrop 3\nend\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "body 1\ndrop 1\nbody 2\ndrop 2\ndrop 3\nend\n"
+        }
+      }
+    }
+  }
+]
