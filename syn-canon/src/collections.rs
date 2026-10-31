@@ -40,6 +40,7 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, sig: &syn::Signature, block: &mut
             && ["ToString", "ToOwned", "Clone"]
                 .iter()
                 .all(|name| unclaimed(name)),
+        accessors: renamer.accessor_free() && unclaimed("Iterator"),
         named,
         scopes: alloc::vec![BTreeMap::new()],
     };
@@ -113,6 +114,9 @@ struct Fold {
     /// Whether the standard copy methods answer to `to_string`, `to_owned`, `clone` and
     /// `as_str`, and `String` names the standard type.
     copies: bool,
+    /// Whether the standard `get`, `first`, `as_bytes`, `as_slice`, `next` and `count` answer
+    /// their calls and `Iterator` names the standard trait.
+    accessors: bool,
     /// The bindings in view, a proven collection or `None` for any other binding.
     scopes: Vec<BTreeMap<String, Option<Collection>>>,
 }
@@ -253,24 +257,7 @@ impl Fold {
         } else {
             return;
         };
-        let test = syn::Expr::MethodCall(syn::ExprMethodCall {
-            attrs: Vec::new(),
-            receiver: Box::new(receiver),
-            dot_token: syn::token::Dot::default(),
-            method: syn::Ident::new("is_empty", proc_macro2::Span::call_site()),
-            turbofish: None,
-            paren_token: syn::token::Paren::default(),
-            args: syn::punctuated::Punctuated::new(),
-        });
-        *expr = if empty {
-            test
-        } else {
-            syn::Expr::Unary(syn::ExprUnary {
-                attrs: Vec::new(),
-                op: syn::UnOp::Not(syn::token::Not::default()),
-                expr: Box::new(test),
-            })
-        };
+        *expr = emptiness_test(receiver, empty);
     }
 
     /// The receiver of `v.len()` over a proven collection binding.
@@ -329,15 +316,7 @@ impl Fold {
             receiver,
             syn::Expr::Verbatim(proc_macro2::TokenStream::new()),
         );
-        *expr = syn::Expr::MethodCall(syn::ExprMethodCall {
-            attrs: Vec::new(),
-            receiver: Box::new(receiver),
-            dot_token: syn::token::Dot::default(),
-            method: syn::Ident::new("to_string", proc_macro2::Span::call_site()),
-            turbofish: None,
-            paren_token: syn::token::Paren::default(),
-            args: syn::punctuated::Punctuated::new(),
-        });
+        *expr = method_call(receiver, "to_string");
     }
 
     /// The kind of a binding whose copies share one reading, a `&str`, a `String` or a
@@ -354,6 +333,126 @@ impl Fold {
             } => Some(Kind::String),
             _ => None,
         }
+    }
+
+    /// Read the accessor synonyms of a proven collection binding as one form.
+    fn accessor(&self, expr: &mut syn::Expr) {
+        if !self.accessors {
+            return;
+        }
+        let read = match expr {
+            syn::Expr::Reference(reference) => self.view(reference),
+            syn::Expr::Binary(binary) => self.empty_text(binary),
+            syn::Expr::MethodCall(call) if bare_call(call) || call.method == "get" => {
+                self.element(call)
+            }
+            _ => None,
+        };
+        if let Some(read) = read {
+            *expr = read;
+        }
+    }
+
+    /// Read `&s[..]` over a `String` and `&v[..]` over a `Vec` as `s.as_str()` and
+    /// `v.as_slice()`, and `&*s` and `&*v` the same way over owned bindings, where the deref
+    /// reaches the view.
+    fn view(&self, reference: &syn::ExprReference) -> Option<syn::Expr> {
+        if !reference.attrs.is_empty() || reference.mutability.is_some() {
+            return None;
+        }
+        let (place, deref) = match reference.expr.as_ref() {
+            syn::Expr::Index(index) if index.attrs.is_empty() && full_range(&index.index) => {
+                (index.expr.as_ref(), false)
+            }
+            syn::Expr::Unary(unary)
+                if unary.attrs.is_empty() && matches!(unary.op, syn::UnOp::Deref(_)) =>
+            {
+                (unary.expr.as_ref(), true)
+            }
+            _ => return None,
+        };
+        let collection = self.binding(place)?;
+        if deref && collection.access != Access::Owned {
+            return None;
+        }
+        let method = match collection.kind {
+            Kind::String => "as_str",
+            Kind::Vec => "as_slice",
+            _ => return None,
+        };
+        Some(method_call(place.clone(), method))
+    }
+
+    /// Read `s == ""` and its mirror over a `String` or `str` binding as `s.is_empty()`, and
+    /// `s != ""` and its mirror as `!s.is_empty()`.
+    fn empty_text(&self, binary: &syn::ExprBinary) -> Option<syn::Expr> {
+        let empty = match binary.op {
+            syn::BinOp::Eq(_) => true,
+            syn::BinOp::Ne(_) => false,
+            _ => return None,
+        };
+        let text = |side: &syn::Expr| {
+            self.binding(side)
+                .is_some_and(|collection| matches!(collection.kind, Kind::String | Kind::Str))
+        };
+        let receiver = if text(&binary.left) && empty_literal(&binary.right) {
+            binary.left.as_ref()
+        } else if text(&binary.right) && empty_literal(&binary.left) {
+            binary.right.as_ref()
+        } else {
+            return None;
+        };
+        Some(emptiness_test(receiver.clone(), empty))
+    }
+
+    /// Read `v.get(0)` and `v.iter().next()` over a `Vec`, array or slice binding as
+    /// `v.first()`, `v.iter().count()` as `v.len()`, and `s.as_bytes().len()` over a `String`
+    /// or `str` binding as `s.len()`.
+    fn element(&self, call: &syn::ExprMethodCall) -> Option<syn::Expr> {
+        let sequence = |expr: &syn::Expr| {
+            self.binding(expr).is_some_and(|collection| {
+                matches!(collection.kind, Kind::Vec | Kind::Array | Kind::Slice)
+            })
+        };
+        let inner = match call.receiver.as_ref() {
+            syn::Expr::MethodCall(inner) if bare_call(inner) => Some(inner),
+            _ => None,
+        };
+        let (receiver, method) = match ident_name(&call.method).as_str() {
+            "get"
+                if call.attrs.is_empty()
+                    && call.turbofish.is_none()
+                    && call.args.len() == 1
+                    && small_literal(&call.args[0]) == Some(0)
+                    && sequence(&call.receiver) =>
+            {
+                (call.receiver.as_ref(), "first")
+            }
+            "next" | "count" => {
+                let inner = inner.filter(|inner| inner.method == "iter")?;
+                if !sequence(&inner.receiver) {
+                    return None;
+                }
+                let method = if call.method == "next" {
+                    "first"
+                } else {
+                    "len"
+                };
+                (inner.receiver.as_ref(), method)
+            }
+            "len" => {
+                let inner = inner.filter(|inner| inner.method == "as_bytes")?;
+                let text = self
+                    .binding(&inner.receiver)
+                    .is_some_and(|collection| matches!(collection.kind, Kind::String | Kind::Str));
+                if !text {
+                    return None;
+                }
+                (inner.receiver.as_ref(), "len")
+            }
+            _ => return None,
+        };
+        Some(method_call(receiver.clone(), method))
     }
 
     fn scoped(&mut self, visit: impl FnOnce(&mut Self)) {
@@ -402,6 +501,53 @@ fn string_from(func: &syn::Expr) -> bool {
         && name.arguments.is_none()
         && owner.ident == "String"
         && name.ident == "from"
+}
+
+/// Whether `index` is the unattributed full range `..`.
+fn full_range(index: &syn::Expr) -> bool {
+    matches!(
+        index,
+        syn::Expr::Range(range)
+            if range.attrs.is_empty()
+                && range.start.is_none()
+                && range.end.is_none()
+                && matches!(range.limits, syn::RangeLimits::HalfOpen(_))
+    )
+}
+
+/// Whether `expr` is the unattributed, unsuffixed empty string literal.
+fn empty_literal(expr: &syn::Expr) -> bool {
+    matches!(
+        expr,
+        syn::Expr::Lit(syn::ExprLit { attrs, lit: syn::Lit::Str(text) })
+            if attrs.is_empty() && text.suffix().is_empty() && text.value().is_empty()
+    )
+}
+
+/// The call `receiver.method()`.
+fn method_call(receiver: syn::Expr, method: &str) -> syn::Expr {
+    syn::Expr::MethodCall(syn::ExprMethodCall {
+        attrs: Vec::new(),
+        receiver: Box::new(receiver),
+        dot_token: syn::token::Dot::default(),
+        method: syn::Ident::new(method, proc_macro2::Span::call_site()),
+        turbofish: None,
+        paren_token: syn::token::Paren::default(),
+        args: syn::punctuated::Punctuated::new(),
+    })
+}
+
+/// The test `receiver.is_empty()` when `empty`, else its negation.
+fn emptiness_test(receiver: syn::Expr, empty: bool) -> syn::Expr {
+    let test = method_call(receiver, "is_empty");
+    if empty {
+        return test;
+    }
+    syn::Expr::Unary(syn::ExprUnary {
+        attrs: Vec::new(),
+        op: syn::UnOp::Not(syn::token::Not::default()),
+        expr: Box::new(test),
+    })
 }
 
 impl VisitMut for Fold {
@@ -485,6 +631,7 @@ impl VisitMut for Fold {
             return;
         }
         syn::visit_mut::visit_expr_mut(self, expr);
+        self.accessor(expr);
         self.emptiness(expr);
         self.copy(expr);
     }

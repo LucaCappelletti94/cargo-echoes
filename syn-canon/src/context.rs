@@ -108,12 +108,8 @@ pub struct SourceContext<'a> {
     gen_frames: BTreeMap<*const syn::Generics, Frame>,
     /// Complete helper summaries shared by every borrowed declaration.
     helpers: crate::helpers::HelperTable,
-    /// No trait of the crate declares a method named `to_string` or `to_owned`.
-    owned_methods: bool,
-    /// No trait of the crate declares a method named `clone`.
-    clone_method: bool,
-    /// No trait of the crate declares a collection method the collection readings rely on.
-    collection_method: bool,
+    /// The method names the traits of the crate declare.
+    trait_methods: BTreeSet<String>,
 }
 
 /// A function view selected from a source context.
@@ -162,6 +158,8 @@ impl FunctionView<'_> {
             attrs: Vec::new(),
             items: vec![syn::Item::Fn(item)],
         };
+        let module = &self.ctx.modules[self.entry.module.0];
+        let standard = module.prelude && module.standard_imports;
         form::canonical_file_with_options(
             file,
             true,
@@ -171,15 +169,12 @@ impl FunctionView<'_> {
                 prim_fallback: self.entry.prim_fallback,
                 observed: self.entry.observed,
                 enclosing_observed: self.entry.enclosing_observed,
-                std_names: self.ctx.modules[self.entry.module.0].std_names,
-                prelude: self.ctx.modules[self.entry.module.0].prelude,
-                owned_methods: self.ctx.owned_methods,
-                clone_free: self.ctx.modules[self.entry.module.0].prelude
-                    && self.ctx.modules[self.entry.module.0].standard_imports
-                    && self.ctx.clone_method,
-                collection_free: self.ctx.modules[self.entry.module.0].prelude
-                    && self.ctx.modules[self.entry.module.0].standard_imports
-                    && self.ctx.collection_method,
+                std_names: module.std_names,
+                prelude: module.prelude,
+                owned_methods: self.ctx.undeclared(&["to_string", "to_owned"]),
+                clone_free: standard && self.ctx.undeclared(&["clone"]),
+                collection_free: standard && self.ctx.undeclared(&alpha::COLLECTION_METHODS),
+                accessor_free: standard && self.ctx.undeclared(&alpha::ACCESSOR_METHODS),
                 self_owner,
                 helper_table: Some(&self.ctx.helpers),
                 helper_module: &self.entry.helper_module,
@@ -290,24 +285,24 @@ impl<'a> SourceContext<'a> {
                 &mut gen_frames,
             );
         }
-        let owned_methods = !files
-            .iter()
-            .any(|(_, file)| declares_trait_method(&file.items, &["to_string", "to_owned"]));
-        let clone_method = !files
-            .iter()
-            .any(|(_, file)| declares_trait_method(&file.items, &["clone"]));
-        let collection_method = !files
-            .iter()
-            .any(|(_, file)| declares_trait_method(&file.items, &alpha::COLLECTION_METHODS));
+        let mut trait_methods = BTreeSet::new();
+        for (_, file) in &files {
+            visit_trait_methods(&file.items, |ident| {
+                trait_methods.insert(ident_name(ident));
+            });
+        }
         Self {
             modules,
             decls,
             gen_frames,
             helpers,
-            owned_methods,
-            clone_method,
-            collection_method,
+            trait_methods,
         }
+    }
+
+    /// Whether no trait of the crate declares a method with one of `names`.
+    fn undeclared(&self, names: &[&str]) -> bool {
+        !names.iter().any(|name| self.trait_methods.contains(*name))
     }
 
     /// The view of the exact declaration its signature and block pointers
@@ -593,21 +588,28 @@ fn prelude_attribute_token(token: &proc_macro2::TokenTree) -> bool {
     }
 }
 
-/// Whether a trait among `items`, at any depth, declares a method with one of `names`, which
-/// the readings of standard method calls leave to the compiler.
-pub(crate) fn declares_trait_method(items: &[syn::Item], names: &[&str]) -> bool {
-    struct Search<'a>(&'a [&'a str], bool);
-    impl syn::visit::Visit<'_> for Search<'_> {
+/// Call `f` with the name of every method a trait among `items` declares, at any depth.
+fn visit_trait_methods(items: &[syn::Item], f: impl FnMut(&syn::Ident)) {
+    struct Search<F>(F);
+    impl<F: FnMut(&syn::Ident)> syn::visit::Visit<'_> for Search<F> {
         fn visit_trait_item_fn(&mut self, method: &syn::TraitItemFn) {
-            let name = ident_name(&method.sig.ident);
-            self.1 |= self.0.contains(&name.as_str());
+            (self.0)(&method.sig.ident);
         }
     }
-    let mut search = Search(names, false);
+    let mut search = Search(f);
     for item in items {
         syn::visit::Visit::visit_item(&mut search, item);
     }
-    search.1
+}
+
+/// Whether a trait among `items`, at any depth, declares a method with one of `names`, which
+/// the readings of standard method calls leave to the compiler.
+pub(crate) fn declares_trait_method(items: &[syn::Item], names: &[&str]) -> bool {
+    let mut declared = false;
+    visit_trait_methods(items, |ident| {
+        declared |= names.contains(&ident_name(ident).as_str());
+    });
+    declared
 }
 
 /// Whether every `use` among `items`, at any depth, imports from `std`, `core` or `alloc`, so

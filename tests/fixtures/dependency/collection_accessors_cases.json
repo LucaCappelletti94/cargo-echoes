@@ -1,0 +1,233 @@
+[
+  {
+    "id": "ac_string_index",
+    "family": "collection_accessors",
+    "a": "fn f(s: String) -> usize { let t: &str = &s[..]; t.len() } fn main(){ println!(\"{:?} {:?}\", f(String::from(\"abc\")), f(String::new())); }",
+    "b": "fn f(s: String) -> usize { let t: &str = s.as_str(); t.len() } fn main(){ println!(\"{:?} {:?}\", f(String::from(\"abc\")), f(String::new())); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_vec_deref",
+    "family": "collection_accessors",
+    "a": "fn f(v: Vec<u32>) -> u32 { let t: &[u32] = &*v; t.iter().sum() } fn main(){ println!(\"{:?} {:?}\", f(vec![1, 2]), f(Vec::new())); }",
+    "b": "fn f(v: Vec<u32>) -> u32 { let t: &[u32] = v.as_slice(); t.iter().sum() } fn main(){ println!(\"{:?} {:?}\", f(vec![1, 2]), f(Vec::new())); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "3 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_empty_text",
+    "family": "collection_accessors",
+    "a": "fn f(s: &str) -> bool { s == \"\" } fn main(){ println!(\"{:?} {:?}\", f(\"\"), f(\"a\")); }",
+    "b": "fn f(s: &str) -> bool { s.is_empty() } fn main(){ println!(\"{:?} {:?}\", f(\"\"), f(\"a\")); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_first",
+    "family": "collection_accessors",
+    "a": "fn f(v: &[u32]) -> Option<&u32> { v.get(0) } fn main(){ println!(\"{:?} {:?}\", f(&[4, 5]), f(&[])); }",
+    "b": "fn f(v: &[u32]) -> Option<&u32> { v.iter().next() } fn main(){ println!(\"{:?} {:?}\", f(&[4, 5]), f(&[])); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(4) None\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(4) None\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(4) None\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(4) None\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_count",
+    "family": "collection_accessors",
+    "a": "fn f(v: &Vec<u32>) -> usize { v.iter().count() } fn main(){ println!(\"{:?} {:?}\", f(&vec![4, 5]), f(&Vec::new())); }",
+    "b": "fn f(v: &Vec<u32>) -> usize { v.len() } fn main(){ println!(\"{:?} {:?}\", f(&vec![4, 5]), f(&Vec::new())); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "2 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_bytes",
+    "family": "collection_accessors",
+    "a": "fn f(s: &str) -> usize { s.as_bytes().len() } fn main(){ println!(\"{:?} {:?}\", f(\"h\\u{e9}llo\"), f(\"\")); }",
+    "b": "fn f(s: &str) -> usize { s.len() } fn main(){ println!(\"{:?} {:?}\", f(\"h\\u{e9}llo\"), f(\"\")); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "6 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ac_second",
+    "family": "collection_accessors",
+    "a": "fn f(v: &[u32]) -> Option<&u32> { v.get(1) } fn main(){ println!(\"{:?} {:?}\", f(&[4, 5]), f(&[])); }",
+    "b": "fn f(v: &[u32]) -> Option<&u32> { v.first() } fn main(){ println!(\"{:?} {:?}\", f(&[4, 5]), f(&[])); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(5) None\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(5) None\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(4) None\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some(4) None\n"
+        }
+      }
+    }
+  }
+]

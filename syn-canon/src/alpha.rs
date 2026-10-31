@@ -55,8 +55,11 @@ pub(crate) struct Options<'a> {
     /// `clone` method.
     pub(crate) clone_free: bool,
     /// Every import in view comes from the standard library and no trait in view declares a
-    /// method named `iter`, `iter_mut`, `into_iter`, `len` or `is_empty`.
+    /// method named in `COLLECTION_METHODS`.
     pub(crate) collection_free: bool,
+    /// Every import in view comes from the standard library and no trait in view declares a
+    /// method named in `ACCESSOR_METHODS`.
+    pub(crate) accessor_free: bool,
     /// The source context's helper summary table, when one is indexed.
     pub(crate) helper_table: Option<&'a crate::helpers::HelperTable>,
     pub(crate) helper_module: &'a [String],
@@ -352,6 +355,9 @@ pub(crate) struct Renamer<'env> {
     /// Every import in view comes from the standard library and no trait in view declares a
     /// collection method the iteration and emptiness readings rely on.
     collection_free: bool,
+    /// Every import in view comes from the standard library and no trait in view declares an
+    /// accessor the collection accessor readings rely on.
+    accessor_free: bool,
     /// An enclosing block of the current item already read its owned strings and empty vectors.
     prelude_folded: bool,
     /// The inline modules around the traversal, whose frames stay on the stack.
@@ -418,6 +424,7 @@ impl<'env> Renamer<'env> {
             owned_methods: false,
             clone_free: false,
             collection_free: false,
+            accessor_free: false,
             prelude_folded: false,
             inline_depth: 0,
             observed: false,
@@ -476,6 +483,7 @@ impl<'env> Renamer<'env> {
         renamer.owned_methods = options.owned_methods;
         renamer.clone_free = options.clone_free;
         renamer.collection_free = options.collection_free;
+        renamer.accessor_free = options.accessor_free;
         renamer.observed = options.observed;
         renamer.tail_blocked = options.enclosing_observed;
         renamer.seed = options.seed;
@@ -1299,12 +1307,20 @@ impl<'env> Renamer<'env> {
         self.prelude && self.clone_free
     }
 
-    /// Whether the standard collection methods `iter`, `iter_mut`, `into_iter`, `len` and
-    /// `is_empty`, and the inherent `contains` of the standard ranges, answer their calls: the
-    /// standard prelude is active, every import in view comes from the standard library and no
-    /// trait in view declares one of those names.
+    /// Whether the standard collection methods `iter`, `iter_mut`, `into_iter`, `len`,
+    /// `is_empty` and `as_str`, and the inherent `contains` of the standard ranges, answer their
+    /// calls: the standard prelude is active, every import in view comes from the standard
+    /// library and no trait in view declares one of those names.
     pub(crate) fn collection_free(&self) -> bool {
         self.prelude && self.collection_free
+    }
+
+    /// Whether the standard `get`, `first`, `as_bytes` and `as_slice` of the collection types
+    /// and the `next` and `count` of their iterators answer their calls: the standard prelude
+    /// is active, every import in view comes from the standard library and no trait in view
+    /// declares one of those names.
+    pub(crate) fn accessor_free(&self) -> bool {
+        self.prelude && self.accessor_free
     }
 
     /// Whether the collection readings may run: compiling source with the standard collection
@@ -2963,6 +2979,7 @@ pub(crate) fn normalize_file(
     let mut renamer = Renamer::seeded(options, compiles);
     renamer.clone_free &= clone_free_file(file);
     renamer.collection_free &= collection_free_file(file);
+    renamer.accessor_free &= accessor_free_file(file);
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
 }
@@ -2973,6 +2990,7 @@ pub(crate) fn analyze_file(file: &mut syn::File, options: Options<'_>) -> Refere
     let mut renamer = Renamer::seeded(options, false);
     renamer.clone_free &= clone_free_file(file);
     renamer.collection_free &= collection_free_file(file);
+    renamer.accessor_free &= accessor_free_file(file);
     renamer.analysis = true;
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
@@ -3001,6 +3019,17 @@ pub(crate) const COLLECTION_METHODS: [&str; 7] = [
 fn collection_free_file(file: &syn::File) -> bool {
     crate::context::standard_imports(&file.items)
         && !crate::context::declares_trait_method(&file.items, &COLLECTION_METHODS)
+}
+
+/// The trait method names the collection accessor readings rely on.
+pub(crate) const ACCESSOR_METHODS: [&str; 6] =
+    ["get", "first", "next", "count", "as_bytes", "as_slice"];
+
+/// Whether a file, bodies included, imports only from the standard library and declares no
+/// trait method a collection accessor reading relies on.
+fn accessor_free_file(file: &syn::File) -> bool {
+    crate::context::standard_imports(&file.items)
+        && !crate::context::declares_trait_method(&file.items, &ACCESSOR_METHODS)
 }
 
 /// True for an ident pattern that names a unit struct, variant, or

@@ -2193,6 +2193,43 @@ fn string_clone_functions_group_with_their_as_str_copy() {
     assert_eq!(function_groups(&scan(4)).len(), 0);
 }
 
+const ACCESSORS_FIXTURE: &str = "tests/fixtures/accessorsws";
+
+#[test]
+fn first_element_doctests_group_apart_from_last() {
+    let report = Echoes::default().run(ACCESSORS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["accessorsws::First", "accessorsws::Indexed"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(30)
+        .run(ACCESSORS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(31)
+        .run(ACCESSORS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn empty_text_functions_group_with_their_emptiness_test() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(ACCESSORS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["accessorsws::blank", "accessorsws::empty"]];
+    for tokens in [0, 3] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(4)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {
