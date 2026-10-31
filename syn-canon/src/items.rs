@@ -2251,6 +2251,7 @@ pub(crate) fn normalize(
             owned_methods: options.owned_methods,
             clone_free: options.clone_free,
             collection_free: options.collection_free,
+            accessor_free: options.accessor_free,
             helper_table: Some(table),
             helper_module: options.helper_module,
             helper_blocked: options.helper_blocked,

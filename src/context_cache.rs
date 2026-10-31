@@ -266,6 +266,9 @@ pub mod alpha {
     pub fn copied(name: &str) -> String {
         String::from(name)
     }
+    pub fn head(values: &[u32]) -> Option<&u32> {
+        values.get(0)
+    }
 }
 mod custom {
     macro_rules! vec {

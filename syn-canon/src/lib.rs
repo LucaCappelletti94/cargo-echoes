@@ -104,6 +104,7 @@ fn canonical(file: syn::File, compiles: bool) -> CanonicalForm {
             owned_methods,
             clone_free: true,
             collection_free: true,
+            accessor_free: true,
             helper_table: None,
             helper_module: &[],
             helper_blocked: false,
