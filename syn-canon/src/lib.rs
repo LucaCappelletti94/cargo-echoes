@@ -91,7 +91,7 @@ pub fn canonicalize_failing(file: syn::File) -> CanonicalForm {
 
 fn canonical(file: syn::File, compiles: bool) -> CanonicalForm {
     let prelude = !context::removes_prelude(&file.attrs);
-    let owned_methods = !context::declares_trait_method(&file.items, &["to_string", "to_owned"]);
+    let owned = !context::declares_trait_method(&file.items, &alpha::OWNED_METHODS);
     form::canonical_file_with_options(
         file,
         compiles,
@@ -104,12 +104,7 @@ fn canonical(file: syn::File, compiles: bool) -> CanonicalForm {
             enclosing_observed: false,
             std_names: true,
             prelude,
-            owned_methods,
-            clone_free: true,
-            collection_free: true,
-            accessor_free: true,
-            pattern_free: true,
-            ascii_free: true,
+            gates: alpha::Gates::open(owned),
             helper_table: None,
             helper_module: &[],
             helper_blocked: false,
