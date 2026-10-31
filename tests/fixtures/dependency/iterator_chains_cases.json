@@ -1,0 +1,266 @@
+[
+  {
+    "id": "ic_copied",
+    "family": "iterator_chains",
+    "a": "fn f(v: Vec<u32>) -> Vec<u32> { v.iter().rev().skip(1).map(|x| *x).collect() } fn main(){ let v = vec![4u32, 1, 7, 2]; println!(\"{:?}\", f(v)); }",
+    "b": "fn f(v: Vec<u32>) -> Vec<u32> { v.iter().rev().skip(1).copied().collect() } fn main(){ let v = vec![4u32, 1, 7, 2]; println!(\"{:?}\", f(v)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[7, 1, 4]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[7, 1, 4]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[7, 1, 4]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[7, 1, 4]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ic_cloned_strings",
+    "family": "iterator_chains",
+    "a": "fn f(v: &[String]) -> Vec<String> { v.iter().map(|x| x.clone()).collect() } fn main(){ let v = vec![String::from(\"a\"), String::from(\"bc\")]; let w = f(&v); println!(\"{:?} {}\", w, w[1].capacity()); }",
+    "b": "fn f(v: &[String]) -> Vec<String> { v.iter().cloned().collect() } fn main(){ let v = vec![String::from(\"a\"), String::from(\"bc\")]; let w = f(&v); println!(\"{:?} {}\", w, w[1].capacity()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"a\", \"bc\"] 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"a\", \"bc\"] 2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"a\", \"bc\"] 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"a\", \"bc\"] 2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ic_find",
+    "family": "iterator_chains",
+    "a": "fn f(v: &Vec<u32>) -> Option<&u32> { v.iter().filter(|x| { println!(\"test {}\", x); **x > 2 }).next() } fn main(){ let v = vec![1u32, 5, 3, 9]; println!(\"{:?}\", f(&v)); }",
+    "b": "fn f(v: &Vec<u32>) -> Option<&u32> { v.iter().find(|x| { println!(\"test {}\", x); **x > 2 }) } fn main(){ let v = vec![1u32, 5, 3, 9]; println!(\"{:?}\", f(&v)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "test 1\ntest 5\nSome(5)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "test 1\ntest 5\nSome(5)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "test 1\ntest 5\nSome(5)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "test 1\ntest 5\nSome(5)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ic_all",
+    "family": "iterator_chains",
+    "a": "fn f(v: &[u32]) -> bool { !v.iter().any(|x| { println!(\"see {}\", x); *x > 3 }) } fn main(){ let v = [1u32, 2, 5, 3]; println!(\"{} {}\", f(&v), f(&[0u32])); }",
+    "b": "fn f(v: &[u32]) -> bool { v.iter().all(|x| !{ println!(\"see {}\", x); *x > 3 }) } fn main(){ let v = [1u32, 2, 5, 3]; println!(\"{} {}\", f(&v), f(&[0u32])); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "see 1\nsee 2\nsee 5\nsee 0\nfalse true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "see 1\nsee 2\nsee 5\nsee 0\nfalse true\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "see 1\nsee 2\nsee 5\nsee 0\nfalse true\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "see 1\nsee 2\nsee 5\nsee 0\nfalse true\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ic_nth",
+    "family": "iterator_chains",
+    "a": "fn f(s: &str) -> (Option<char>, Option<u8>) { (s.chars().nth(0), s.bytes().nth(0)) } fn main(){ println!(\"{:?} {:?}\", f(\"\\u{e9}x\"), f(\"\")); }",
+    "b": "fn f(s: &str) -> (Option<char>, Option<u8>) { (s.chars().next(), s.bytes().next()) } fn main(){ println!(\"{:?} {:?}\", f(\"\\u{e9}x\"), f(\"\")); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(Some('é'), Some(195)) (None, None)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(Some('é'), Some(195)) (None, None)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(Some('é'), Some(195)) (None, None)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(Some('é'), Some(195)) (None, None)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ic_contains",
+    "family": "iterator_chains",
+    "a": "fn f(v: &[u32], y: u32) -> bool { v.iter().any(|x| *x == y) } fn main(){ let v = [3u32, 8]; println!(\"{} {} {}\", f(&v, 8), f(&v, 4), f(&[], 0)); }",
+    "b": "fn f(v: &[u32], y: u32) -> bool { v.contains(&y) } fn main(){ let v = [3u32, 8]; println!(\"{} {} {}\", f(&v, 8), f(&v, 4), f(&[], 0)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false false\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false false\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "true false false\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ic_collect",
+    "family": "iterator_chains",
+    "a": "fn f(v: &[u32]) -> (usize, usize) { let w: Vec<u32> = v.iter().copied().collect(); (w.len(), w.capacity()) } fn main(){ println!(\"{:?}\", f(&[1, 2, 3])); }",
+    "b": "fn f(v: &[u32]) -> (usize, usize) { let w = v.iter().copied().collect::<Vec<u32>>(); (w.len(), w.capacity()) } fn main(){ println!(\"{:?}\", f(&[1, 2, 3])); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(3, 3)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(3, 3)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(3, 3)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(3, 3)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ic_nth_one",
+    "family": "iterator_chains",
+    "a": "fn f(s: &str) -> Option<char> { s.chars().nth(1) } fn main(){ println!(\"{:?}\", f(\"ab\")); }",
+    "b": "fn f(s: &str) -> Option<char> { s.chars().next() } fn main(){ println!(\"{:?}\", f(\"ab\")); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some('b')\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some('b')\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some('a')\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "Some('a')\n"
+        }
+      }
+    }
+  }
+]

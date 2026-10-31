@@ -295,6 +295,9 @@ pub mod alpha {
     pub fn shown(total: u32) -> String {
         format!("{0}/{0}", total)
     }
+    pub fn present(values: &[u32], wanted: u32) -> bool {
+        values.iter().any(|value| *value == wanted)
+    }
 }
 mod custom {
     macro_rules! vec {

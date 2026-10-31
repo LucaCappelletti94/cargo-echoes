@@ -2440,6 +2440,43 @@ fn indexed_format_functions_group_with_their_inline_arguments() {
     assert_eq!(function_groups(&scan(4)).len(), 0);
 }
 
+const CHAINS_FIXTURE: &str = "tests/fixtures/chainsws";
+
+#[test]
+fn mapped_copy_doctests_group_with_their_copied_turbofish() {
+    let report = Echoes::default().run(CHAINS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["chainsws::Copied", "chainsws::Mapped"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(47)
+        .run(CHAINS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(48)
+        .run(CHAINS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn negated_any_functions_group_with_their_all() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(CHAINS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["chainsws::quiet", "chainsws::small"]];
+    for tokens in [0, 13] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(14)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {
