@@ -11,7 +11,7 @@ use syn::visit::{self, Visit};
 use syn::visit_mut::{self, VisitMut};
 
 use crate::reference::{ReferenceFacts, Resolution, ResolvedOrigin};
-use crate::schedule::Lbl;
+use crate::schedule::{Lbl, MAX_BLOCK_DEPTH, MAX_REGION_NODES};
 use crate::scope::{Binding, BindingId, Domain, Frame, Ns, Origin};
 
 fn identity(origin: ResolvedOrigin) -> (bool, BindingId) {
@@ -41,7 +41,7 @@ macro_rules! count_nodes {
             self.nodes += 1;
             self.depth += 1;
             self.deepest = self.deepest.max(self.depth);
-            if self.nodes <= 16_384 && self.depth <= 64 {
+            if self.nodes <= MAX_REGION_NODES && self.depth <= MAX_BLOCK_DEPTH {
                 visit::$method(self, value);
             }
             self.depth -= 1;
@@ -78,7 +78,7 @@ impl Budget {
         for tree in stream {
             self.nodes += 1;
             self.deepest = self.deepest.max(depth);
-            if self.nodes > 16_384 || depth > 64 {
+            if self.nodes > MAX_REGION_NODES || depth > MAX_BLOCK_DEPTH {
                 return;
             }
             if let proc_macro2::TokenTree::Group(group) = tree {
@@ -92,12 +92,11 @@ impl Budget {
         for item in items {
             budget.visit_item(item);
         }
-        budget.nodes <= 16_384 && budget.deepest <= 64
+        budget.within()
     }
 
     fn within(&self) -> bool {
-        self.nodes <= crate::schedule::MAX_REGION_NODES
-            && self.deepest <= crate::schedule::MAX_BLOCK_DEPTH
+        self.nodes <= MAX_REGION_NODES && self.deepest <= MAX_BLOCK_DEPTH
     }
 
     fn label(&mut self, label: &Lbl, depth: usize) {
@@ -109,24 +108,8 @@ impl Budget {
         if !self.within() {
             return;
         }
-        match label {
-            Lbl::Not(inner) => self.label(inner, depth + 1),
-            Lbl::Op(_, left, right, _) => {
-                self.label(left, depth + 1);
-                self.label(right, depth + 1);
-            }
-            Lbl::Flat(_, children, _) | Lbl::Other(_, children) | Lbl::Select(children, _) => {
-                for child in children {
-                    self.label(child, depth + 1);
-                }
-            }
-            Lbl::Call(callee, arguments, _) => {
-                self.label(callee, depth + 1);
-                for argument in arguments {
-                    self.label(argument, depth + 1);
-                }
-            }
-            _ => {}
+        for child in label.children() {
+            self.label(child, depth + 1);
         }
     }
 }

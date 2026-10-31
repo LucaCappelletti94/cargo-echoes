@@ -9,13 +9,41 @@ use syn::visit::{self, Visit};
 use super::{BlockScan, Env, Lbl, MAX_BLOCK_DEPTH, MAX_REGION_NODES, Port, Renamer, Value};
 use crate::scope::unraw;
 
-struct Bounds {
+/// A scan of syntax against the analysis budget, which also records whether the syntax carries
+/// an attribute.
+pub(crate) struct Bounds {
     nodes: usize,
     expressions: usize,
     blocks: usize,
+    /// The block depth around the scanned syntax.
     outer: usize,
-    valid: bool,
-    observed: bool,
+    /// Whether verbatim items and expressions exceed the budget.
+    opaque: bool,
+    pub(crate) valid: bool,
+    pub(crate) observed: bool,
+}
+
+impl Bounds {
+    /// A scan at block depth `outer` that refuses verbatim syntax.
+    fn new(outer: usize) -> Self {
+        Self {
+            nodes: 0,
+            expressions: 0,
+            blocks: 0,
+            outer,
+            opaque: true,
+            valid: true,
+            observed: false,
+        }
+    }
+
+    /// A scan from the outermost block depth that admits verbatim syntax.
+    pub(crate) fn lenient() -> Self {
+        Self {
+            opaque: false,
+            ..Self::new(0)
+        }
+    }
 }
 
 impl<'ast> Visit<'ast> for Bounds {
@@ -46,7 +74,8 @@ impl<'ast> Visit<'ast> for Bounds {
 
     fn visit_item(&mut self, item: &'ast syn::Item) {
         self.nodes += 1;
-        if self.nodes > MAX_REGION_NODES || matches!(item, syn::Item::Verbatim(_)) {
+        if self.nodes > MAX_REGION_NODES || (self.opaque && matches!(item, syn::Item::Verbatim(_)))
+        {
             self.valid = false;
         } else if self.valid {
             visit::visit_item(self, item);
@@ -58,7 +87,7 @@ impl<'ast> Visit<'ast> for Bounds {
         self.expressions += 1;
         if self.nodes > MAX_REGION_NODES
             || self.expressions > MAX_BLOCK_DEPTH
-            || matches!(expr, syn::Expr::Verbatim(_))
+            || (self.opaque && matches!(expr, syn::Expr::Verbatim(_)))
         {
             self.valid = false;
         } else if self.valid {
@@ -69,14 +98,7 @@ impl<'ast> Visit<'ast> for Bounds {
 }
 
 fn bounds(block: &syn::Block, outer: usize) -> Bounds {
-    let mut scan = Bounds {
-        nodes: 0,
-        expressions: 0,
-        blocks: 0,
-        outer,
-        valid: true,
-        observed: false,
-    };
+    let mut scan = Bounds::new(outer);
     scan.visit_block(block);
     scan
 }
@@ -195,14 +217,7 @@ struct Expanded {
 }
 
 fn expression_bounds(expr: &syn::Expr, outer: usize) -> Bounds {
-    let mut scan = Bounds {
-        nodes: 0,
-        expressions: 0,
-        blocks: 0,
-        outer,
-        valid: true,
-        observed: false,
-    };
+    let mut scan = Bounds::new(outer);
     scan.visit_expr(expr);
     scan
 }
@@ -451,14 +466,7 @@ pub(super) fn normalize(renamer: &mut Renamer, block: &mut syn::Block) -> Outcom
         }
         if erase[index] {
             let original = &block.stmts[index];
-            let mut removed = Bounds {
-                nodes: 0,
-                expressions: 0,
-                blocks: 0,
-                outer: 0,
-                valid: true,
-                observed: false,
-            };
+            let mut removed = Bounds::new(0);
             removed.visit_stmt(original);
             nodes -= removed.nodes;
             for def in &defs[first_definition..definition_index] {
