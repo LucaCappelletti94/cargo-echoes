@@ -124,6 +124,62 @@ fn negated_any_reads_as_all() {
 }
 
 #[test]
+fn every_chain_start_and_adapter_carries_negated_any() {
+    let all = |params: &str, chain: &str, input: &str, test: &str| {
+        rows(
+            params,
+            "bool",
+            &[&[
+                &format!("{chain}.all(|{input}| !({test}))"),
+                &format!("!{chain}.any(|{input}| {test})"),
+            ]],
+        );
+    };
+    all("v: &mut Vec<u32>", "v.iter_mut()", "x", "*x > 3");
+    all("v: &[u32]", "v.into_iter()", "x", "*x > 3");
+    all("a: [u32; 2]", "a.into_iter()", "x", "x > 3");
+    all("s: &str", "s.lines()", "l", "l.is_empty()");
+    all("v: &[u32]", "v.iter().map(|x| x).copied()", "x", "x > 3");
+    all("v: Vec<'a>", "v.iter()", "x", "*x > 3");
+}
+
+#[test]
+fn returns_inside_nested_bodies_leave_negated_any_readable() {
+    for body in [
+        "let g = || return true; g() && *x > 3",
+        "let _f = async { return 1u32 }; *x > 3",
+        "fn g() -> bool { return true } g() && *x > 3",
+    ] {
+        rows(
+            "v: &[u32]",
+            "bool",
+            &[&[
+                &format!("v.iter().all(|x| !{{ {body} }})"),
+                &format!("!v.iter().any(|x| {{ {body} }})"),
+            ]],
+        );
+    }
+}
+
+#[test]
+fn contains_reads_every_literal_of_the_element_primitive() {
+    for (params, value) in [
+        ("v: &[u32]", "3u32"),
+        ("v: &[bool]", "true"),
+        ("v: &[u8]", "b'a'"),
+    ] {
+        rows(
+            params,
+            "bool",
+            &[&[
+                &format!("v.contains(&{value})"),
+                &format!("v.iter().any(|x| *x == {value})"),
+            ]],
+        );
+    }
+}
+
+#[test]
 fn collect_annotations_read_as_turbofish() {
     rows(
         "v: &[u32]",
@@ -208,5 +264,69 @@ fn unproven_iterators_and_other_shapes_stay_apart() {
         ),
     ] {
         separate(&left, &right);
+    }
+}
+
+#[test]
+fn negated_any_stays_apart_off_admitted_chains_and_closures() {
+    for (any, all) in [
+        (
+            "!v.iter().map::<u32, _>(|x| *x).any(|x| x > 3)",
+            "v.iter().map::<u32, _>(|x| *x).all(|x| !(x > 3))",
+        ),
+        (
+            "let mut m = v.iter().map::<u32, _>(|x| *x); !m.any(|x| x > 3)",
+            "let mut m = v.iter().map::<u32, _>(|x| *x); m.all(|x| !(x > 3))",
+        ),
+        (
+            "!v.iter().step_by(2).any(|x| *x > 3)",
+            "v.iter().step_by(2).all(|x| !(*x > 3))",
+        ),
+        ("!v.iter().any(is_big)", "v.iter().all(|x| !is_big(x))"),
+        (
+            "!v.iter().any(|x| check(x)?)",
+            "v.iter().all(|x| !(check(x)?))",
+        ),
+        (
+            "!v.iter().any(|x| ready(x).await)",
+            "v.iter().all(|x| !(ready(x).await))",
+        ),
+        ("!v.iter().any(|x| yield x)", "v.iter().all(|x| !(yield x))"),
+    ] {
+        separate(
+            &function("v: &[u32]", "bool", any),
+            &function("v: &[u32]", "bool", all),
+        );
+    }
+}
+
+#[test]
+fn contains_needs_a_dereferenced_comparison_with_the_element_primitive() {
+    for (params, any, contains) in [
+        (
+            "v: &[u32], y: u32",
+            "v.iter().any(|x| x == &y)",
+            "v.contains(&y)",
+        ),
+        (
+            "v: &[u32], y: u32",
+            "v.iter().any(|&x| x == y)",
+            "v.contains(&y)",
+        ),
+        (
+            "v: &[f64]",
+            "v.iter().any(|x| *x == 1.5)",
+            "v.contains(&1.5)",
+        ),
+        (
+            "v: &[char]",
+            "v.iter().any(|x| *x == \"a\")",
+            "v.contains(&\"a\")",
+        ),
+    ] {
+        separate(
+            &function(params, "bool", any),
+            &function(params, "bool", contains),
+        );
     }
 }
