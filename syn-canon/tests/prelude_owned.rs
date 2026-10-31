@@ -172,8 +172,8 @@ fn calls_of_other_callees_keep_their_literal() {
 #[test]
 fn other_shapes_keep_the_spelling() {
     separate(
-        "fn f(x: &str) -> String { \"a\".into() }",
-        "fn f(x: &str) -> String { \"a\".to_string() }",
+        "fn f(x: &str) { g(\"a\".into()) }",
+        "fn f(x: &str) { g(\"a\".to_string()) }",
     );
     separate(
         "fn f() -> Vec<u8> { b\"a\".to_owned() }",

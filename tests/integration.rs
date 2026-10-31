@@ -2298,6 +2298,43 @@ fn strict_char_bounds_group_with_their_adjacent_inclusive_bound() {
     assert_eq!(function_groups(&scan(4)).len(), 0);
 }
 
+const CONVERSIONS_FIXTURE: &str = "tests/fixtures/conversionsws";
+
+#[test]
+fn into_doctests_group_with_their_from_spelling() {
+    let report = Echoes::default().run(CONVERSIONS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["conversionsws::From", "conversionsws::Into"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(20)
+        .run(CONVERSIONS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(21)
+        .run(CONVERSIONS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn default_replacements_group_with_take() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(CONVERSIONS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["conversionsws::drained", "conversionsws::taken"]];
+    for tokens in [0, 2] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(3)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

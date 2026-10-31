@@ -275,6 +275,9 @@ pub mod alpha {
     pub fn digit(c: char) -> bool {
         c.is_ascii_digit()
     }
+    pub fn widened(value: u16) -> u32 {
+        value.into()
+    }
 }
 mod custom {
     macro_rules! vec {

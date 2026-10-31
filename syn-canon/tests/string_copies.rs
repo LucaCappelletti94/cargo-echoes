@@ -77,8 +77,8 @@ fn unproven_and_differently_allocating_copies_stay_apart() {
             function("s: &str", "s.to_string()"),
         ),
         (
-            function("s: &str", "s.into()"),
-            function("s: &str", "s.to_string()"),
+            "fn f(s: &str) { g(s.into()) }".to_owned(),
+            "fn f(s: &str) { g(s.to_string()) }".to_owned(),
         ),
         (
             function("s: &str", "s.clone().to_string()"),
