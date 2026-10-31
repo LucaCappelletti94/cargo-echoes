@@ -316,20 +316,18 @@ impl Fold<'_, '_> {
         let syn::Expr::Call(call) = expr else {
             return;
         };
-        if !call.attrs.is_empty()
-            || call.args.len() != 2
-            || !self.renamer.standard_function(&call.func, "mem", "replace")
-            || !self.replacement_default(&call.args[1])
-        {
-            return;
-        }
-        if let syn::Expr::Path(path) = call.func.as_mut()
+        let replaces = call.attrs.is_empty()
+            && call.args.len() == 2
+            && self.renamer.standard_function(&call.func, "mem", "replace")
+            && self.replacement_default(&call.args[1]);
+        if replaces
+            && let syn::Expr::Path(path) = call.func.as_mut()
             && let Some(last) = path.path.segments.last_mut()
         {
             last.ident = syn::Ident::new("take", last.ident.span());
+            call.args.pop();
+            call.args.pop_punct();
         }
-        call.args.pop();
-        call.args.pop_punct();
     }
 
     fn scoped(&mut self, visit: impl FnOnce(&mut Self)) {
