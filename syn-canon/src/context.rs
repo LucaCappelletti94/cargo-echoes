@@ -176,6 +176,7 @@ impl FunctionView<'_> {
                 collection_free: standard && self.ctx.undeclared(&alpha::COLLECTION_METHODS),
                 accessor_free: standard && self.ctx.undeclared(&alpha::ACCESSOR_METHODS),
                 pattern_free: standard && self.ctx.undeclared(&alpha::PATTERN_METHODS),
+                ascii_free: standard && self.ctx.undeclared(&alpha::ASCII_METHODS),
                 self_owner,
                 helper_table: Some(&self.ctx.helpers),
                 helper_module: &self.entry.helper_module,

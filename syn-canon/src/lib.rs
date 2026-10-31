@@ -106,6 +106,7 @@ fn canonical(file: syn::File, compiles: bool) -> CanonicalForm {
             collection_free: true,
             accessor_free: true,
             pattern_free: true,
+            ascii_free: true,
             helper_table: None,
             helper_module: &[],
             helper_blocked: false,

@@ -93,10 +93,6 @@ fn guards_comparands_scrutinees_overlaps_and_shadowing_stay_apart() {
             test("u32", "x >= 5 && x <= 1"),
         ),
         (
-            test("char", "matches!(x, 'a' | 'b')"),
-            test("char", "x == 'a' || x == 'b'"),
-        ),
-        (
             "macro_rules! matches { ($($t:tt)*) => { true } } fn f(x: u32) -> bool { matches!(x, 1 | 2) }"
                 .to_owned(),
             "macro_rules! matches { ($($t:tt)*) => { true } } fn f(x: u32) -> bool { x == 1 || x == 2 }"

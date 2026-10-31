@@ -2253,6 +2253,7 @@ pub(crate) fn normalize(
             collection_free: options.collection_free,
             accessor_free: options.accessor_free,
             pattern_free: options.pattern_free,
+            ascii_free: options.ascii_free,
             helper_table: Some(table),
             helper_module: options.helper_module,
             helper_blocked: options.helper_blocked,

@@ -1845,7 +1845,7 @@ fn literal(lit: &syn::Lit, expected: Option<PrimTy>) -> Option<Proven> {
             let prim = if lit.suffix().is_empty() {
                 expected.filter(|prim| matches!(prim, PrimTy::Int { .. }))
             } else {
-                Some(primitive_suffix(lit.suffix())?)
+                Some(primitive_suffix(lit.suffix()).filter(|prim| *prim != PrimTy::Char)?)
             };
             Some(Proven {
                 prim,

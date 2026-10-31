@@ -138,7 +138,7 @@ fn distinct_origins_and_shadowed_values_keep_equality() {
 
 #[test]
 fn unproven_domains_and_type_constraints_keep_equality() {
-    for ty in ["f32", "f64", "usize", "isize", "char", "String", "Unknown"] {
+    for ty in ["f32", "f64", "usize", "isize", "String", "Unknown"] {
         separate(
             &format!("fn f(x: {ty}) -> bool {{ x == x }}"),
             &format!("fn f(x: {ty}) -> bool {{ true }}"),

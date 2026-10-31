@@ -93,6 +93,8 @@ pub(crate) enum PrimTy {
     Int { width: IntWidth, signed: bool },
     /// The `bool` scalar.
     Bool,
+    /// The `char` scalar, ordered by its Unicode scalar value.
+    Char,
 }
 
 impl PrimTy {
@@ -120,6 +122,7 @@ impl PrimTy {
                 IntWidth::W128 => "u128",
             },
             Self::Bool => "bool",
+            Self::Char => "char",
         }
     }
 }
@@ -168,6 +171,7 @@ pub(crate) fn primitive_suffix(name: &str) -> Option<PrimTy> {
             signed: false,
         }),
         "bool" => Some(PrimTy::Bool),
+        "char" => Some(PrimTy::Char),
         _ => None,
     }
 }

@@ -2267,6 +2267,37 @@ fn one_character_push_functions_group_with_their_char_push() {
     assert_eq!(function_groups(&scan(6)).len(), 0);
 }
 
+const CHARS_FIXTURE: &str = "tests/fixtures/charsws";
+
+#[test]
+fn ascii_predicate_doctests_group_with_their_bounds() {
+    let report = Echoes::default().run(CHARS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["charsws::Bounds", "charsws::Predicate"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default().min_tokens(28).run(CHARS_FIXTURE).unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default().min_tokens(29).run(CHARS_FIXTURE).unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn strict_char_bounds_group_with_their_adjacent_inclusive_bound() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(CHARS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["charsws::after", "charsws::from"]];
+    for tokens in [0, 3] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(4)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {
