@@ -285,20 +285,33 @@ fn type_free_value(expr: &syn::Expr, depth: usize) -> Option<u8> {
 fn integer_type(ty: PrimTy) -> Option<FixedInt> {
     match ty {
         PrimTy::Int { width, signed } => Some(FixedInt { width, signed }),
-        PrimTy::Bool => None,
+        PrimTy::Bool | PrimTy::Char => None,
     }
 }
 
-/// A folded literal expression of a proven scalar type.
+/// A folded literal expression of a proven scalar type, `bits` a scalar value for `char`.
 pub(crate) fn literal_expr(ty: PrimTy, bits: u128, span: proc_macro2::Span) -> syn::Expr {
-    if ty == PrimTy::Bool {
-        return syn::Expr::Lit(syn::ExprLit {
-            attrs: Vec::new(),
-            lit: syn::Lit::Bool(syn::LitBool::new(bits != 0, span)),
-        });
-    }
-    let ty = integer_type(ty).expect("an integer type");
-    Integer { ty, bits }.expression(span)
+    let lit = match ty {
+        PrimTy::Bool => syn::Lit::Bool(syn::LitBool::new(bits != 0, span)),
+        PrimTy::Char => syn::Lit::Char(syn::LitChar::new(
+            u32::try_from(bits)
+                .ok()
+                .and_then(char::from_u32)
+                .expect("a char label holds a scalar value"),
+            span,
+        )),
+        PrimTy::Int { width, signed } => {
+            return Integer {
+                ty: FixedInt { width, signed },
+                bits,
+            }
+            .expression(span);
+        }
+    };
+    syn::Expr::Lit(syn::ExprLit {
+        attrs: Vec::new(),
+        lit,
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -440,11 +453,11 @@ fn evaluate(expr: &syn::Expr, ty: FixedInt, depth: usize) -> Option<Integer> {
     }
 }
 
-/// The suffixed literal a byte literal, a cast of a literal or a primitive limit spells: `b'a'`
-/// reads as `97u8`, an unsuffixed integer literal cast to a proven integer type as that type's
-/// literal, which the cast gives the literal anyway, an ASCII character or byte cast to one as
-/// its code, and `u8::MAX` or `i32::MIN` as the value. A pointer-sized target takes values every
-/// pointer width holds.
+/// The literal a byte literal, a cast of a literal or a primitive limit spells: `b'a'` reads as
+/// `97u8`, an unsuffixed integer literal cast to a proven integer type as that type's literal,
+/// which the cast gives the literal anyway, an ASCII character or byte cast to one as its code,
+/// `u8::MAX` or `i32::MIN` as the value, and `char::MAX` or `char::MIN` as its `char` literal. A
+/// pointer-sized target takes values every pointer width holds.
 fn literal_form(renamer: &Renamer<'_>, expr: &syn::Expr) -> Option<syn::Expr> {
     let span = expr.span();
     match expr {
@@ -516,14 +529,23 @@ fn literal_form(renamer: &Renamer<'_>, expr: &syn::Expr) -> Option<syn::Expr> {
             if !ty.arguments.is_none() || !limit.arguments.is_none() {
                 return None;
             }
-            let prim @ PrimTy::Int { width, signed } = renamer.type_name_prim(&ty.ident)? else {
-                return None;
+            let prim = renamer.type_name_prim(&ty.ident)?;
+            let (min, max) = match prim {
+                PrimTy::Int { width, signed } => {
+                    let all = u128::MAX >> (128 - width.bits());
+                    if signed {
+                        (1 << (width.bits() - 1), all >> 1)
+                    } else {
+                        (0, all)
+                    }
+                }
+                PrimTy::Char => (0, u128::from(u32::from(char::MAX))),
+                PrimTy::Bool => return None,
             };
-            let all = u128::MAX >> (128 - width.bits());
             let bits = if limit.ident == "MAX" {
-                if signed { all >> 1 } else { all }
+                max
             } else if limit.ident == "MIN" {
-                if signed { 1 << (width.bits() - 1) } else { 0 }
+                min
             } else {
                 return None;
             };

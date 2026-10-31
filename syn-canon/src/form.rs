@@ -229,6 +229,7 @@ pub(crate) fn item_payload(
             collection_free: false,
             accessor_free: false,
             pattern_free: false,
+            ascii_free: false,
             helper_table: proof.table,
             helper_module: &[],
             helper_blocked: false,

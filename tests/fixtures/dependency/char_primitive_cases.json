@@ -1,0 +1,563 @@
+[
+  {
+    "id": "ch_orient",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { 'a' <= c } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "b": "fn f(c: char) -> bool { !(c < 'a') } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, true, true, true, true, true, true]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, true, true, true, true, true, true]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, true, true, true, true, true, true]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, true, true, true, true, true, true]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_gap",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { c > '\\u{D7FF}' } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "b": "fn f(c: char) -> bool { c >= '\\u{E000}' } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, false, false, false, false, true, true]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, false, false, false, false, true, true]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, false, false, false, false, true, true]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, false, false, false, false, true, true]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_zero",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { c > '\\0' } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "b": "fn f(c: char) -> bool { c != '\\0' } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, true, true, true, true, true, true, true]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, true, true, true, true, true, true, true]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, true, true, true, true, true, true, true]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, true, true, true, true, true, true, true]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_max",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { c < char::MAX } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "b": "fn f(c: char) -> bool { c <= '\\u{10FFFE}' } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[true, true, true, true, true, true, true, false]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[true, true, true, true, true, true, true, false]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[true, true, true, true, true, true, true, false]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[true, true, true, true, true, true, true, false]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_chain",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { ('a'..='z').contains(&c) } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "b": "fn f(c: char) -> bool { matches!(c, 'a'..='z') } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, true, true, false, false, false, false]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, true, true, false, false, false, false]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, true, true, false, false, false, false]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, true, true, false, false, false, false]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_strict",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { c > 'a' } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "b": "fn f(c: char) -> bool { c >= 'a' } fn main(){ let r: Vec<bool> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, false, true, true, true, true, true]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, false, true, true, true, true, true]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, true, true, true, true, true, true]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[false, false, true, true, true, true, true, true]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_is_ascii_digit",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { c.is_ascii_digit() } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "b": "fn f(c: char) -> bool { matches!(c, '0'..='9') } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_is_ascii_lowercase",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { c.is_ascii_lowercase() } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "b": "fn f(c: char) -> bool { matches!(c, 'a'..='z') } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_is_ascii_uppercase",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { c.is_ascii_uppercase() } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "b": "fn f(c: char) -> bool { matches!(c, 'A'..='Z') } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_is_ascii_alphabetic",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { c.is_ascii_alphabetic() } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "b": "fn f(c: char) -> bool { matches!(c, 'A'..='Z' | 'a'..='z') } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_is_ascii_alphanumeric",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { c.is_ascii_alphanumeric() } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "b": "fn f(c: char) -> bool { matches!(c, '0'..='9' | 'A'..='Z' | 'a'..='z') } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_is_ascii_hexdigit",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { c.is_ascii_hexdigit() } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "b": "fn f(c: char) -> bool { matches!(c, '0'..='9' | 'A'..='F' | 'a'..='f') } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 97, 98, 99, 100, 101, 102]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 97, 98, 99, 100, 101, 102]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 97, 98, 99, 100, 101, 102]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 97, 98, 99, 100, 101, 102]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_is_ascii_whitespace",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> bool { c.is_ascii_whitespace() } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "b": "fn f(c: char) -> bool { matches!(c, '\\t' | '\\n' | '\\x0C' | '\\r' | ' ') } fn main(){ let mut all: Vec<char> = (0u8..=255).map(char::from).collect(); all.extend(['\\u{D7FF}', '\\u{E000}', char::MAX]); let hits: Vec<u32> = all.into_iter().filter(|c| f(*c)).map(u32::from).collect(); println!(\"{:?}\", hits); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[9, 10, 12, 13, 32]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[9, 10, 12, 13, 32]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[9, 10, 12, 13, 32]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[9, 10, 12, 13, 32]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_u8_alphanumeric",
+    "family": "char_primitive",
+    "a": "fn f(b: u8) -> bool { b.is_ascii_alphanumeric() } fn main(){ let hits: Vec<u8> = (0u8..=255).filter(|b| f(*b)).collect(); println!(\"{:?}\", hits); }",
+    "b": "fn f(b: u8) -> bool { matches!(b, 48..=57 | 65..=90 | 97..=122) } fn main(){ let hits: Vec<u8> = (0u8..=255).filter(|b| f(*b)).collect(); println!(\"{:?}\", hits); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_u8_whitespace",
+    "family": "char_primitive",
+    "a": "fn f(b: u8) -> bool { b.is_ascii_whitespace() } fn main(){ let hits: Vec<u8> = (0u8..=255).filter(|b| f(*b)).collect(); println!(\"{:?}\", hits); }",
+    "b": "fn f(b: u8) -> bool { matches!(b, 9 | 10 | 12 | 13 | 32) } fn main(){ let hits: Vec<u8> = (0u8..=255).filter(|b| f(*b)).collect(); println!(\"{:?}\", hits); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[9, 10, 12, 13, 32]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[9, 10, 12, 13, 32]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[9, 10, 12, 13, 32]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[9, 10, 12, 13, 32]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_cast_u32",
+    "family": "char_primitive",
+    "a": "fn f(c: char) -> u32 { c as u32 } fn main(){ let r: Vec<u32> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "b": "fn f(c: char) -> u32 { u32::from(c) } fn main(){ let r: Vec<u32> = ['\\0', '`', 'a', 'z', '{', '\\u{D7FF}', '\\u{E000}', char::MAX].into_iter().map(f).collect(); println!(\"{:?}\", r); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[0, 96, 97, 122, 123, 55295, 57344, 1114111]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[0, 96, 97, 122, 123, 55295, 57344, 1114111]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[0, 96, 97, 122, 123, 55295, 57344, 1114111]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[0, 96, 97, 122, 123, 55295, 57344, 1114111]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "ch_cast_char",
+    "family": "char_primitive",
+    "a": "fn f(b: u8) -> char { b as char } fn main(){ let s: u32 = (0u8..=255).map(f).map(u32::from).sum(); println!(\"{} {:?} {:?}\", s, f(0), f(255)); }",
+    "b": "fn f(b: u8) -> char { char::from(b) } fn main(){ let s: u32 = (0u8..=255).map(f).map(u32::from).sum(); println!(\"{} {:?} {:?}\", s, f(0), f(255)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "32640 '\\0' 'ÿ'\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "32640 '\\0' 'ÿ'\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "32640 '\\0' 'ÿ'\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "32640 '\\0' 'ÿ'\n"
+        }
+      }
+    }
+  }
+]

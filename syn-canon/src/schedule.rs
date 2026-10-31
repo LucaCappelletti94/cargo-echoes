@@ -530,7 +530,7 @@ pub(crate) fn compound_operator(op: syn::BinOp, prim: PrimTy, operand: &Lbl) -> 
         syn::BinOp::ShrAssign(_) => syn::BinOp::Shr(syn::token::Shr::default()),
         _ => return None,
     };
-    if prim == PrimTy::Bool && BitwiseOp::from_bin_op(plain).is_none() {
+    if prim == PrimTy::Char || prim == PrimTy::Bool && BitwiseOp::from_bin_op(plain).is_none() {
         return None;
     }
     let accepted = if matches!(plain, syn::BinOp::Shl(_) | syn::BinOp::Shr(_)) {
@@ -617,7 +617,8 @@ pub(crate) enum TotalBinary {
 
 pub(crate) fn total_binary(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<TotalBinary> {
     if let Some(op) = BitwiseOp::from_bin_op(bin_op) {
-        return Some(TotalBinary::Flat(op, scalar_prim(left, right)?));
+        let prim = scalar_prim(left, right)?;
+        return (prim != PrimTy::Char).then_some(TotalBinary::Flat(op, prim));
     }
     match bin_op {
         syn::BinOp::Shl(_) | syn::BinOp::Shr(_) => {
@@ -678,31 +679,32 @@ fn comparison(bin_op: syn::BinOp, left: &Lbl, right: &Lbl) -> Option<TotalBinary
     })
 }
 
-/// The canonical spelling of the comparison `lo tag hi` with exactly one integer literal operand.
-/// An inclusive bound reads as the strict bound past the adjacent literal when that literal stays
-/// in the operand type, and over unsigned operands `0 < x` reads as `0 != x` and `x < 1` as
-/// `0 == x`. Integers are totally ordered, so each reading keeps the truth value for every `x`.
+/// The canonical spelling of the comparison `lo tag hi` with exactly one integer or `char`
+/// literal operand. An inclusive bound reads as the strict bound past the adjacent literal when
+/// that literal stays in the operand type, and over unsigned and `char` operands `0 < x` reads
+/// as `0 != x` and `x < 1` as `0 == x`. Integers and scalar values are totally ordered, so each
+/// reading keeps the truth value for every `x`.
 pub(crate) fn adjacent(tag: char, lo: Lbl, hi: Lbl) -> (char, Lbl, Lbl) {
-    let Some(PrimTy::Int { width, signed }) = scalar_prim(&lo, &hi) else {
+    let Some(prim @ (PrimTy::Int { .. } | PrimTy::Char)) = scalar_prim(&lo, &hi) else {
         return (tag, lo, hi);
     };
     let literal = |label: &Lbl| matches!(label, Lbl::Int(..));
     let (tag, lo, hi) = match (tag, lo, hi) {
         ('≤', lo, Lbl::Int(bits, suffix)) if !literal(&lo) => {
-            match adjacent_literal(bits, suffix, width, signed, true) {
+            match adjacent_literal(bits, suffix, prim, true) {
                 Some(next) => ('<', lo, Lbl::Int(next, suffix)),
                 None => ('≤', lo, Lbl::Int(bits, suffix)),
             }
         }
         ('≤', Lbl::Int(bits, suffix), hi) if !literal(&hi) => {
-            match adjacent_literal(bits, suffix, width, signed, false) {
+            match adjacent_literal(bits, suffix, prim, false) {
                 Some(previous) => ('<', Lbl::Int(previous, suffix), hi),
                 None => ('≤', Lbl::Int(bits, suffix), hi),
             }
         }
         other => other,
     };
-    if signed {
+    if matches!(prim, PrimTy::Int { signed: true, .. }) {
         return (tag, lo, hi);
     }
     match (tag, lo, hi) {
@@ -712,15 +714,20 @@ pub(crate) fn adjacent(tag: char, lo: Lbl, hi: Lbl) -> (char, Lbl, Lbl) {
     }
 }
 
-/// The literal one past `bits` when `up`, one before otherwise, when it stays in the type of
-/// `width` and `signed`. An unsuffixed literal stays non-negative, which is all it can spell.
-fn adjacent_literal(
-    bits: u128,
-    suffix: Option<PrimTy>,
-    width: crate::scope::IntWidth,
-    signed: bool,
-    up: bool,
-) -> Option<u128> {
+/// The literal one past `bits` when `up`, one before otherwise, when it stays in `prim`. An
+/// unsuffixed literal stays non-negative, which is all it can spell, and a `char` steps over the
+/// surrogate gap between `'\u{D7FF}'` and `'\u{E000}'`.
+fn adjacent_literal(bits: u128, suffix: Option<PrimTy>, prim: PrimTy, up: bool) -> Option<u128> {
+    let PrimTy::Int { width, signed } = prim else {
+        let value = u32::try_from(bits).ok()?;
+        let next = match (up, value) {
+            (true, 0xD7FF) => 0xE000,
+            (false, 0xE000) => 0xD7FF,
+            (true, value) => value.checked_add(1)?,
+            (false, value) => value.checked_sub(1)?,
+        };
+        return char::from_u32(next).map(|next| u128::from(u32::from(next)));
+    };
     let shift = 128 - width.bits();
     let mask = u128::MAX >> shift;
     if !signed {
@@ -944,11 +951,13 @@ pub(crate) fn flat_label(op: BitwiseOp, prim: PrimTy, mut leaves: Vec<Lbl>) -> L
     }
 }
 
-/// Every bit of `prim` set: the all-ones value of a fixed-width integer, `true` for `bool`.
+/// Every bit of `prim` set: the all-ones value of a fixed-width integer, `true` for `bool`, and
+/// the largest scalar value for `char`, which no bitwise chain admits.
 pub(crate) fn all_ones(prim: PrimTy) -> u128 {
     match prim {
         PrimTy::Int { width, .. } => u128::MAX >> (128 - width.bits()),
         PrimTy::Bool => 1,
+        PrimTy::Char => u128::from(u32::from(char::MAX)),
     }
 }
 
@@ -1088,7 +1097,7 @@ fn fold_literal_leaves(op: BitwiseOp, prim: PrimTy, leaves: &mut Vec<Lbl>) {
 /// A folded literal under the chain's proven primitive type.
 pub(crate) fn literal_label(prim: PrimTy, bits: u128) -> Lbl {
     match prim {
-        PrimTy::Int { .. } => Lbl::Int(bits, Some(prim)),
+        PrimTy::Int { .. } | PrimTy::Char => Lbl::Int(bits, Some(prim)),
         PrimTy::Bool => Lbl::Bool(bits != 0),
     }
 }
@@ -1147,13 +1156,18 @@ fn label_lit(lit: &syn::Lit) -> Lbl {
         syn::Lit::Int(integer) => {
             let prim = crate::scope::primitive_suffix(integer.suffix());
             match integer.base10_parse::<u128>() {
-                Ok(value) if prim.is_none_or(|prim| value <= largest(prim)) => {
+                Ok(value)
+                    if prim.is_none_or(|prim| value <= largest(prim) && prim != PrimTy::Char) =>
+                {
                     Lbl::Int(value, prim)
                 }
                 _ => Lbl::Lit(integer.to_token_stream().to_string()),
             }
         }
         syn::Lit::Bool(boolean) => Lbl::Bool(boolean.value),
+        syn::Lit::Char(character) if character.suffix().is_empty() => {
+            Lbl::Int(u128::from(u32::from(character.value())), Some(PrimTy::Char))
+        }
         other => Lbl::Lit(other.to_token_stream().to_string()),
     }
 }
@@ -2859,10 +2873,18 @@ fn cast_label(renamer: &Renamer, value: Lbl, name: &syn::Ident) -> Lbl {
 }
 
 /// Whether the standard library converts `source` into `target` with a lossless `From` impl:
-/// `bool` into any integer, and an integer into a wider one that keeps its sign or gains one.
+/// `bool` into any integer, an integer into a wider one that keeps its sign or gains one, `char`
+/// into `u32`, `u64` and `u128`, and `u8` into `char`.
 pub(crate) fn lossless(source: PrimTy, target: PrimTy) -> bool {
     match (source, target) {
-        (PrimTy::Bool, PrimTy::Int { .. }) => true,
+        (PrimTy::Bool, PrimTy::Int { .. })
+        | (
+            PrimTy::Int {
+                width: crate::scope::IntWidth::W8,
+                signed: false,
+            },
+            PrimTy::Char,
+        ) => true,
         (
             PrimTy::Int {
                 width: from,
@@ -2873,6 +2895,13 @@ pub(crate) fn lossless(source: PrimTy, target: PrimTy) -> bool {
                 signed: to_signed,
             },
         ) => to.bits() > from.bits() && (to_signed || !from_signed),
+        (
+            PrimTy::Char,
+            PrimTy::Int {
+                width,
+                signed: false,
+            },
+        ) => width.bits() >= 32,
         _ => false,
     }
 }

@@ -63,6 +63,9 @@ pub(crate) struct Options<'a> {
     /// Every import in view comes from the standard library and no trait in view declares a
     /// method named in `PATTERN_METHODS`.
     pub(crate) pattern_free: bool,
+    /// Every import in view comes from the standard library and no trait in view declares a
+    /// method named in `ASCII_METHODS`.
+    pub(crate) ascii_free: bool,
     /// The source context's helper summary table, when one is indexed.
     pub(crate) helper_table: Option<&'a crate::helpers::HelperTable>,
     pub(crate) helper_module: &'a [String],
@@ -364,6 +367,9 @@ pub(crate) struct Renamer<'env> {
     /// Every import in view comes from the standard library and no trait in view declares a
     /// method the one-character pattern readings rely on.
     pattern_free: bool,
+    /// Every import in view comes from the standard library and no trait in view declares an
+    /// ASCII predicate the range readings rely on.
+    ascii_free: bool,
     /// An enclosing block of the current item already read its owned strings and empty vectors.
     prelude_folded: bool,
     /// The inline modules around the traversal, whose frames stay on the stack.
@@ -432,6 +438,7 @@ impl<'env> Renamer<'env> {
             collection_free: false,
             accessor_free: false,
             pattern_free: false,
+            ascii_free: false,
             prelude_folded: false,
             inline_depth: 0,
             observed: false,
@@ -492,6 +499,7 @@ impl<'env> Renamer<'env> {
         renamer.collection_free = options.collection_free;
         renamer.accessor_free = options.accessor_free;
         renamer.pattern_free = options.pattern_free;
+        renamer.ascii_free = options.ascii_free;
         renamer.observed = options.observed;
         renamer.tail_blocked = options.enclosing_observed;
         renamer.seed = options.seed;
@@ -1336,6 +1344,13 @@ impl<'env> Renamer<'env> {
     /// standard library and no trait in view declares one of those names.
     pub(crate) fn pattern_free(&self) -> bool {
         self.prelude && self.pattern_free
+    }
+
+    /// Whether the inherent ASCII predicates of `char` and `u8` answer their calls: the standard
+    /// prelude is active, every import in view comes from the standard library and no trait in
+    /// view declares one of those names.
+    pub(crate) fn ascii_free(&self) -> bool {
+        self.prelude && self.ascii_free
     }
 
     /// Whether the collection readings may run: compiling source with the standard collection
@@ -2996,6 +3011,7 @@ pub(crate) fn normalize_file(
     renamer.collection_free &= collection_free_file(file);
     renamer.accessor_free &= accessor_free_file(file);
     renamer.pattern_free &= pattern_free_file(file);
+    renamer.ascii_free &= ascii_free_file(file);
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
 }
@@ -3008,6 +3024,7 @@ pub(crate) fn analyze_file(file: &mut syn::File, options: Options<'_>) -> Refere
     renamer.collection_free &= collection_free_file(file);
     renamer.accessor_free &= accessor_free_file(file);
     renamer.pattern_free &= pattern_free_file(file);
+    renamer.ascii_free &= ascii_free_file(file);
     renamer.analysis = true;
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
@@ -3078,6 +3095,24 @@ pub(crate) const PATTERN_METHODS: [&str; 20] = [
 fn pattern_free_file(file: &syn::File) -> bool {
     crate::context::standard_imports(&file.items)
         && !crate::context::declares_trait_method(&file.items, &PATTERN_METHODS)
+}
+
+/// The ASCII predicates the range readings rely on.
+pub(crate) const ASCII_METHODS: [&str; 7] = [
+    "is_ascii_digit",
+    "is_ascii_lowercase",
+    "is_ascii_uppercase",
+    "is_ascii_alphabetic",
+    "is_ascii_alphanumeric",
+    "is_ascii_hexdigit",
+    "is_ascii_whitespace",
+];
+
+/// Whether a file, bodies included, imports only from the standard library and declares no
+/// trait method an ASCII predicate reading relies on.
+fn ascii_free_file(file: &syn::File) -> bool {
+    crate::context::standard_imports(&file.items)
+        && !crate::context::declares_trait_method(&file.items, &ASCII_METHODS)
 }
 
 /// True for an ident pattern that names a unit struct, variant, or

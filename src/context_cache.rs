@@ -272,6 +272,9 @@ pub mod alpha {
     pub fn fields(line: &str) -> usize {
         line.split(",").count()
     }
+    pub fn digit(c: char) -> bool {
+        c.is_ascii_digit()
+    }
 }
 mod custom {
     macro_rules! vec {
