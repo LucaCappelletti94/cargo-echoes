@@ -2230,6 +2230,43 @@ fn empty_text_functions_group_with_their_emptiness_test() {
     assert_eq!(function_groups(&scan(4)).len(), 0);
 }
 
+const PATTERNS_FIXTURE: &str = "tests/fixtures/patternsws";
+
+#[test]
+fn one_character_pattern_doctests_group_with_their_char_pattern() {
+    let report = Echoes::default().run(PATTERNS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["patternsws::Character", "patternsws::Text"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(24)
+        .run(PATTERNS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(25)
+        .run(PATTERNS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn one_character_push_functions_group_with_their_char_push() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(PATTERNS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["patternsws::newline", "patternsws::pushed"]];
+    for tokens in [0, 5] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(6)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

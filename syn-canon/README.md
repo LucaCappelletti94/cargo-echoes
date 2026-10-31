@@ -154,6 +154,8 @@ In compiling mode, a binding declared as `&str` reads `to_owned()` and `String::
 
 In compiling mode, over a binding declared as a `Vec`, array or slice, `v.get(0)` and `v.iter().next()` read as `v.first()` and `v.iter().count()` as `v.len()`. Over a `String` or `str` binding, `s == ""` reads as `s.is_empty()`, `s != ""` as `!s.is_empty()` and `s.as_bytes().len()` as `s.len()`. `&s[..]` over a `String` and `&v[..]` over a `Vec` read as `s.as_str()` and `v.as_slice()`, as do `&*s` and `&*v` over owned bindings. A file that declares a trait method named `get`, `first`, `next`, `count`, `as_bytes` or `as_slice`, imports from outside the standard library, or claims `Iterator` keeps the written form of these accessors.
 
+In compiling mode, over a binding declared as `String` or `str`, a string literal of exactly one character passed as the pattern of `split`, `rsplit`, `splitn`, `split_once`, `rsplit_once`, `contains`, `starts_with`, `ends_with`, `find`, `rfind`, `matches`, `replace`, `replacen`, `strip_prefix`, `strip_suffix`, `trim_matches`, `trim_start_matches` or `trim_end_matches` reads as its `char` literal, and `s.push_str("a")` over a `String` reads as `s.push('a')`. The replacement argument of `replace` keeps its spelling. A file that declares a trait method of one of those names or imports from outside the standard library keeps the written form.
+
 ## Stability
 
 `CanonicalForm` keys and hashes are comparable within a semver-compatible release series. Before `1.0`, each minor version defines a series, such as `0.5.x`. Incompatible normalization requires a new series.

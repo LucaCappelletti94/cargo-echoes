@@ -41,6 +41,7 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, sig: &syn::Signature, block: &mut
                 .iter()
                 .all(|name| unclaimed(name)),
         accessors: renamer.accessor_free() && unclaimed("Iterator"),
+        patterns: renamer.pattern_free(),
         named,
         scopes: alloc::vec![BTreeMap::new()],
     };
@@ -117,6 +118,9 @@ struct Fold {
     /// Whether the standard `get`, `first`, `as_bytes`, `as_slice`, `next` and `count` answer
     /// their calls and `Iterator` names the standard trait.
     accessors: bool,
+    /// Whether the standard `str` pattern methods and the `push_str` and `push` of `String`
+    /// answer their calls.
+    patterns: bool,
     /// The bindings in view, a proven collection or `None` for any other binding.
     scopes: Vec<BTreeMap<String, Option<Collection>>>,
 }
@@ -335,6 +339,49 @@ impl Fold {
         }
     }
 
+    /// Read a one-character string literal passed as the pattern of a standard `str` method
+    /// over a `String` or `str` binding as its `char` literal, and `s.push_str` of one
+    /// character over a `String` binding as `s.push` of it.
+    fn pattern(&self, expr: &mut syn::Expr) {
+        if !self.patterns {
+            return;
+        }
+        let syn::Expr::MethodCall(call) = expr else {
+            return;
+        };
+        let Some(collection) = self.binding(&call.receiver) else {
+            return;
+        };
+        let method = ident_name(&call.method);
+        let (index, arity) = match method.as_str() {
+            "push_str" if collection.kind == Kind::String => (0, 1),
+            "split" | "rsplit" | "split_once" | "rsplit_once" | "contains" | "starts_with"
+            | "ends_with" | "find" | "rfind" | "matches" | "strip_prefix" | "strip_suffix"
+            | "trim_matches" | "trim_start_matches" | "trim_end_matches" => (0, 1),
+            "splitn" => (1, 2),
+            "replace" => (0, 2),
+            "replacen" => (0, 3),
+            _ => return,
+        };
+        if !call.attrs.is_empty()
+            || call.turbofish.is_some()
+            || call.args.len() != arity
+            || !matches!(collection.kind, Kind::String | Kind::Str)
+        {
+            return;
+        }
+        let Some(character) = single_character(&call.args[index]) else {
+            return;
+        };
+        call.args[index] = syn::Expr::Lit(syn::ExprLit {
+            attrs: Vec::new(),
+            lit: syn::Lit::Char(syn::LitChar::new(character, proc_macro2::Span::call_site())),
+        });
+        if method == "push_str" {
+            call.method = syn::Ident::new("push", call.method.span());
+        }
+    }
+
     /// Read the accessor synonyms of a proven collection binding as one form.
     fn accessor(&self, expr: &mut syn::Expr) {
         if !self.accessors {
@@ -524,6 +571,24 @@ fn empty_literal(expr: &syn::Expr) -> bool {
     )
 }
 
+/// The one character of an unattributed, unsuffixed string literal that holds exactly one.
+fn single_character(expr: &syn::Expr) -> Option<char> {
+    let syn::Expr::Lit(syn::ExprLit {
+        attrs,
+        lit: syn::Lit::Str(text),
+    }) = expr
+    else {
+        return None;
+    };
+    if !attrs.is_empty() || !text.suffix().is_empty() {
+        return None;
+    }
+    let value = text.value();
+    let mut characters = value.chars();
+    let character = characters.next()?;
+    characters.next().is_none().then_some(character)
+}
+
 /// The call `receiver.method()`.
 fn method_call(receiver: syn::Expr, method: &str) -> syn::Expr {
     syn::Expr::MethodCall(syn::ExprMethodCall {
@@ -632,6 +697,7 @@ impl VisitMut for Fold {
         }
         syn::visit_mut::visit_expr_mut(self, expr);
         self.accessor(expr);
+        self.pattern(expr);
         self.emptiness(expr);
         self.copy(expr);
     }
