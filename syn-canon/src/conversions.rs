@@ -390,11 +390,15 @@ impl Fold<'_, '_> {
         let syn::Expr::Path(callee) = call.func.as_mut() else {
             return false;
         };
-        let mut owner = callee.path.clone();
-        let Some(method) = owner.segments.pop() else {
+        let segments = callee.path.segments.iter().cloned().collect::<Vec<_>>();
+        let Some((method, owner)) = segments.split_last().filter(|(_, owner)| !owner.is_empty())
+        else {
             return false;
         };
-        owner.segments.pop_punct();
+        let owner = syn::Path {
+            leading_colon: callee.path.leading_colon,
+            segments: owner.iter().cloned().collect(),
+        };
         let arity = match ident_name(&method.ident).as_str() {
             "new" => 0,
             "with_capacity" => 1,

@@ -1837,9 +1837,7 @@ impl<'env> Renamer<'env> {
                 }
                 (None, None) => return None,
             };
-            let [root, module @ ..] = target.as_slice() else {
-                return None;
-            };
+            let (root, module) = target.split_first()?;
             let root = crate::macros::StandardRoot::named(root)?;
             return standard_collection_path(root, module, collection).then_some(collection);
         };

@@ -1,5 +1,8 @@
 //! Annotations of `let` bindings whose initializer fixes the same type read as the initializer.
 
+#[path = "support/view.rs"]
+mod view;
+
 fn parse(source: &str) -> syn::File {
     syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
 }
@@ -94,12 +97,37 @@ fn collection_annotations_read_as_turbofish() {
             "let s = std::collections::BTreeSet::<u32>::new()",
             "s.len()",
         ),
+        (
+            "",
+            "let s: std::string::String = std::string::String::new()",
+            "let s = std::string::String::new()",
+            "s.len()",
+        ),
+        (
+            "extern crate alloc;\n",
+            "let v: alloc::vec::Vec<u8> = alloc::vec::Vec::new()",
+            "let v = alloc::vec::Vec::<u8>::new()",
+            "v.len()",
+        ),
     ] {
         equivalent(
             &function(prefix, annotated, rest),
             &function(prefix, turbofish, rest),
         );
     }
+}
+
+#[test]
+fn imports_the_function_view_keeps_bare_still_read_as_standard() {
+    let file = |binding: &str| {
+        parse(&format!(
+            "use std::collections::HashMap;\nfn f() -> usize {{ #[derive(Clone)] struct Local; {binding}; m.len() }}"
+        ))
+    };
+    assert_eq!(
+        view::view_of(&file("let m: HashMap<u32, u8> = HashMap::new()"), "f"),
+        view::view_of(&file("let m = HashMap::<u32, u8>::new()"), "f"),
+    );
 }
 
 #[test]
@@ -176,6 +204,42 @@ fn inferred_coercing_and_user_annotations_stay_apart() {
         (
             "fn f(x: Num) -> u32 { let y: u32 = x; y }".to_owned(),
             "fn f(x: Num) -> u32 { let y = x; y }".to_owned(),
+        ),
+        (
+            function(
+                "mod store { pub struct HashMap; }\nuse store::HashMap;\n",
+                "let m: HashMap<u32, u8> = HashMap::new()",
+                "0",
+            ),
+            function(
+                "mod store { pub struct HashMap; }\nuse store::HashMap;\n",
+                "let m = HashMap::<u32, u8>::new()",
+                "0",
+            ),
+        ),
+        (
+            function("", "let v: Vec<u32> = (make)()", "v.len()"),
+            function("", "let v = (make)()", "v.len()"),
+        ),
+        (
+            function("", "let v: Vec<u32> = make()", "v.len()"),
+            function("", "let v = make()", "v.len()"),
+        ),
+        (
+            function("", "let v: Vec<u32> = Store::new()", "v.len()"),
+            function("", "let v = Store::<u32>::new()", "v.len()"),
+        ),
+        (
+            function(
+                "",
+                "let v: core::vec::Vec<u8> = core::vec::Vec::new()",
+                "v.len()",
+            ),
+            function("", "let v = core::vec::Vec::<u8>::new()", "v.len()"),
+        ),
+        (
+            function("", "let v: std::Vec<u8> = std::Vec::new()", "v.len()"),
+            function("", "let v = std::Vec::<u8>::new()", "v.len()"),
         ),
     ] {
         separate(&left, &right);
