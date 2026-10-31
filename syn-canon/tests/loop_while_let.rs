@@ -59,6 +59,14 @@ fn breaking_matches_read_as_while_let() {
             "fn f() { 'outer: for y in ys() { loop { match next() { Some(x) => { if x == y { break 'outer; } } None => break } } } }",
             "fn f() { 'outer: for y in ys() { while let Some(x) = next() { if x == y { break 'outer; } } } }",
         ),
+        (
+            "fn f() { loop { match next() { Some(x) => g(x), _ => { break } } } }",
+            "fn f() { while let Some(x) = next() { g(x) } }",
+        ),
+        (
+            "fn f() { loop { match next() { Some(x) => { let v = loop { break x; }; while ready() { break; } for y in ys() { g(y); } let c = || x; let a = async { x }; fn helper() {} g(v); } None => break } } }",
+            "fn f() { while let Some(x) = next() { let v = loop { break x; }; while ready() { break; } for y in ys() { g(y); } let c = || x; let a = async { x }; fn helper() {} g(v); } }",
+        ),
     ] {
         equivalent(written, read);
     }
@@ -89,6 +97,14 @@ fn valued_labelled_guarded_and_let_else_loops_stay_apart() {
         ),
         (
             "fn f() { loop { match next() { Some(x) => g(x), None => return } } }",
+            "fn f() { while let Some(x) = next() { g(x) } }",
+        ),
+        (
+            "fn f() { loop { match next() { Some(x) => g(x), _ => { h(); break } } } }",
+            "fn f() { while let Some(x) = next() { g(x) } }",
+        ),
+        (
+            "fn f() { loop { match next() { Some(0) => h(), Some(x) => g(x), None => break } } }",
             "fn f() { while let Some(x) = next() { g(x) } }",
         ),
         (
