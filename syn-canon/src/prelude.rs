@@ -13,6 +13,7 @@ use alloc::vec::Vec;
 use syn::visit_mut::VisitMut;
 
 use crate::alpha::Renamer;
+use crate::syntax::placeholder;
 
 /// The names the spellings resolve through the prelude.
 const STRING_NAMES: [&str; 3] = ["String", "ToString", "ToOwned"];
@@ -121,10 +122,7 @@ impl Fold<'_, '_> {
                     && string_literal(&call.args[0])
                     && path_is(&call.func, "String", "from") =>
             {
-                let receiver = core::mem::replace(
-                    &mut call.args[0],
-                    syn::Expr::Verbatim(proc_macro2::TokenStream::new()),
-                );
+                let receiver = core::mem::replace(&mut call.args[0], placeholder());
                 *expr = syn::Expr::MethodCall(syn::ExprMethodCall {
                     attrs: Vec::new(),
                     receiver: Box::new(receiver),

@@ -13,6 +13,7 @@ use crate::schedule::{
     self, BitwiseOp, BlockFacts, Equality, Identity, Lbl, Port, TotalBinary, Value,
 };
 use crate::scope::PrimTy;
+use crate::syntax::placeholder;
 
 /// The single unqualified type name a cast targets.
 fn cast_name(ty: &syn::Type) -> Option<&syn::Ident> {
@@ -151,10 +152,6 @@ struct Walker<'a, 'env> {
     dedup: bool,
 }
 
-fn empty_expr() -> syn::Expr {
-    syn::Expr::Verbatim(proc_macro2::TokenStream::new())
-}
-
 fn tail_expr_mut(block: &mut syn::Block) -> Option<&mut syn::Expr> {
     let [syn::Stmt::Expr(expr, None)] = block.stmts.as_mut_slice() else {
         return None;
@@ -192,7 +189,7 @@ fn local_name(expr: &syn::Expr) -> Option<String> {
 
 impl Walker<'_, '_> {
     fn scalar_in_place(&self, expr: &mut syn::Expr, total_calls: bool) -> Option<Lbl> {
-        let owned = core::mem::replace(expr, empty_expr());
+        let owned = core::mem::replace(expr, placeholder());
         let (normalized, label) = self.scalar(owned, total_calls);
         *expr = normalized;
         label
@@ -308,8 +305,8 @@ impl Walker<'_, '_> {
         if left_label.prim().is_none() || right_label.prim().is_none() {
             return None;
         }
-        let left = core::mem::replace(&mut *left.expr, empty_expr());
-        let right = core::mem::replace(&mut *right.expr, empty_expr());
+        let left = core::mem::replace(&mut *left.expr, placeholder());
+        let right = core::mem::replace(&mut *right.expr, placeholder());
         *binary.left = left;
         *binary.right = right;
         Some((left_label, right_label))
@@ -430,7 +427,7 @@ impl Walker<'_, '_> {
                     && matches!(label.prim(), Some(PrimTy::Int { .. }))
                 {
                     return (
-                        core::mem::replace(&mut *negated.expr, empty_expr()),
+                        core::mem::replace(&mut *negated.expr, placeholder()),
                         Some(label),
                     );
                 }
@@ -460,7 +457,7 @@ impl Walker<'_, '_> {
                     && label.prim().is_some()
                 {
                     return (
-                        core::mem::replace(&mut *reference.expr, empty_expr()),
+                        core::mem::replace(&mut *reference.expr, placeholder()),
                         Some(label),
                     );
                 }
@@ -559,13 +556,14 @@ impl Walker<'_, '_> {
         let name = name.clone();
         let operand = self.scalar_in_place(&mut call.args[0], total_calls);
         match operand.as_ref().and_then(Lbl::prim) {
-            Some(source) if source == target => {
-                (core::mem::replace(&mut call.args[0], empty_expr()), operand)
-            }
+            Some(source) if source == target => (
+                core::mem::replace(&mut call.args[0], placeholder()),
+                operand,
+            ),
             Some(source) if schedule::lossless(source, target) => {
                 let cast = syn::ExprCast {
                     attrs: Vec::new(),
-                    expr: Box::new(core::mem::replace(&mut call.args[0], empty_expr())),
+                    expr: Box::new(core::mem::replace(&mut call.args[0], placeholder())),
                     as_token: syn::token::As::default(),
                     ty: Box::new(syn::Type::Path(syn::TypePath {
                         attrs: Vec::new(),
@@ -637,7 +635,7 @@ impl Walker<'_, '_> {
             syn::Expr::Unary(mut unary)
                 if unary.attrs.is_empty() && matches!(unary.op, syn::UnOp::Not(_)) =>
             {
-                let owned = core::mem::replace(&mut *unary.expr, empty_expr());
+                let owned = core::mem::replace(&mut *unary.expr, placeholder());
                 let (expr, label, inverted) = self.condition(owned, total_calls);
                 if label
                     .as_ref()
@@ -740,7 +738,7 @@ impl Walker<'_, '_> {
         }
         let mut then = self.tail(&mut branch.then_branch, total_calls);
         let mut otherwise = self.tail(&mut else_block.block, total_calls);
-        let owned = core::mem::replace(&mut *branch.cond, empty_expr());
+        let owned = core::mem::replace(&mut *branch.cond, placeholder());
         let (cond, label, inverted) = self.condition(owned, total_calls);
         *branch.cond = cond;
         let Some(mut cond_label) = label.filter(|label| label.prim() == Some(PrimTy::Bool)) else {
@@ -756,7 +754,7 @@ impl Walker<'_, '_> {
                 | (Some(Lbl::Bool(false)), Some(Lbl::Bool(true)))
         );
         if !complementary && schedule::positive_condition(&cond_label).is_some() {
-            let owned = core::mem::replace(&mut *branch.cond, empty_expr());
+            let owned = core::mem::replace(&mut *branch.cond, placeholder());
             let (cond, positive) = negate(owned, cond_label);
             *branch.cond = cond;
             cond_label = positive;
@@ -770,11 +768,11 @@ impl Walker<'_, '_> {
         {
             let then_expr = core::mem::replace(
                 tail_expr_mut(&mut branch.then_branch).expect("proven scalar tail"),
-                empty_expr(),
+                placeholder(),
             );
             let else_expr = core::mem::replace(
                 tail_expr_mut(&mut else_block.block).expect("proven scalar tail"),
-                empty_expr(),
+                placeholder(),
             );
             let cond = (*branch.cond, cond_label);
             let expr = choice_expr(&value, cond, (then_expr, &then), (else_expr, &otherwise));
@@ -793,7 +791,7 @@ impl Walker<'_, '_> {
                 &mut else_block.block
             };
             let expr = tail_expr_mut(block).expect("proven scalar tail");
-            return (core::mem::replace(expr, empty_expr()), Some(value));
+            return (core::mem::replace(expr, placeholder()), Some(value));
         }
         if !complementary
             && let Some((tag, negated, keep_then)) = schedule::literal_branch(&then, &otherwise)
@@ -804,7 +802,7 @@ impl Walker<'_, '_> {
                 (&mut else_block.block, otherwise)
             };
             let expr = tail_expr_mut(block).expect("proven scalar tail");
-            let operand = (core::mem::replace(expr, empty_expr()), operand);
+            let operand = (core::mem::replace(expr, placeholder()), operand);
             let cond = if negated {
                 negate(*branch.cond, cond_label)
             } else {
@@ -929,7 +927,7 @@ impl VisitMut for Walker<'_, '_> {
         }
         match expr {
             syn::Expr::Match(r#match) if self.dedup && self.boolean_match(r#match) => {
-                let owned = core::mem::replace(expr, empty_expr());
+                let owned = core::mem::replace(expr, placeholder());
                 *expr = self.scalar(owned, false).0;
             }
             syn::Expr::Binary(_)
@@ -939,7 +937,7 @@ impl VisitMut for Walker<'_, '_> {
             | syn::Expr::Path(_)
             | syn::Expr::Group(_)
             | syn::Expr::Cast(_) => {
-                let owned = core::mem::replace(expr, empty_expr());
+                let owned = core::mem::replace(expr, placeholder());
                 *expr = self.scalar(owned, false).0;
             }
             syn::Expr::Call(call)
@@ -947,7 +945,7 @@ impl VisitMut for Walker<'_, '_> {
                     && (schedule::from_conversion(self.renamer, call).is_some()
                         || matches!(call.func.as_ref(), syn::Expr::Path(path) if self.renamer.standard_cmp(&path.path).is_some())) =>
             {
-                let owned = core::mem::replace(expr, empty_expr());
+                let owned = core::mem::replace(expr, placeholder());
                 *expr = self.scalar(owned, false).0;
             }
             syn::Expr::Reference(reference) => {
@@ -966,7 +964,7 @@ impl VisitMut for Walker<'_, '_> {
                         && (schedule::clone_call(method) && self.renamer.clone_free()
                             || schedule::unit_power(method)) =>
             {
-                let owned = core::mem::replace(expr, empty_expr());
+                let owned = core::mem::replace(expr, placeholder());
                 *expr = self.scalar(owned, false).0;
             }
             syn::Expr::MethodCall(method) => {
@@ -1122,8 +1120,8 @@ fn comparison_tokens(
 ) -> syn::Expr {
     let span = binary.span();
     let mut exprs = [
-        Some(core::mem::replace(&mut *binary.left, empty_expr())),
-        Some(core::mem::replace(&mut *binary.right, empty_expr())),
+        Some(core::mem::replace(&mut *binary.left, placeholder())),
+        Some(core::mem::replace(&mut *binary.right, placeholder())),
     ];
     let mut place = |label: &Lbl| match label {
         Lbl::Int(bits, Some(prim)) => crate::constants::literal_expr(*prim, *bits, span),

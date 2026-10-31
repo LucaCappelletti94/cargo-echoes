@@ -18,19 +18,19 @@
 //! primitive as `contains`, and a `collect` annotation as its turbofish.
 
 use alloc::boxed::Box;
-use alloc::collections::{BTreeMap, BTreeSet};
-use alloc::string::String;
+use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 use syn::visit_mut::VisitMut;
 
 use crate::alpha::Renamer;
+use crate::phase::{Claims, Phase, PhaseFold};
 use crate::scope::{PrimTy, ident_name};
+use crate::syntax::placeholder;
 
 /// Read the collection loops and emptiness tests of the body `block` of a function with the
 /// signature `sig`, nested items aside.
 pub(crate) fn normalize(renamer: &Renamer<'_>, sig: &syn::Signature, block: &mut syn::Block) {
-    let mut claims = Claims::default();
-    syn::visit::Visit::visit_block(&mut claims, block);
+    let claims = Claims::of_types(block);
     let unclaimed = |name: &str| !claims.names.contains(name) && renamer.type_unclaimed(name);
     let named: BTreeSet<Kind> = [
         (Kind::Vec, "Vec"),
@@ -41,8 +41,7 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, sig: &syn::Signature, block: &mut
     .filter(|(_, name)| !claims.glob && unclaimed(name))
     .map(|(kind, _)| kind)
     .collect();
-    let mut fold = Fold {
-        renamer,
+    let phase = Collections {
         copies: named.contains(&Kind::String)
             && renamer.owned_methods()
             && renamer.clone_free()
@@ -52,48 +51,10 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, sig: &syn::Signature, block: &mut
         accessors: renamer.accessor_free() && unclaimed("Iterator"),
         patterns: renamer.pattern_free(),
         named,
-        scopes: alloc::vec![BTreeMap::new()],
     };
-    for input in &sig.inputs {
-        if let syn::FnArg::Typed(typed) = input {
-            let kind = fold.declared(&typed.ty);
-            fold.bind(&typed.pat, kind);
-        }
-    }
+    let mut fold = Fold::new(renamer, phase);
+    fold.bind_inputs(sig);
     fold.visit_block_mut(block);
-}
-
-/// The type names an item or import inside the body declares.
-#[derive(Default)]
-struct Claims {
-    names: BTreeSet<String>,
-    glob: bool,
-}
-
-impl syn::visit::Visit<'_> for Claims {
-    fn visit_item(&mut self, item: &syn::Item) {
-        if let Some(ident) = crate::alpha::type_item_ident(item) {
-            self.names.insert(ident_name(ident));
-        }
-        syn::visit::visit_item(self, item);
-    }
-
-    fn visit_use_name(&mut self, name: &syn::UseName) {
-        self.names.insert(ident_name(&name.ident));
-    }
-
-    fn visit_use_rename(&mut self, rename: &syn::UseRename) {
-        self.names.insert(ident_name(&rename.rename));
-    }
-
-    fn visit_use_glob(&mut self, _: &syn::UseGlob) {
-        self.glob = true;
-    }
-
-    fn visit_type_param(&mut self, param: &syn::TypeParam) {
-        self.names.insert(ident_name(&param.ident));
-        syn::visit::visit_type_param(self, param);
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -142,8 +103,8 @@ enum Item {
     Unknown,
 }
 
-struct Fold<'a, 'env> {
-    renamer: &'a Renamer<'env>,
+/// The standard collections phase.
+struct Collections {
     /// The kinds whose type names resolve to the standard `Vec`, `String` and `str`.
     named: BTreeSet<Kind>,
     /// Whether the standard copy methods answer to `to_string`, `to_owned`, `clone` and
@@ -156,28 +117,18 @@ struct Fold<'a, 'env> {
     /// Whether the standard `str` pattern methods and the `push_str` and `push` of `String`
     /// answer their calls.
     patterns: bool,
-    /// The bindings in view, a proven collection or primitive, or `None` for any other binding.
-    scopes: Vec<BTreeMap<String, Option<Bound>>>,
 }
 
-impl Fold<'_, '_> {
-    /// What the declared type `ty` proves: a collection, or a primitive.
-    fn declared(&self, ty: &syn::Type) -> Option<Bound> {
-        self.collection(ty).map(Bound::Collection).or_else(|| {
-            self.renamer
-                .param_prim(ty)
-                .filter(|_| !matches!(ty, syn::Type::Reference(_)))
-                .map(Bound::Prim)
-        })
-    }
+type Fold<'a, 'env> = PhaseFold<'a, 'env, Collections>;
 
+impl Fold<'_, '_> {
     /// The element type `ty` spells.
     fn elem(&self, ty: &syn::Type) -> Elem {
         match ty {
             syn::Type::Path(path)
                 if path.qself.is_none()
                     && path.path.is_ident("String")
-                    && self.named.contains(&Kind::String) =>
+                    && self.phase.named.contains(&Kind::String) =>
             {
                 Elem::String
             }
@@ -216,7 +167,7 @@ impl Fold<'_, '_> {
                     ("str", syn::PathArguments::None) => (Kind::Str, Elem::Unknown),
                     _ => return None,
                 };
-                if !self.named.contains(&kind) {
+                if !self.phase.named.contains(&kind) {
                     return None;
                 }
                 (kind, elem)
@@ -254,45 +205,12 @@ impl Fold<'_, '_> {
             && callee.qself.is_none()
             && callee.path.leading_colon.is_none()
             && method.arguments.is_none()
-            && self.named.contains(&kind))
+            && self.phase.named.contains(&kind))
         .then_some(Collection {
             kind,
             access: Access::Owned,
             elem: Elem::Unknown,
         })
-    }
-
-    /// Bind the names of `pat`, a lone identifier to `bound` and every other name to `None`.
-    fn bind(&mut self, pat: &syn::Pat, bound: Option<Bound>) {
-        struct Names<'s>(&'s mut BTreeMap<String, Option<Bound>>, Option<Bound>);
-        impl syn::visit::Visit<'_> for Names<'_> {
-            fn visit_pat_ident(&mut self, ident: &syn::PatIdent) {
-                let bound = self
-                    .1
-                    .filter(|_| ident.by_ref.is_none() && ident.subpat.is_none());
-                self.0.insert(ident_name(&ident.ident), bound);
-                syn::visit::visit_pat_ident(self, ident);
-            }
-
-            fn visit_expr(&mut self, _: &syn::Expr) {}
-        }
-        let bound = bound.filter(|_| matches!(pat, syn::Pat::Ident(_)));
-        let scope = self.scopes.last_mut().expect("a scope");
-        syn::visit::Visit::visit_pat(&mut Names(scope, bound), pat);
-    }
-
-    /// What the declaration of the single-identifier path `expr` proves.
-    fn bound(&self, expr: &syn::Expr) -> Option<Bound> {
-        let syn::Expr::Path(path) = expr else {
-            return None;
-        };
-        let name = ident_name(path.path.get_ident().filter(|_| path.qself.is_none())?);
-        self.scopes
-            .iter()
-            .rev()
-            .find_map(|scope| scope.get(&name))
-            .copied()
-            .flatten()
     }
 
     /// The collection the single-identifier path `expr` names.
@@ -324,10 +242,7 @@ impl Fold<'_, '_> {
             ("into_iter", Access::Owned) if collection.kind == Kind::Vec => None,
             _ => return,
         };
-        let receiver = core::mem::replace(
-            call.receiver.as_mut(),
-            syn::Expr::Verbatim(proc_macro2::TokenStream::new()),
-        );
+        let receiver = core::mem::replace(call.receiver.as_mut(), placeholder());
         *expr = match borrow {
             Some(mutable) => syn::Expr::Reference(syn::ExprReference {
                 attrs: Vec::new(),
@@ -388,7 +303,7 @@ impl Fold<'_, '_> {
     /// `s.clone()` and `String::from(s.as_str())` over a `String` or `&String` binding, as
     /// `s.to_string()`.
     fn copy(&self, expr: &mut syn::Expr) {
-        if !self.copies {
+        if !self.phase.copies {
             return;
         }
         let receiver = match expr {
@@ -423,10 +338,7 @@ impl Fold<'_, '_> {
             }
             _ => return,
         };
-        let receiver = core::mem::replace(
-            receiver,
-            syn::Expr::Verbatim(proc_macro2::TokenStream::new()),
-        );
+        let receiver = core::mem::replace(receiver, placeholder());
         *expr = method_call(receiver, "to_string");
     }
 
@@ -452,7 +364,7 @@ impl Fold<'_, '_> {
     /// over a `String` or `str` binding as its `char` literal, and `s.push_str` of one
     /// character over a `String` binding as `s.push` of it.
     fn pattern(&self, expr: &mut syn::Expr) {
-        if !self.patterns {
+        if !self.phase.patterns {
             return;
         }
         let syn::Expr::MethodCall(call) = expr else {
@@ -493,7 +405,7 @@ impl Fold<'_, '_> {
 
     /// Read the accessor synonyms of a proven collection binding as one form.
     fn accessor(&self, expr: &mut syn::Expr) {
-        if !self.accessors {
+        if !self.phase.accessors {
             return;
         }
         let read = match expr {
@@ -658,7 +570,7 @@ impl Fold<'_, '_> {
 
     /// Read the method synonyms of a proven standard iterator chain as one form.
     fn chains(&self, expr: &mut syn::Expr) {
-        if !self.accessors {
+        if !self.phase.accessors {
             return;
         }
         let read = match expr {
@@ -856,7 +768,7 @@ impl Fold<'_, '_> {
         };
         let plain = matches!(typed.pat.as_ref(), syn::Pat::Ident(ident)
             if ident.attrs.is_empty() && ident.by_ref.is_none() && ident.subpat.is_none());
-        if !self.accessors
+        if !self.phase.accessors
             || !local.attrs.is_empty()
             || !typed.attrs.is_empty()
             || !plain
@@ -865,7 +777,7 @@ impl Fold<'_, '_> {
             || call.turbofish.is_some()
             || !call.args.is_empty()
             || call.method != "collect"
-            || infers(&typed.ty)
+            || crate::syntax::infers(|walk| walk.visit_type(&typed.ty))
             || self.chain(&call.receiver).is_none()
         {
             return;
@@ -878,12 +790,6 @@ impl Fold<'_, '_> {
         });
         let binding = typed.pat.as_ref().clone();
         local.pat = binding;
-    }
-
-    fn scoped(&mut self, visit: impl FnOnce(&mut Self)) {
-        self.scopes.push(BTreeMap::new());
-        visit(self);
-        self.scopes.pop();
     }
 }
 
@@ -993,10 +899,6 @@ fn emptiness_test(receiver: syn::Expr, empty: bool) -> syn::Expr {
     })
 }
 
-fn placeholder() -> syn::Expr {
-    syn::Expr::Verbatim(proc_macro2::TokenStream::new())
-}
-
 /// The negation `!body`, parenthesizing a body whose operator binds looser than `!`.
 fn negate(body: syn::Expr) -> syn::Expr {
     let operand = match body {
@@ -1100,134 +1002,52 @@ fn typed_literal(expr: &syn::Expr, prim: PrimTy) -> bool {
         }
 }
 
-/// Whether `ty` leaves any type to inference with `_`.
-fn infers(ty: &syn::Type) -> bool {
-    struct Infer(bool);
-    impl syn::visit::Visit<'_> for Infer {
-        fn visit_type_infer(&mut self, _: &syn::TypeInfer) {
-            self.0 = true;
-        }
-    }
-    let mut infer = Infer(false);
-    syn::visit::Visit::visit_type(&mut infer, ty);
-    infer.0
-}
+impl Phase for Collections {
+    type Value = Bound;
 
-impl VisitMut for Fold<'_, '_> {
-    fn visit_item_mut(&mut self, _: &mut syn::Item) {}
-
-    fn visit_block_mut(&mut self, block: &mut syn::Block) {
-        self.scoped(|fold| {
-            for stmt in &mut block.stmts {
-                fold.visit_stmt_mut(stmt);
-            }
-        });
+    /// What the declared type `ty` proves: a collection, or a primitive.
+    fn declared(fold: &Fold<'_, '_>, ty: &syn::Type) -> Option<Bound> {
+        fold.collection(ty).map(Bound::Collection).or_else(|| {
+            fold.renamer
+                .param_prim(ty)
+                .filter(|_| !matches!(ty, syn::Type::Reference(_)))
+                .map(Bound::Prim)
+        })
     }
 
-    fn visit_local_mut(&mut self, local: &mut syn::Local) {
-        if let Some(init) = &mut local.init {
-            self.visit_expr_mut(&mut init.expr);
-            if let Some((_, diverge)) = &mut init.diverge {
-                self.visit_expr_mut(diverge);
-            }
-        }
+    fn local(fold: &mut Fold<'_, '_>, local: &mut syn::Local) {
+        fold.visit_init(local);
         let bound = match &local.pat {
-            syn::Pat::Type(typed) if local.attrs.is_empty() => self.declared(&typed.ty),
+            syn::Pat::Type(typed) if local.attrs.is_empty() => fold.declared(&typed.ty),
             _ if local.attrs.is_empty() => local
                 .init
                 .as_ref()
                 .filter(|init| init.diverge.is_none())
                 .and_then(|init| {
-                    self.constructed(&init.expr)
-                        .or_else(|| self.collected(&init.expr))
+                    fold.constructed(&init.expr)
+                        .or_else(|| fold.collected(&init.expr))
                 })
                 .map(Bound::Collection),
             _ => None,
         };
-        self.collect_annotation(local);
+        fold.collect_annotation(local);
         let pat = match &local.pat {
             syn::Pat::Type(typed) => typed.pat.as_ref(),
             pat => pat,
         };
         let pat = pat.clone();
-        self.bind(&pat, bound);
+        fold.bind(&pat, bound);
     }
 
-    fn visit_expr_closure_mut(&mut self, closure: &mut syn::ExprClosure) {
-        self.scoped(|fold| {
-            for input in &closure.inputs {
-                let (pat, kind) = match input {
-                    syn::Pat::Type(typed) => (typed.pat.as_ref(), fold.declared(&typed.ty)),
-                    pat => (pat, None),
-                };
-                fold.bind(pat, kind);
-            }
-            fold.visit_expr_mut(&mut closure.body);
-        });
+    fn read(fold: &mut Fold<'_, '_>, expr: &mut syn::Expr) {
+        fold.chains(expr);
+        fold.accessor(expr);
+        fold.pattern(expr);
+        fold.emptiness(expr);
+        fold.copy(expr);
     }
 
-    fn visit_arm_mut(&mut self, arm: &mut syn::Arm) {
-        self.scoped(|fold| {
-            fold.bind(&arm.pat, None);
-            if let syn::Pat::Guard(guard) = &mut arm.pat {
-                fold.visit_expr_mut(&mut guard.guard);
-            }
-            fold.visit_expr_mut(&mut arm.body);
-        });
-    }
-
-    fn visit_expr_for_loop_mut(&mut self, expr: &mut syn::ExprForLoop) {
-        self.iterable(&mut expr.expr);
-        self.visit_expr_mut(&mut expr.expr);
-        self.scoped(|fold| {
-            fold.bind(&expr.pat, None);
-            fold.visit_block_mut(&mut expr.body);
-        });
-    }
-
-    fn visit_expr_if_mut(&mut self, branch: &mut syn::ExprIf) {
-        self.scoped(|fold| {
-            fold.condition(&mut branch.cond);
-            fold.visit_block_mut(&mut branch.then_branch);
-        });
-        if let Some((_, otherwise)) = &mut branch.else_branch {
-            self.visit_expr_mut(otherwise);
-        }
-    }
-
-    fn visit_expr_while_mut(&mut self, expr: &mut syn::ExprWhile) {
-        self.scoped(|fold| {
-            fold.condition(&mut expr.cond);
-            fold.visit_block_mut(&mut expr.body);
-        });
-    }
-
-    fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
-        if !crate::drift::expr_attrs(expr).is_empty() {
-            return;
-        }
-        syn::visit_mut::visit_expr_mut(self, expr);
-        self.chains(expr);
-        self.accessor(expr);
-        self.pattern(expr);
-        self.emptiness(expr);
-        self.copy(expr);
-    }
-}
-
-impl Fold<'_, '_> {
-    /// Visit a condition, binding the patterns of its `let` operands for the guarded block.
-    fn condition(&mut self, cond: &mut syn::Expr) {
-        match cond {
-            syn::Expr::Let(binding) => {
-                self.visit_expr_mut(&mut binding.expr);
-                self.bind(&binding.pat, None);
-            }
-            syn::Expr::Binary(binary) if matches!(binary.op, syn::BinOp::And(_)) => {
-                self.condition(&mut binary.left);
-                self.condition(&mut binary.right);
-            }
-            other => self.visit_expr_mut(other),
-        }
+    fn iterable(fold: &mut Fold<'_, '_>, expr: &mut syn::Expr) {
+        fold.iterable(expr);
     }
 }

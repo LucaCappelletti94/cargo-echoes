@@ -15,35 +15,25 @@
 //! `let v = C::<T…>::new()` and its `with_capacity` counterpart.
 
 use alloc::boxed::Box;
-use alloc::collections::{BTreeMap, BTreeSet};
-use alloc::string::String;
+use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 use syn::visit_mut::VisitMut;
 
 use crate::alpha::Renamer;
+use crate::phase::{Claims, Phase, PhaseFold};
 use crate::scope::{PrimTy, ident_name};
+use crate::syntax::{ident, placeholder};
 
 /// Read the declared-target conversions and defaults of the body `block` of a function with the
 /// signature `sig`, nested items aside.
 pub(crate) fn normalize(renamer: &Renamer<'_>, sig: &syn::Signature, block: &mut syn::Block) {
-    let mut claims = Claims::default();
-    syn::visit::Visit::visit_signature(&mut claims, sig);
-    syn::visit::Visit::visit_block(&mut claims, block);
+    let claims = Claims::of_function(sig, block);
     let standard = STANDARD_NAMES
         .into_iter()
         .filter(|name| !claims.glob && !claims.names.contains(*name) && renamer.prelude_trait(name))
         .collect();
-    let mut fold = Fold {
-        renamer,
-        standard,
-        scopes: alloc::vec![BTreeMap::new()],
-    };
-    for input in &sig.inputs {
-        if let syn::FnArg::Typed(typed) = input {
-            let declared = fold.declared(&typed.ty);
-            fold.bind(&typed.pat, declared);
-        }
-    }
+    let mut fold = Fold::new(renamer, Conversions { standard });
+    fold.bind_inputs(sig);
     let target = match &sig.output {
         syn::ReturnType::Type(_, ty) => fold.declared(ty),
         syn::ReturnType::Default => None,
@@ -57,40 +47,6 @@ pub(crate) fn normalize(renamer: &Renamer<'_>, sig: &syn::Signature, block: &mut
             fold.targeted(tail, &target);
         }
     });
-}
-
-/// The names an item, import or generic parameter of the function declares, and whether a
-/// glob import may declare any name.
-#[derive(Default)]
-struct Claims {
-    names: BTreeSet<String>,
-    glob: bool,
-}
-
-impl syn::visit::Visit<'_> for Claims {
-    fn visit_item(&mut self, item: &syn::Item) {
-        if let Some((_, ident)) = crate::alpha::item_binding(item) {
-            self.names.insert(ident_name(ident));
-        }
-        syn::visit::visit_item(self, item);
-    }
-
-    fn visit_use_name(&mut self, name: &syn::UseName) {
-        self.names.insert(ident_name(&name.ident));
-    }
-
-    fn visit_use_rename(&mut self, rename: &syn::UseRename) {
-        self.names.insert(ident_name(&rename.rename));
-    }
-
-    fn visit_use_glob(&mut self, _: &syn::UseGlob) {
-        self.glob = true;
-    }
-
-    fn visit_type_param(&mut self, param: &syn::TypeParam) {
-        self.names.insert(ident_name(&param.ident));
-        syn::visit::visit_type_param(self, param);
-    }
 }
 
 /// What a declared type proves about a value.
@@ -110,88 +66,25 @@ enum Declared {
 /// the prelude types `String` and `Vec`, and the primitive `str`.
 const STANDARD_NAMES: [&str; 6] = ["Into", "From", "Default", "String", "Vec", "str"];
 
-struct Fold<'a, 'env> {
-    renamer: &'a Renamer<'env>,
+/// The declared-target conversions phase.
+struct Conversions {
     /// The names of `STANDARD_NAMES` that resolve to their standard item here.
     standard: BTreeSet<&'static str>,
-    /// The bindings in view, with what their declared type proves.
-    scopes: Vec<BTreeMap<String, Option<Declared>>>,
 }
+
+type Fold<'a, 'env> = PhaseFold<'a, 'env, Conversions>;
 
 impl Fold<'_, '_> {
     /// Whether every one of `names` resolves to its standard item.
     fn proves(&self, names: &[&str]) -> bool {
-        names.iter().all(|name| self.standard.contains(name))
-    }
-
-    /// What the declared type `ty` proves.
-    fn declared(&self, ty: &syn::Type) -> Option<Declared> {
-        match ty {
-            syn::Type::Reference(reference) if reference.mutability.is_none() => {
-                let syn::Type::Path(path) = reference.elem.as_ref() else {
-                    return None;
-                };
-                (self.proves(&["str"]) && path.qself.is_none() && path.path.is_ident("str"))
-                    .then_some(Declared::Str)
-            }
-            syn::Type::Path(path) if path.qself.is_none() && path.path.leading_colon.is_none() => {
-                let [segment] = path.path.segments.iter().collect::<Vec<_>>()[..] else {
-                    return None;
-                };
-                match (ident_name(&segment.ident).as_str(), &segment.arguments) {
-                    ("String", syn::PathArguments::None) if self.proves(&["String"]) => {
-                        Some(Declared::String)
-                    }
-                    ("Vec", syn::PathArguments::AngleBracketed(args))
-                        if self.proves(&["Vec"]) && args.args.len() == 1 =>
-                    {
-                        Some(Declared::Vec)
-                    }
-                    (_, syn::PathArguments::None) => self
-                        .renamer
-                        .type_name_prim(&segment.ident)
-                        .map(|prim| Declared::Prim(prim, segment.ident.clone())),
-                    _ => None,
-                }
-            }
-            _ => None,
-        }
-    }
-
-    /// Bind the names of `pat`, a lone identifier to `declared` and every other name to
-    /// `None`.
-    fn bind(&mut self, pat: &syn::Pat, declared: Option<Declared>) {
-        struct Names<'s>(&'s mut BTreeMap<String, Option<Declared>>, Option<Declared>);
-        impl syn::visit::Visit<'_> for Names<'_> {
-            fn visit_pat_ident(&mut self, ident: &syn::PatIdent) {
-                let declared = self
-                    .1
-                    .clone()
-                    .filter(|_| ident.by_ref.is_none() && ident.subpat.is_none());
-                self.0.insert(ident_name(&ident.ident), declared);
-                syn::visit::visit_pat_ident(self, ident);
-            }
-
-            fn visit_expr(&mut self, _: &syn::Expr) {}
-        }
-        let declared = declared.filter(|_| matches!(pat, syn::Pat::Ident(_)));
-        let scope = self.scopes.last_mut().expect("a scope");
-        syn::visit::Visit::visit_pat(&mut Names(scope, declared), pat);
+        names.iter().all(|name| self.phase.standard.contains(name))
     }
 
     /// What the type of `expr` proves, a single-identifier binding by its declaration and a
     /// literal by its spelling.
     fn source(&self, expr: &syn::Expr) -> Option<Declared> {
         match expr {
-            syn::Expr::Path(path) if path.attrs.is_empty() && path.qself.is_none() => {
-                let name = ident_name(path.path.get_ident()?);
-                self.scopes
-                    .iter()
-                    .rev()
-                    .find_map(|scope| scope.get(&name))
-                    .cloned()
-                    .flatten()
-            }
+            syn::Expr::Path(_) => self.bound(expr),
             syn::Expr::Lit(literal) if literal.attrs.is_empty() => {
                 let prim = match &literal.lit {
                     syn::Lit::Str(text) if text.suffix().is_empty() && self.proves(&["str"]) => {
@@ -378,7 +271,10 @@ impl Fold<'_, '_> {
         {
             Some(syn::PathArguments::None) if collection == "String" => None,
             Some(syn::PathArguments::AngleBracketed(arguments))
-                if collection != "String" && !infers(arguments) =>
+                if collection != "String"
+                    && !crate::syntax::infers(|walk| {
+                        walk.visit_angle_bracketed_generic_arguments(arguments);
+                    }) =>
             {
                 Some(arguments.clone())
             }
@@ -426,118 +322,74 @@ impl Fold<'_, '_> {
         }
         true
     }
-
-    fn scoped(&mut self, visit: impl FnOnce(&mut Self)) {
-        self.scopes.push(BTreeMap::new());
-        visit(self);
-        self.scopes.pop();
-    }
-
-    /// Visit a condition, binding the patterns of its `let` operands for the guarded block.
-    fn condition(&mut self, cond: &mut syn::Expr) {
-        match cond {
-            syn::Expr::Let(binding) => {
-                self.visit_expr_mut(&mut binding.expr);
-                self.bind(&binding.pat, None);
-            }
-            syn::Expr::Binary(binary) if matches!(binary.op, syn::BinOp::And(_)) => {
-                self.condition(&mut binary.left);
-                self.condition(&mut binary.right);
-            }
-            other => self.visit_expr_mut(other),
-        }
-    }
 }
 
-impl VisitMut for Fold<'_, '_> {
-    fn visit_item_mut(&mut self, _: &mut syn::Item) {}
+impl Phase for Conversions {
+    type Value = Declared;
 
-    fn visit_block_mut(&mut self, block: &mut syn::Block) {
-        self.scoped(|fold| {
-            for stmt in &mut block.stmts {
-                fold.visit_stmt_mut(stmt);
+    /// What the declared type `ty` proves.
+    fn declared(fold: &Fold<'_, '_>, ty: &syn::Type) -> Option<Declared> {
+        match ty {
+            syn::Type::Reference(reference) if reference.mutability.is_none() => {
+                let syn::Type::Path(path) = reference.elem.as_ref() else {
+                    return None;
+                };
+                (fold.proves(&["str"]) && path.qself.is_none() && path.path.is_ident("str"))
+                    .then_some(Declared::Str)
             }
-        });
+            syn::Type::Path(path) if path.qself.is_none() && path.path.leading_colon.is_none() => {
+                let [segment] = path.path.segments.iter().collect::<Vec<_>>()[..] else {
+                    return None;
+                };
+                match (ident_name(&segment.ident).as_str(), &segment.arguments) {
+                    ("String", syn::PathArguments::None) if fold.proves(&["String"]) => {
+                        Some(Declared::String)
+                    }
+                    ("Vec", syn::PathArguments::AngleBracketed(args))
+                        if fold.proves(&["Vec"]) && args.args.len() == 1 =>
+                    {
+                        Some(Declared::Vec)
+                    }
+                    (_, syn::PathArguments::None) => fold
+                        .renamer
+                        .type_name_prim(&segment.ident)
+                        .map(|prim| Declared::Prim(prim, segment.ident.clone())),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
     }
 
-    fn visit_local_mut(&mut self, local: &mut syn::Local) {
+    fn local(fold: &mut Fold<'_, '_>, local: &mut syn::Local) {
         let (pat, declared) = match &local.pat {
             syn::Pat::Type(typed) if local.attrs.is_empty() => {
-                (typed.pat.as_ref().clone(), self.declared(&typed.ty))
+                (typed.pat.as_ref().clone(), fold.declared(&typed.ty))
             }
             pat => (pat.clone(), None),
         };
         let mut known = declared.clone();
         if let Some(init) = &mut local.init {
-            self.visit_expr_mut(&mut init.expr);
+            fold.visit_expr_mut(&mut init.expr);
             if let Some(target) = &declared {
-                self.targeted(&mut init.expr, target);
+                fold.targeted(&mut init.expr, target);
             }
             if let Some((_, diverge)) = &mut init.diverge {
-                self.visit_expr_mut(diverge);
+                fold.visit_expr_mut(diverge);
             } else if !matches!(local.pat, syn::Pat::Type(_)) && local.attrs.is_empty() {
-                known = self.source(&init.expr);
+                known = fold.source(&init.expr);
             }
         }
-        self.annotation(local, declared.as_ref());
-        self.bind(&pat, known);
+        fold.annotation(local, declared.as_ref());
+        fold.bind(&pat, known);
     }
 
-    fn visit_expr_closure_mut(&mut self, closure: &mut syn::ExprClosure) {
-        self.scoped(|fold| {
-            for input in &closure.inputs {
-                let (pat, declared) = match input {
-                    syn::Pat::Type(typed) => (typed.pat.as_ref(), fold.declared(&typed.ty)),
-                    pat => (pat, None),
-                };
-                fold.bind(pat, declared);
-            }
-            fold.visit_expr_mut(&mut closure.body);
-        });
+    fn read_first(fold: &mut Fold<'_, '_>, expr: &mut syn::Expr) {
+        fold.take(expr);
     }
 
-    fn visit_arm_mut(&mut self, arm: &mut syn::Arm) {
-        self.scoped(|fold| {
-            fold.bind(&arm.pat, None);
-            if let syn::Pat::Guard(guard) = &mut arm.pat {
-                fold.visit_expr_mut(&mut guard.guard);
-            }
-            fold.visit_expr_mut(&mut arm.body);
-        });
-    }
-
-    fn visit_expr_for_loop_mut(&mut self, expr: &mut syn::ExprForLoop) {
-        self.visit_expr_mut(&mut expr.expr);
-        self.scoped(|fold| {
-            fold.bind(&expr.pat, None);
-            fold.visit_block_mut(&mut expr.body);
-        });
-    }
-
-    fn visit_expr_if_mut(&mut self, branch: &mut syn::ExprIf) {
-        self.scoped(|fold| {
-            fold.condition(&mut branch.cond);
-            fold.visit_block_mut(&mut branch.then_branch);
-        });
-        if let Some((_, otherwise)) = &mut branch.else_branch {
-            self.visit_expr_mut(otherwise);
-        }
-    }
-
-    fn visit_expr_while_mut(&mut self, expr: &mut syn::ExprWhile) {
-        self.scoped(|fold| {
-            fold.condition(&mut expr.cond);
-            fold.visit_block_mut(&mut expr.body);
-        });
-    }
-
-    fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
-        if !crate::drift::expr_attrs(expr).is_empty() {
-            return;
-        }
-        self.take(expr);
-        syn::visit_mut::visit_expr_mut(self, expr);
-        self.standard_default(expr);
+    fn read(fold: &mut Fold<'_, '_>, expr: &mut syn::Expr) {
+        fold.standard_default(expr);
     }
 }
 
@@ -611,25 +463,4 @@ fn associated_call(
         paren_token: syn::token::Paren::default(),
         args: argument.into_iter().collect(),
     })
-}
-
-/// Whether `arguments` leave any type to inference with `_`.
-fn infers(arguments: &syn::AngleBracketedGenericArguments) -> bool {
-    struct Infer(bool);
-    impl syn::visit::Visit<'_> for Infer {
-        fn visit_type_infer(&mut self, _: &syn::TypeInfer) {
-            self.0 = true;
-        }
-    }
-    let mut infer = Infer(false);
-    syn::visit::Visit::visit_angle_bracketed_generic_arguments(&mut infer, arguments);
-    infer.0
-}
-
-fn ident(name: &str) -> syn::Ident {
-    syn::Ident::new(name, proc_macro2::Span::call_site())
-}
-
-fn placeholder() -> syn::Expr {
-    syn::Expr::Verbatim(proc_macro2::TokenStream::new())
 }
