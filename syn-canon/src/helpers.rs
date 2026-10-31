@@ -121,22 +121,10 @@ impl HelperTable {
     }
 
     pub(crate) fn resolve(&self, from: &[String], path: &syn::Path) -> Option<HelperId> {
-        if path.leading_colon.is_some()
-            || path.segments.is_empty()
-            || path.segments.len() > MAX_BLOCK_DEPTH
-            || path
-                .segments
-                .iter()
-                .any(|seg| !matches!(seg.arguments, syn::PathArguments::None))
-        {
+        if !plain_path(path) {
             return None;
         }
-        let names: Vec<String> = path
-            .segments
-            .iter()
-            .map(|seg| ident_name(&seg.ident))
-            .collect();
-        self.resolve_names(from, &names)
+        self.resolve_names(from, &segment_names(path))
     }
 
     fn resolve_names(&self, from: &[String], names: &[String]) -> Option<HelperId> {
@@ -180,18 +168,30 @@ impl HelperTable {
 
     pub(crate) fn resolve_in_scope(&self, scope: ScopeId, path: &syn::Path) -> Option<HelperId> {
         let environment = self.frames.get(scope.0)?;
-        let frame = &environment.frame;
-        let names: Vec<String> = path
-            .segments
-            .iter()
-            .map(|seg| ident_name(&seg.ident))
-            .collect();
+        let names = segment_names(path);
+        self.resolve_from(
+            &environment.frame,
+            &self.module_canons,
+            &environment.module,
+            &names,
+        )
+    }
+
+    /// Resolve `names` from the module `home`, a first name other than `crate`, `self` or
+    /// `super` naming a module through the type namespace of `frame`.
+    fn resolve_from(
+        &self,
+        frame: &Frame,
+        module_canons: &BTreeMap<String, Vec<String>>,
+        home: &[String],
+        names: &[String],
+    ) -> Option<HelperId> {
         if !matches!(names[0].as_str(), "crate" | "self" | "super") {
             let binding = frame.lookup(Ns::Type, &names[0])?;
-            let module = self.module_canons.get(&binding.canon)?;
+            let module = module_canons.get(&binding.canon)?;
             return self.resolve_names(module, &names[1..]);
         }
-        self.resolve_names(&environment.module, &names)
+        self.resolve_names(home, names)
     }
 }
 
@@ -1120,6 +1120,27 @@ impl<'a> Collector<'a, '_> {
             prim_fallback: outer.prim_fallback,
         });
     }
+
+    /// Visit a method or trait function of signature `sig` under `attrs`, and its body when it
+    /// has one, restoring the environment and the blocking state it entered with.
+    fn visit_method(
+        &mut self,
+        attrs: &[syn::Attribute],
+        sig: &'a syn::Signature,
+        body: Option<&'a syn::Block>,
+    ) {
+        let environment = self.environment;
+        let blocked = self.blocked;
+        self.observe(blocking_attr(attrs));
+        self.visit_signature(sig);
+        self.blocked |= blocking_attr(attrs);
+        self.mask_generics(&sig.generics);
+        if let Some(body) = body {
+            self.visit_block(body);
+        }
+        self.environment = environment;
+        self.blocked = blocked;
+    }
 }
 
 impl<'a> Visit<'a> for Collector<'a, '_> {
@@ -1171,29 +1192,11 @@ impl<'a> Visit<'a> for Collector<'a, '_> {
     }
 
     fn visit_impl_item_fn(&mut self, item: &'a syn::ImplItemFn) {
-        let environment = self.environment;
-        let blocked = self.blocked;
-        self.observe(blocking_attr(&item.attrs));
-        self.visit_signature(&item.sig);
-        self.blocked |= blocking_attr(&item.attrs);
-        self.mask_generics(&item.sig.generics);
-        self.visit_block(&item.block);
-        self.environment = environment;
-        self.blocked = blocked;
+        self.visit_method(&item.attrs, &item.sig, Some(&item.block));
     }
 
     fn visit_trait_item_fn(&mut self, item: &'a syn::TraitItemFn) {
-        let environment = self.environment;
-        let blocked = self.blocked;
-        self.observe(blocking_attr(&item.attrs));
-        self.visit_signature(&item.sig);
-        self.blocked |= blocking_attr(&item.attrs);
-        self.mask_generics(&item.sig.generics);
-        if let Some(body) = &item.default {
-            self.visit_block(body);
-        }
-        self.environment = environment;
-        self.blocked = blocked;
+        self.visit_method(&item.attrs, &item.sig, item.default.as_ref());
     }
 
     fn visit_expr(&mut self, expr: &'a syn::Expr) {
@@ -1432,6 +1435,8 @@ fn sanitize_imports(
     }
 }
 
+/// The attributes of `item`, empty for a kind that carries none. `drift::item_attrs_mut` writes
+/// the same kinds.
 pub(crate) fn item_attrs(item: &syn::Item) -> &[syn::Attribute] {
     match item {
         syn::Item::Const(item) => &item.attrs,
@@ -1801,14 +1806,7 @@ impl Proof<'_, '_> {
     }
 
     fn resolve(&self, environment: usize, path: &syn::Path) -> Option<HelperId> {
-        if path.leading_colon.is_some()
-            || path.segments.is_empty()
-            || path.segments.len() > MAX_BLOCK_DEPTH
-            || path
-                .segments
-                .iter()
-                .any(|seg| !matches!(seg.arguments, syn::PathArguments::None))
-        {
+        if !plain_path(path) {
             return None;
         }
         let frame = &self.environments[environment].frame;
@@ -1820,18 +1818,29 @@ impl Proof<'_, '_> {
                 _ => None,
             };
         }
-        let names: Vec<String> = path
+        let names = segment_names(path);
+        self.table
+            .resolve_from(frame, self.module_canons, self.module, &names)
+    }
+}
+
+/// Whether `path` is relative, nonempty, within the block depth and free of generic arguments.
+fn plain_path(path: &syn::Path) -> bool {
+    path.leading_colon.is_none()
+        && !path.segments.is_empty()
+        && path.segments.len() <= MAX_BLOCK_DEPTH
+        && path
             .segments
             .iter()
-            .map(|seg| ident_name(&seg.ident))
-            .collect();
-        if !matches!(names[0].as_str(), "crate" | "self" | "super") {
-            let binding = frame.lookup(Ns::Type, &names[0])?;
-            let module = self.module_canons.get(&binding.canon)?;
-            return self.table.resolve_names(module, &names[1..]);
-        }
-        self.table.resolve_names(self.module, &names)
-    }
+            .all(|seg| matches!(seg.arguments, syn::PathArguments::None))
+}
+
+/// The names of the segments of `path`.
+fn segment_names(path: &syn::Path) -> Vec<String> {
+    path.segments
+        .iter()
+        .map(|seg| ident_name(&seg.ident))
+        .collect()
 }
 
 fn literal(lit: &syn::Lit, expected: Option<PrimTy>) -> Option<Proven> {

@@ -676,13 +676,7 @@ impl<'env> Renamer<'env> {
 
     /// The next local canonical name, positional in the traversal.
     fn local_canon(&mut self, ns: Ns) -> String {
-        let canon = if self.context {
-            local_name(ns, self.counter)
-        } else {
-            format!("_canon_{}", self.counter)
-        };
-        self.counter += 1;
-        canon
+        self.canon_at(ns, self.counter)
     }
 
     /// Assign the producer's canonical position before the permutation
@@ -692,6 +686,11 @@ impl<'env> Renamer<'env> {
             .counter
             .checked_add_signed(offset)
             .expect("a producer permutation preserves its binding range");
+        self.canon_at(ns, position)
+    }
+
+    /// The local canonical name of `position`, advancing the traversal counter.
+    fn canon_at(&mut self, ns: Ns, position: usize) -> String {
         let canon = if self.context {
             local_name(ns, position)
         } else {
@@ -810,19 +809,10 @@ impl<'env> Renamer<'env> {
 
     /// The canonical name a resolved reference renders.
     fn render(&mut self, resolved: &Resolved<'_>) -> String {
-        match resolved.domain {
-            Domain::Local => self
-                .local_canons
-                .get(&resolved.id)
-                .expect("a local binding")
-                .clone(),
-            Domain::Inherited => {
-                if self.context {
-                    inherited_name(resolved.ns, self.inherited_number(resolved.id))
-                } else {
-                    self.inherited_canon(resolved.inherited_canon())
-                }
-            }
+        if self.context && matches!(resolved.domain, Domain::Inherited) {
+            inherited_name(resolved.ns, self.inherited_number(resolved.id))
+        } else {
+            self.identity(resolved)
         }
     }
 
@@ -1234,6 +1224,25 @@ impl<'env> Renamer<'env> {
             && !self.constants_observed
             && self.macro_origins.is_none()
             && !self.scopes.iter().any(|scope| scope.frozen)
+    }
+
+    /// Enter a constant of type `ty` declared under `attrs`, normalizing its `default` when the
+    /// constant readings may run, and return the observation flag to restore on leaving.
+    fn enter_const(
+        &mut self,
+        attrs: &[syn::Attribute],
+        ty: &syn::Type,
+        default: Option<&mut syn::Expr>,
+    ) -> bool {
+        let observed = self.constants_observed;
+        self.constants_observed |= crate::context::live_attr(attrs);
+        if self.constants_allowed()
+            && let Some(expr) = default
+        {
+            let expected = self.param_prim(ty);
+            crate::constants::normalize_expr(self, expr, expected, true);
+        }
+        observed
     }
 
     /// Whether owned strings and empty vectors may take their canonical spelling: the value
@@ -3746,13 +3755,11 @@ impl VisitMut for Renamer<'_> {
         self.tail_blocked |=
             crate::tails::observed(crate::helpers::item_attrs(item), self.std_names);
         let observed = self.constants_observed;
-        self.constants_observed |=
-            crate::drift::item_attrs(item).is_some_and(|attrs| crate::context::live_attr(attrs));
+        self.constants_observed |= crate::context::live_attr(crate::helpers::item_attrs(item));
         let prepared = core::mem::replace(&mut self.constants_prepared, false);
         let regions_active = core::mem::replace(&mut self.regions_active, true);
         let helper_blocked = self.helper_blocked;
-        self.helper_blocked |= crate::drift::item_attrs(item)
-            .is_some_and(|attrs| crate::context::blocking_attr(attrs));
+        self.helper_blocked |= crate::context::blocking_attr(crate::helpers::item_attrs(item));
         let prelude_folded = core::mem::replace(&mut self.prelude_folded, false);
         syn::visit_mut::visit_item_mut(self, item);
         self.prelude_folded = prelude_folded;
@@ -4094,38 +4101,21 @@ impl VisitMut for Renamer<'_> {
     }
 
     fn visit_impl_item_const_mut(&mut self, item: &mut syn::ImplItemConst) {
-        let observed = self.constants_observed;
-        self.constants_observed |= crate::context::live_attr(&item.attrs);
-        if self.constants_allowed() {
-            let expected = self.param_prim(&item.ty);
-            crate::constants::normalize_expr(self, &mut item.expr, expected, true);
-        }
+        let observed = self.enter_const(&item.attrs, &item.ty, Some(&mut item.expr));
         syn::visit_mut::visit_impl_item_const_mut(self, item);
         self.constants_observed = observed;
     }
 
     fn visit_trait_item_const_mut(&mut self, item: &mut syn::TraitItemConst) {
-        let observed = self.constants_observed;
-        self.constants_observed |= crate::context::live_attr(&item.attrs);
-        if self.constants_allowed()
-            && let Some((_, expr)) = &mut item.default
-        {
-            let expected = self.param_prim(&item.ty);
-            crate::constants::normalize_expr(self, expr, expected, true);
-        }
+        let default = item.default.as_mut().map(|(_, expr)| expr);
+        let observed = self.enter_const(&item.attrs, &item.ty, default);
         syn::visit_mut::visit_trait_item_const_mut(self, item);
         self.constants_observed = observed;
     }
 
     fn visit_const_param_mut(&mut self, param: &mut syn::ConstParam) {
-        let observed = self.constants_observed;
-        self.constants_observed |= crate::context::live_attr(&param.attrs);
-        if self.constants_allowed()
-            && let Some((_, expr)) = &mut param.default
-        {
-            let expected = self.param_prim(&param.ty);
-            crate::constants::normalize_expr(self, expr, expected, true);
-        }
+        let default = param.default.as_mut().map(|(_, expr)| expr);
+        let observed = self.enter_const(&param.attrs, &param.ty, default);
         syn::visit_mut::visit_const_param_mut(self, param);
         self.constants_observed = observed;
     }
