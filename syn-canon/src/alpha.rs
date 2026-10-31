@@ -49,23 +49,8 @@ pub(crate) struct Options<'a> {
     pub(crate) std_names: bool,
     /// No attribute on the module, an ancestor or the crate root removes the standard prelude.
     pub(crate) prelude: bool,
-    /// No trait in view declares a method named `to_string` or `to_owned`.
-    pub(crate) owned_methods: bool,
-    /// Every import in view comes from the standard library and no trait in view declares a
-    /// `clone` method.
-    pub(crate) clone_free: bool,
-    /// Every import in view comes from the standard library and no trait in view declares a
-    /// method named in `COLLECTION_METHODS`.
-    pub(crate) collection_free: bool,
-    /// Every import in view comes from the standard library and no trait in view declares a
-    /// method named in `ACCESSOR_METHODS`.
-    pub(crate) accessor_free: bool,
-    /// Every import in view comes from the standard library and no trait in view declares a
-    /// method named in `PATTERN_METHODS`.
-    pub(crate) pattern_free: bool,
-    /// Every import in view comes from the standard library and no trait in view declares a
-    /// method named in `ASCII_METHODS`.
-    pub(crate) ascii_free: bool,
+    /// Which standard method names no trait in view declares.
+    pub(crate) gates: Gates,
     /// The source context's helper summary table, when one is indexed.
     pub(crate) helper_table: Option<&'a crate::helpers::HelperTable>,
     pub(crate) helper_module: &'a [String],
@@ -353,23 +338,8 @@ pub(crate) struct Renamer<'env> {
     std_names: bool,
     /// The standard prelude is active in the module being visited.
     prelude: bool,
-    /// No trait in view declares a method named `to_string` or `to_owned`.
-    owned_methods: bool,
-    /// Every import in view comes from the standard library and no trait in view declares a
-    /// `clone` method.
-    clone_free: bool,
-    /// Every import in view comes from the standard library and no trait in view declares a
-    /// collection method the iteration and emptiness readings rely on.
-    collection_free: bool,
-    /// Every import in view comes from the standard library and no trait in view declares an
-    /// accessor the collection accessor readings rely on.
-    accessor_free: bool,
-    /// Every import in view comes from the standard library and no trait in view declares a
-    /// method the one-character pattern readings rely on.
-    pattern_free: bool,
-    /// Every import in view comes from the standard library and no trait in view declares an
-    /// ASCII predicate the range readings rely on.
-    ascii_free: bool,
+    /// Which standard method names no trait in view declares.
+    gates: Gates,
     /// An enclosing block of the current item already read its owned strings and empty vectors.
     prelude_folded: bool,
     /// The inline modules around the traversal, whose frames stay on the stack.
@@ -433,12 +403,7 @@ impl<'env> Renamer<'env> {
             prim_fallback: false,
             std_names: false,
             prelude: false,
-            owned_methods: false,
-            clone_free: false,
-            collection_free: false,
-            accessor_free: false,
-            pattern_free: false,
-            ascii_free: false,
+            gates: Gates::CLOSED,
             prelude_folded: false,
             inline_depth: 0,
             observed: false,
@@ -494,12 +459,7 @@ impl<'env> Renamer<'env> {
         renamer.prim_fallback = options.prim_fallback;
         renamer.std_names = options.std_names;
         renamer.prelude = options.prelude;
-        renamer.owned_methods = options.owned_methods;
-        renamer.clone_free = options.clone_free;
-        renamer.collection_free = options.collection_free;
-        renamer.accessor_free = options.accessor_free;
-        renamer.pattern_free = options.pattern_free;
-        renamer.ascii_free = options.ascii_free;
+        renamer.gates = options.gates;
         renamer.observed = options.observed;
         renamer.tail_blocked = options.enclosing_observed;
         renamer.seed = options.seed;
@@ -1306,7 +1266,7 @@ impl<'env> Renamer<'env> {
 
     /// Whether no trait in view declares a method named `to_string` or `to_owned`.
     pub(crate) fn owned_methods(&self) -> bool {
-        self.owned_methods
+        self.gates.owned
     }
 
     /// The declared fixed-width integer return type of the function whose body is `block`.
@@ -1320,7 +1280,7 @@ impl<'env> Renamer<'env> {
     /// active, every import in view comes from the standard library and no trait in view
     /// declares a `clone` method.
     pub(crate) fn clone_free(&self) -> bool {
-        self.prelude && self.clone_free
+        self.prelude && self.gates.clone
     }
 
     /// Whether the standard collection methods `iter`, `iter_mut`, `into_iter`, `chars`,
@@ -1329,7 +1289,7 @@ impl<'env> Renamer<'env> {
     /// calls: the standard prelude is active, every import in view comes from the standard
     /// library and no trait in view declares one of those names.
     pub(crate) fn collection_free(&self) -> bool {
-        self.prelude && self.collection_free
+        self.prelude && self.gates.collection
     }
 
     /// Whether the standard `get`, `first`, `as_bytes` and `as_slice` of the collection types
@@ -1337,21 +1297,21 @@ impl<'env> Renamer<'env> {
     /// is active, every import in view comes from the standard library and no trait in view
     /// declares one of those names.
     pub(crate) fn accessor_free(&self) -> bool {
-        self.prelude && self.accessor_free
+        self.prelude && self.gates.accessor
     }
 
     /// Whether the standard `str` pattern methods and the `push_str` and `push` of `String`
     /// answer their calls: the standard prelude is active, every import in view comes from the
     /// standard library and no trait in view declares one of those names.
     pub(crate) fn pattern_free(&self) -> bool {
-        self.prelude && self.pattern_free
+        self.prelude && self.gates.pattern
     }
 
     /// Whether the inherent ASCII predicates of `char` and `u8` answer their calls: the standard
     /// prelude is active, every import in view comes from the standard library and no trait in
     /// view declares one of those names.
     pub(crate) fn ascii_free(&self) -> bool {
-        self.prelude && self.ascii_free
+        self.prelude && self.gates.ascii
     }
 
     /// Whether the collection readings may run: compiling source with the standard collection
@@ -3070,11 +3030,7 @@ pub(crate) fn normalize_file(
     options: Options<'_>,
 ) -> ReferenceFacts {
     let mut renamer = Renamer::seeded(options, compiles);
-    renamer.clone_free &= clone_free_file(file);
-    renamer.collection_free &= collection_free_file(file);
-    renamer.accessor_free &= accessor_free_file(file);
-    renamer.pattern_free &= pattern_free_file(file);
-    renamer.ascii_free &= ascii_free_file(file);
+    renamer.gates.narrow(file);
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
 }
@@ -3083,22 +3039,93 @@ pub(crate) fn normalize_file(
 /// main pass so that both see one spelling.
 pub(crate) fn analyze_file(file: &mut syn::File, options: Options<'_>) -> ReferenceFacts {
     let mut renamer = Renamer::seeded(options, false);
-    renamer.clone_free &= clone_free_file(file);
-    renamer.collection_free &= collection_free_file(file);
-    renamer.accessor_free &= accessor_free_file(file);
-    renamer.pattern_free &= pattern_free_file(file);
-    renamer.ascii_free &= ascii_free_file(file);
+    renamer.gates.narrow(file);
     renamer.analysis = true;
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
 }
 
-/// Whether a file, bodies included, imports only from the standard library and declares no
-/// trait method named `clone`, so `clone` on a primitive resolves to `Clone::clone`.
-fn clone_free_file(file: &syn::File) -> bool {
-    crate::context::standard_imports(&file.items)
-        && !crate::context::declares_trait_method(&file.items, &["clone"])
+/// Which standard method names no trait in view declares, so the readings relying on them
+/// answer to the standard method.
+#[derive(Clone, Copy)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each gate guards an independent family of standard methods"
+)]
+pub(crate) struct Gates {
+    /// No trait declares a method named in `OWNED_METHODS`.
+    owned: bool,
+    /// Every import comes from the standard library and no trait declares `clone`.
+    clone: bool,
+    /// Every import comes from the standard library and no trait declares a method named in
+    /// `COLLECTION_METHODS`.
+    collection: bool,
+    /// Every import comes from the standard library and no trait declares a method named in
+    /// `ACCESSOR_METHODS`.
+    accessor: bool,
+    /// Every import comes from the standard library and no trait declares a method named in
+    /// `PATTERN_METHODS`.
+    pattern: bool,
+    /// Every import comes from the standard library and no trait declares a method named in
+    /// `ASCII_METHODS`.
+    ascii: bool,
 }
+
+impl Gates {
+    /// No gate open, for a pass that reads no standard method.
+    pub(crate) const CLOSED: Self = Self {
+        owned: false,
+        clone: false,
+        collection: false,
+        accessor: false,
+        pattern: false,
+        ascii: false,
+    };
+
+    /// The gates of a scope whose imports all come from the standard library when `standard`
+    /// holds, where `undeclared(names)` holds when no trait in view declares one of `names`.
+    /// The owned-string methods need no import proof.
+    pub(crate) fn new(standard: bool, undeclared: impl Fn(&[&str]) -> bool) -> Self {
+        Self::imported(undeclared(&OWNED_METHODS), standard, undeclared)
+    }
+
+    /// The gates with `owned` given and every other gate opened by `standard` and `undeclared`.
+    fn imported(owned: bool, standard: bool, undeclared: impl Fn(&[&str]) -> bool) -> Self {
+        Self {
+            owned,
+            clone: standard && undeclared(&["clone"]),
+            collection: standard && undeclared(&COLLECTION_METHODS),
+            accessor: standard && undeclared(&ACCESSOR_METHODS),
+            pattern: standard && undeclared(&PATTERN_METHODS),
+            ascii: standard && undeclared(&ASCII_METHODS),
+        }
+    }
+
+    /// Every gate but `owned` open, for a file pass whose `narrow` settles the rest.
+    pub(crate) fn open(owned: bool) -> Self {
+        Self::imported(owned, true, |_| true)
+    }
+
+    /// Close every gate but `owned` that `file`, bodies included, does not also open.
+    fn narrow(&mut self, file: &syn::File) {
+        let file = Self::imported(
+            true,
+            crate::context::standard_imports(&file.items),
+            |names| !crate::context::declares_trait_method(&file.items, names),
+        );
+        *self = Self {
+            owned: self.owned,
+            clone: self.clone && file.clone,
+            collection: self.collection && file.collection,
+            accessor: self.accessor && file.accessor,
+            pattern: self.pattern && file.pattern,
+            ascii: self.ascii && file.ascii,
+        };
+    }
+}
+
+/// The trait method names the owned-string readings rely on.
+pub(crate) const OWNED_METHODS: [&str; 2] = ["to_string", "to_owned"];
 
 /// The trait method names the collection readings rely on.
 pub(crate) const COLLECTION_METHODS: [&str; 10] = [
@@ -3114,23 +3141,9 @@ pub(crate) const COLLECTION_METHODS: [&str; 10] = [
     "as_str",
 ];
 
-/// Whether a file, bodies included, imports only from the standard library and declares no
-/// trait method a collection reading relies on.
-fn collection_free_file(file: &syn::File) -> bool {
-    crate::context::standard_imports(&file.items)
-        && !crate::context::declares_trait_method(&file.items, &COLLECTION_METHODS)
-}
-
 /// The trait method names the collection accessor readings rely on.
 pub(crate) const ACCESSOR_METHODS: [&str; 6] =
     ["get", "first", "next", "count", "as_bytes", "as_slice"];
-
-/// Whether a file, bodies included, imports only from the standard library and declares no
-/// trait method a collection accessor reading relies on.
-fn accessor_free_file(file: &syn::File) -> bool {
-    crate::context::standard_imports(&file.items)
-        && !crate::context::declares_trait_method(&file.items, &ACCESSOR_METHODS)
-}
 
 /// The trait method names the one-character pattern readings rely on.
 pub(crate) const PATTERN_METHODS: [&str; 20] = [
@@ -3156,13 +3169,6 @@ pub(crate) const PATTERN_METHODS: [&str; 20] = [
     "push",
 ];
 
-/// Whether a file, bodies included, imports only from the standard library and declares no
-/// trait method a one-character pattern reading relies on.
-fn pattern_free_file(file: &syn::File) -> bool {
-    crate::context::standard_imports(&file.items)
-        && !crate::context::declares_trait_method(&file.items, &PATTERN_METHODS)
-}
-
 /// The ASCII predicates the range readings rely on.
 pub(crate) const ASCII_METHODS: [&str; 7] = [
     "is_ascii_digit",
@@ -3173,13 +3179,6 @@ pub(crate) const ASCII_METHODS: [&str; 7] = [
     "is_ascii_hexdigit",
     "is_ascii_whitespace",
 ];
-
-/// Whether a file, bodies included, imports only from the standard library and declares no
-/// trait method an ASCII predicate reading relies on.
-fn ascii_free_file(file: &syn::File) -> bool {
-    crate::context::standard_imports(&file.items)
-        && !crate::context::declares_trait_method(&file.items, &ASCII_METHODS)
-}
 
 /// The standard collections the constructor annotation reading moves type arguments onto.
 const STANDARD_COLLECTIONS: [&str; 7] = [
