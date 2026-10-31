@@ -9,13 +9,13 @@
 //! The prelude variants spelled through `Option::` and `Result::` read as their bare names.
 
 use alloc::boxed::Box;
-use alloc::collections::{BTreeMap, BTreeSet};
-use alloc::string::String;
 use alloc::vec::Vec;
 use syn::visit_mut::VisitMut;
 
 use crate::alpha::Renamer;
+use crate::phase::{Claims, Phase, PhaseFold};
 use crate::scope::ident_name;
+use crate::syntax::{arm, bool_expr, ident, placeholder, wild};
 
 /// The prelude names the readings rely on.
 const PRELUDE: [&str; 6] = ["Option", "Result", "Some", "None", "Ok", "Err"];
@@ -23,60 +23,16 @@ const PRELUDE: [&str; 6] = ["Option", "Result", "Some", "None", "Ok", "Err"];
 /// Read the `Option` and `Result` predicates and conversions of the body `block` of a function
 /// with the signature `sig`, nested items aside.
 pub(crate) fn normalize(renamer: &Renamer<'_>, sig: &syn::Signature, block: &mut syn::Block) {
-    let mut claims = Claims::default();
-    syn::visit::Visit::visit_signature(&mut claims, sig);
-    syn::visit::Visit::visit_block(&mut claims, block);
-    if claims.open
+    let claims = Claims::of_function(sig, block);
+    if claims.glob
         || !renamer.prelude_names(&PRELUDE)
         || PRELUDE.iter().any(|name| claims.names.contains(*name))
     {
         return;
     }
-    let mut fold = Fold {
-        renamer,
-        scopes: alloc::vec![BTreeMap::new()],
-    };
-    for input in &sig.inputs {
-        if let syn::FnArg::Typed(typed) = input {
-            let declared = fold.declared(&typed.ty);
-            fold.bind(&typed.pat, declared);
-        }
-    }
+    let mut fold = Fold::new(renamer, Options);
+    fold.bind_inputs(sig);
     fold.visit_block_mut(block);
-}
-
-/// The names an item, import or generic parameter of the function declares, and whether a
-/// glob import may declare any name.
-#[derive(Default)]
-struct Claims {
-    names: BTreeSet<String>,
-    open: bool,
-}
-
-impl syn::visit::Visit<'_> for Claims {
-    fn visit_item(&mut self, item: &syn::Item) {
-        if let Some((_, ident)) = crate::alpha::item_binding(item) {
-            self.names.insert(ident_name(ident));
-        }
-        syn::visit::visit_item(self, item);
-    }
-
-    fn visit_use_name(&mut self, name: &syn::UseName) {
-        self.names.insert(ident_name(&name.ident));
-    }
-
-    fn visit_use_rename(&mut self, rename: &syn::UseRename) {
-        self.names.insert(ident_name(&rename.rename));
-    }
-
-    fn visit_use_glob(&mut self, _: &syn::UseGlob) {
-        self.open = true;
-    }
-
-    fn visit_type_param(&mut self, param: &syn::TypeParam) {
-        self.names.insert(ident_name(&param.ident));
-        syn::visit::visit_type_param(self, param);
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -99,85 +55,15 @@ enum Declared {
     Primitive,
 }
 
-struct Fold<'a, 'env> {
-    renamer: &'a Renamer<'env>,
-    /// The bindings in view, with what their declared type proves.
-    scopes: Vec<BTreeMap<String, Option<Declared>>>,
-}
+/// The `Option` and `Result` phase.
+struct Options;
+
+type Fold<'a, 'env> = PhaseFold<'a, 'env, Options>;
 
 impl Fold<'_, '_> {
-    /// What the declared type `ty` proves, behind at most one reference.
-    fn declared(&self, ty: &syn::Type) -> Option<Declared> {
-        if self.renamer.param_prim(ty).is_some() {
-            return Some(Declared::Primitive);
-        }
-        let (access, ty) = match ty {
-            syn::Type::Reference(reference) if reference.mutability.is_some() => {
-                (Access::Mut, reference.elem.as_ref())
-            }
-            syn::Type::Reference(reference) => (Access::Shared, reference.elem.as_ref()),
-            ty => (Access::Owned, ty),
-        };
-        let syn::Type::Path(path) = ty else {
-            return None;
-        };
-        if path.qself.is_some() || path.path.leading_colon.is_some() {
-            return None;
-        }
-        let [segment] = path.path.segments.iter().collect::<Vec<_>>()[..] else {
-            return None;
-        };
-        let syn::PathArguments::AngleBracketed(args) = &segment.arguments else {
-            return None;
-        };
-        let kind = match (ident_name(&segment.ident).as_str(), args.args.len()) {
-            ("Option", 1) => Kind::Option,
-            ("Result", 2) => Kind::Result,
-            _ => return None,
-        };
-        Some(Declared::Variant(kind, access))
-    }
-
-    /// Bind the names of `pat`, a lone identifier to `declared` and every other name to
-    /// `None`.
-    fn bind(&mut self, pat: &syn::Pat, declared: Option<Declared>) {
-        struct Names<'s>(&'s mut BTreeMap<String, Option<Declared>>, Option<Declared>);
-        impl syn::visit::Visit<'_> for Names<'_> {
-            fn visit_pat_ident(&mut self, ident: &syn::PatIdent) {
-                let declared = self
-                    .1
-                    .filter(|_| ident.by_ref.is_none() && ident.subpat.is_none());
-                self.0.insert(ident_name(&ident.ident), declared);
-                syn::visit::visit_pat_ident(self, ident);
-            }
-
-            fn visit_expr(&mut self, _: &syn::Expr) {}
-        }
-        let declared = declared.filter(|_| matches!(pat, syn::Pat::Ident(_)));
-        let scope = self.scopes.last_mut().expect("a scope");
-        syn::visit::Visit::visit_pat(&mut Names(scope, declared), pat);
-    }
-
-    /// What the declaration of the single-identifier path `expr` proves.
-    fn binding(&self, expr: &syn::Expr) -> Option<Declared> {
-        let syn::Expr::Path(path) = expr else {
-            return None;
-        };
-        if !path.attrs.is_empty() || path.qself.is_some() {
-            return None;
-        }
-        let name = ident_name(path.path.get_ident()?);
-        self.scopes
-            .iter()
-            .rev()
-            .find_map(|scope| scope.get(&name))
-            .copied()
-            .flatten()
-    }
-
     /// The kind and access of a binding declared as `Option` or `Result`.
     fn variant(&self, expr: &syn::Expr) -> Option<(Kind, Access)> {
-        match self.binding(expr)? {
+        match self.bound(expr)? {
             Declared::Variant(kind, access) => Some((kind, access)),
             Declared::Primitive => None,
         }
@@ -267,7 +153,7 @@ impl Fold<'_, '_> {
         };
         let plain = match fallback {
             syn::Expr::Lit(lit) => lit.attrs.is_empty(),
-            path @ syn::Expr::Path(_) => matches!(self.binding(path), Some(Declared::Primitive)),
+            path @ syn::Expr::Path(_) => matches!(self.bound(path), Some(Declared::Primitive)),
             _ => false,
         };
         if !plain {
@@ -286,7 +172,7 @@ impl Fold<'_, '_> {
                     variant_pattern("Some", ident_pat(value.clone())),
                     path_expr(value)
                 ),
-                arm(ident_pat(name("None")), fallback),
+                arm(ident_pat(ident("None")), fallback),
             ],
         });
     }
@@ -379,17 +265,11 @@ impl Fold<'_, '_> {
             attrs: Vec::new(),
             receiver: Box::new(target),
             dot_token: syn::token::Dot::default(),
-            method: name("take"),
+            method: ident("take"),
             turbofish: None,
             paren_token: syn::token::Paren::default(),
             args: syn::punctuated::Punctuated::new(),
         });
-    }
-
-    fn scoped(&mut self, visit: impl FnOnce(&mut Self)) {
-        self.scopes.push(BTreeMap::new());
-        visit(self);
-        self.scopes.pop();
     }
 }
 
@@ -414,84 +294,73 @@ fn bare_variant(path: &mut syn::Path) {
     }
 }
 
-impl VisitMut for Fold<'_, '_> {
-    fn visit_item_mut(&mut self, _: &mut syn::Item) {}
+impl Phase for Options {
+    type Value = Declared;
 
-    fn visit_block_mut(&mut self, block: &mut syn::Block) {
-        self.scoped(|fold| {
-            for stmt in &mut block.stmts {
-                fold.visit_stmt_mut(stmt);
+    /// What the declared type `ty` proves, behind at most one reference.
+    fn declared(fold: &Fold<'_, '_>, ty: &syn::Type) -> Option<Declared> {
+        if fold.renamer.param_prim(ty).is_some() {
+            return Some(Declared::Primitive);
+        }
+        let (access, ty) = match ty {
+            syn::Type::Reference(reference) if reference.mutability.is_some() => {
+                (Access::Mut, reference.elem.as_ref())
             }
-        });
+            syn::Type::Reference(reference) => (Access::Shared, reference.elem.as_ref()),
+            ty => (Access::Owned, ty),
+        };
+        let syn::Type::Path(path) = ty else {
+            return None;
+        };
+        if path.qself.is_some() || path.path.leading_colon.is_some() {
+            return None;
+        }
+        let [segment] = path.path.segments.iter().collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        let syn::PathArguments::AngleBracketed(args) = &segment.arguments else {
+            return None;
+        };
+        let kind = match (ident_name(&segment.ident).as_str(), args.args.len()) {
+            ("Option", 1) => Kind::Option,
+            ("Result", 2) => Kind::Result,
+            _ => return None,
+        };
+        Some(Declared::Variant(kind, access))
     }
 
-    fn visit_local_mut(&mut self, local: &mut syn::Local) {
-        if let Some(init) = &mut local.init {
-            self.visit_expr_mut(&mut init.expr);
-            if let Some((_, diverge)) = &mut init.diverge {
-                self.visit_expr_mut(diverge);
-            }
-        }
-        self.visit_pat_mut(&mut local.pat);
+    fn local(fold: &mut Fold<'_, '_>, local: &mut syn::Local) {
+        fold.visit_init(local);
+        fold.visit_pat_mut(&mut local.pat);
         let (pat, declared) = match &local.pat {
             syn::Pat::Type(typed) if local.attrs.is_empty() => {
-                (typed.pat.as_ref(), self.declared(&typed.ty))
+                (typed.pat.as_ref(), fold.declared(&typed.ty))
             }
             pat => (pat, None),
         };
-        self.bind(pat, declared);
+        fold.bind(pat, declared);
     }
 
-    fn visit_expr_closure_mut(&mut self, closure: &mut syn::ExprClosure) {
-        self.scoped(|fold| {
-            for input in &closure.inputs {
-                let (pat, declared) = match input {
-                    syn::Pat::Type(typed) => (typed.pat.as_ref(), fold.declared(&typed.ty)),
-                    pat => (pat, None),
-                };
-                fold.bind(pat, declared);
-            }
-            fold.visit_expr_mut(&mut closure.body);
-        });
-    }
-
-    fn visit_arm_mut(&mut self, arm: &mut syn::Arm) {
-        self.scoped(|fold| {
-            fold.visit_pat_mut(&mut arm.pat);
-            fold.bind(&arm.pat, None);
-            if let syn::Pat::Guard(guard) = &mut arm.pat {
-                fold.visit_expr_mut(&mut guard.guard);
-            }
-            fold.visit_expr_mut(&mut arm.body);
-        });
-    }
-
-    fn visit_expr_for_loop_mut(&mut self, expr: &mut syn::ExprForLoop) {
-        self.visit_expr_mut(&mut expr.expr);
-        self.scoped(|fold| {
-            fold.bind(&expr.pat, None);
-            fold.visit_block_mut(&mut expr.body);
-        });
-    }
-
-    fn visit_expr_if_mut(&mut self, branch: &mut syn::ExprIf) {
-        self.scoped(|fold| {
-            fold.condition(&mut branch.cond);
-            fold.visit_block_mut(&mut branch.then_branch);
-        });
-        if let Some((_, otherwise)) = &mut branch.else_branch {
-            self.visit_expr_mut(otherwise);
+    fn read_first(_: &mut Fold<'_, '_>, expr: &mut syn::Expr) {
+        if let syn::Expr::Path(path) = expr
+            && path.qself.is_none()
+        {
+            bare_variant(&mut path.path);
         }
     }
 
-    fn visit_expr_while_mut(&mut self, expr: &mut syn::ExprWhile) {
-        self.scoped(|fold| {
-            fold.condition(&mut expr.cond);
-            fold.visit_block_mut(&mut expr.body);
-        });
+    fn read(fold: &mut Fold<'_, '_>, expr: &mut syn::Expr) {
+        fold.predicate(expr);
+        fold.default(expr);
+        fold.identity(expr);
+        fold.take(expr);
     }
 
-    fn visit_pat_mut(&mut self, pat: &mut syn::Pat) {
+    fn bound_pattern(fold: &mut Fold<'_, '_>, pat: &mut syn::Pat) {
+        fold.visit_pat_mut(pat);
+    }
+
+    fn pattern(fold: &mut Fold<'_, '_>, pat: &mut syn::Pat) {
         match pat {
             syn::Pat::TupleStruct(pattern) if pattern.qself.is_none() => {
                 bare_variant(&mut pattern.path);
@@ -505,57 +374,8 @@ impl VisitMut for Fold<'_, '_> {
             }
             _ => {}
         }
-        syn::visit_mut::visit_pat_mut(self, pat);
+        syn::visit_mut::visit_pat_mut(fold, pat);
     }
-
-    fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
-        if !crate::drift::expr_attrs(expr).is_empty() {
-            return;
-        }
-        if let syn::Expr::Path(path) = expr
-            && path.qself.is_none()
-        {
-            bare_variant(&mut path.path);
-        }
-        syn::visit_mut::visit_expr_mut(self, expr);
-        self.predicate(expr);
-        self.default(expr);
-        self.identity(expr);
-        self.take(expr);
-    }
-}
-
-impl Fold<'_, '_> {
-    /// Visit a condition, binding the patterns of its `let` operands for the guarded block.
-    fn condition(&mut self, cond: &mut syn::Expr) {
-        match cond {
-            syn::Expr::Let(binding) => {
-                self.visit_expr_mut(&mut binding.expr);
-                self.visit_pat_mut(&mut binding.pat);
-                self.bind(&binding.pat, None);
-            }
-            syn::Expr::Binary(binary) if matches!(binary.op, syn::BinOp::And(_)) => {
-                self.condition(&mut binary.left);
-                self.condition(&mut binary.right);
-            }
-            other => self.visit_expr_mut(other),
-        }
-    }
-}
-
-fn placeholder() -> syn::Expr {
-    syn::Expr::Verbatim(proc_macro2::TokenStream::new())
-}
-
-fn name(text: &str) -> syn::Ident {
-    syn::Ident::new(text, proc_macro2::Span::call_site())
-}
-
-fn wild() -> syn::Pat {
-    syn::Pat::Wild(syn::PatWild {
-        attrs: Vec::new(),
-        underscore_token: syn::token::Underscore::default(),
-    })
 }
 
 fn ident_pat(ident: syn::Ident) -> syn::Pat {
@@ -572,7 +392,7 @@ fn variant_pattern(variant: &str, inner: syn::Pat) -> syn::Pat {
     syn::Pat::TupleStruct(syn::PatTupleStruct {
         attrs: Vec::new(),
         qself: None,
-        path: syn::Path::from(name(variant)),
+        path: syn::Path::from(ident(variant)),
         paren_token: syn::token::Paren::default(),
         elems: core::iter::once(inner).collect(),
     })
@@ -584,21 +404,4 @@ fn path_expr(ident: syn::Ident) -> syn::Expr {
         qself: None,
         path: syn::Path::from(ident),
     })
-}
-
-fn bool_expr(value: bool) -> syn::Expr {
-    syn::Expr::Lit(syn::ExprLit {
-        attrs: Vec::new(),
-        lit: syn::Lit::Bool(syn::LitBool::new(value, proc_macro2::Span::call_site())),
-    })
-}
-
-fn arm(pat: syn::Pat, body: syn::Expr) -> syn::Arm {
-    syn::Arm {
-        attrs: Vec::new(),
-        pat,
-        fat_arrow_token: syn::token::FatArrow::default(),
-        body: Box::new(body),
-        comma: None,
-    }
 }

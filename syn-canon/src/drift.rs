@@ -9,6 +9,8 @@ use proc_macro2::{Group, TokenStream, TokenTree};
 use quote::ToTokens;
 use syn::visit_mut::VisitMut;
 
+use crate::syntax::placeholder;
+
 /// `group` with its stream mapped through `f`, delimiter and span kept.
 pub(crate) fn map_group(group: &Group, f: impl FnOnce(TokenStream) -> TokenStream) -> TokenTree {
     let mut rebuilt = Group::new(group.delimiter(), f(group.stream()));
@@ -1274,10 +1276,7 @@ fn discard_call_bindings(stmts: &mut [syn::Stmt]) {
             && expr_attrs(&init.expr).is_empty()
         {
             let semi = local.semi_token;
-            let expr = core::mem::replace(
-                init.expr.as_mut(),
-                syn::Expr::Verbatim(proc_macro2::TokenStream::new()),
-            );
+            let expr = core::mem::replace(init.expr.as_mut(), placeholder());
             *stmt = syn::Stmt::Expr(expr, Some(semi));
         }
     }
@@ -1911,7 +1910,7 @@ fn fold_paren_expr(expr: &mut syn::Expr) {
     if !matches!(expr, syn::Expr::Paren(p) if p.attrs.is_empty()) {
         return;
     }
-    let dummy = syn::Expr::Verbatim(proc_macro2::TokenStream::new());
+    let dummy = placeholder();
     if let syn::Expr::Paren(paren) = core::mem::replace(expr, dummy) {
         *expr = *paren.expr;
     }

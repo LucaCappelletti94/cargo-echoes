@@ -3,6 +3,7 @@
 use crate::alpha::{Env, Renamer};
 use crate::schedule::{self, Port, Value};
 use crate::scope::{Ns, PrimTy};
+use crate::syntax::placeholder;
 
 pub(crate) fn observed(attrs: &[syn::Attribute], std_names: bool) -> bool {
     attrs.iter().any(|attr| {
@@ -127,7 +128,7 @@ pub(crate) fn unwrap(renamer: &Renamer<'_>, body: &mut syn::Expr, places: bool) 
     {
         return;
     }
-    *body = core::mem::replace(expr, syn::Expr::Verbatim(proc_macro2::TokenStream::new()));
+    *body = core::mem::replace(expr, placeholder());
 }
 
 struct Proof<'a, 'env> {
@@ -311,10 +312,7 @@ impl<'env> Proof<'_, 'env> {
         if !literal && !self.value(&init.expr, &env) {
             return;
         }
-        let value = core::mem::replace(
-            init.expr.as_mut(),
-            syn::Expr::Verbatim(proc_macro2::TokenStream::new()),
-        );
+        let value = core::mem::replace(init.expr.as_mut(), placeholder());
         stmts.truncate(stmts.len() - 2);
         stmts.push(syn::Stmt::Expr(value, None));
     }
@@ -341,14 +339,9 @@ impl<'env> Proof<'_, 'env> {
                     &mut local.pat,
                     syn::Pat::Verbatim(proc_macro2::TokenStream::new()),
                 );
-                let scrutinee = core::mem::replace(
-                    &mut init.expr,
-                    alloc::boxed::Box::new(syn::Expr::Verbatim(proc_macro2::TokenStream::new())),
-                );
-                let diverge = core::mem::replace(
-                    diverge,
-                    alloc::boxed::Box::new(syn::Expr::Verbatim(proc_macro2::TokenStream::new())),
-                );
+                let scrutinee =
+                    core::mem::replace(&mut init.expr, alloc::boxed::Box::new(placeholder()));
+                let diverge = core::mem::replace(diverge, alloc::boxed::Box::new(placeholder()));
                 for name in schedule::pat_names(&pat) {
                     self.bind(&mut env, name, None);
                 }
@@ -462,8 +455,7 @@ impl<'env> Proof<'_, 'env> {
             )
             && self.value(&branch.cond, env)
         {
-            let tail =
-                core::mem::replace(tail, syn::Expr::Verbatim(proc_macro2::TokenStream::new()));
+            let tail = core::mem::replace(tail, placeholder());
             let otherwise = match tail {
                 syn::Expr::If(chained) if chained.attrs.is_empty() => syn::Expr::If(chained),
                 tail => syn::Expr::Block(syn::ExprBlock {

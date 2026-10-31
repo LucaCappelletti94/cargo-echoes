@@ -23,11 +23,13 @@ mod helpers;
 mod items;
 mod macros;
 mod options;
+mod phase;
 mod prelude;
 mod reference;
 mod schedule;
 mod scope;
 mod structure;
+mod syntax;
 mod tails;
 
 use alloc::vec::Vec;

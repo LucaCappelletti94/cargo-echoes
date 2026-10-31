@@ -17,6 +17,7 @@ use syn::visit_mut::VisitMut;
 
 use crate::alpha::Renamer;
 use crate::scope::{Origin, ident_name};
+use crate::syntax::{arm, bool_expr, placeholder, wild};
 
 /// The prelude variants of `Option` and `Result`, each with its declaration position.
 const PRELUDE_VARIANTS: [(&str, usize); 4] = [("None", 0), ("Some", 1), ("Ok", 0), ("Err", 1)];
@@ -447,7 +448,7 @@ impl Fold<'_, '_> {
             match_token: syn::token::Match::default(),
             expr: Box::new(args.value),
             brace_token: syn::token::Brace::default(),
-            arms: alloc::vec![arm(pat, bool_expr(true)), arm(wildcard(), bool_expr(false)),],
+            arms: alloc::vec![arm(pat, bool_expr(true)), arm(wild(), bool_expr(false)),],
         });
     }
 
@@ -567,7 +568,7 @@ impl Fold<'_, '_> {
             match_token: syn::token::Match::default(),
             expr: scrutinee,
             brace_token: syn::token::Brace::default(),
-            arms: alloc::vec![arm(pat, then), arm(wildcard(), otherwise)],
+            arms: alloc::vec![arm(pat, then), arm(wild(), otherwise)],
         });
     }
 
@@ -596,7 +597,7 @@ impl Fold<'_, '_> {
             return;
         };
         let mut arm = expr_match.arms.remove(none);
-        arm.pat = wildcard();
+        arm.pat = wild();
         expr_match.arms.push(arm);
     }
 
@@ -869,7 +870,7 @@ fn lead_with_present(expr_match: &mut syn::ExprMatch) {
         qself: None,
         path: syn::Path::from(syn::Ident::new(present, proc_macro2::Span::call_site())),
         paren_token: syn::token::Paren::default(),
-        elems: core::iter::once(wildcard()).collect(),
+        elems: core::iter::once(wild()).collect(),
     });
     let (absent, rest) = expr_match.arms.split_at_mut(1);
     core::mem::swap(&mut absent[0].body, &mut rest[0].body);
@@ -981,17 +982,6 @@ fn valued_break(body: &syn::Expr) -> bool {
     search.0
 }
 
-fn placeholder() -> syn::Expr {
-    syn::Expr::Verbatim(proc_macro2::TokenStream::new())
-}
-
-fn wildcard() -> syn::Pat {
-    syn::Pat::Wild(syn::PatWild {
-        attrs: Vec::new(),
-        underscore_token: syn::token::Underscore::default(),
-    })
-}
-
 fn block_expr(stmts: Vec<syn::Stmt>) -> syn::Expr {
     syn::Expr::Block(syn::ExprBlock {
         attrs: Vec::new(),
@@ -1003,16 +993,6 @@ fn block_expr(stmts: Vec<syn::Stmt>) -> syn::Expr {
     })
 }
 
-fn arm(pat: syn::Pat, body: syn::Expr) -> syn::Arm {
-    syn::Arm {
-        attrs: Vec::new(),
-        pat,
-        fat_arrow_token: syn::token::FatArrow::default(),
-        body: Box::new(body),
-        comma: None,
-    }
-}
-
 /// The value of the unattributed `bool` literal `expr`.
 fn bool_literal(expr: &syn::Expr) -> Option<bool> {
     match expr {
@@ -1022,11 +1002,4 @@ fn bool_literal(expr: &syn::Expr) -> Option<bool> {
         }) if attrs.is_empty() => Some(value.value),
         _ => None,
     }
-}
-
-fn bool_expr(value: bool) -> syn::Expr {
-    syn::Expr::Lit(syn::ExprLit {
-        attrs: Vec::new(),
-        lit: syn::Lit::Bool(syn::LitBool::new(value, proc_macro2::Span::call_site())),
-    })
 }

@@ -314,6 +314,11 @@ fn contains_needs_a_dereferenced_comparison_with_the_element_primitive() {
             "v.contains(&y)",
         ),
         (
+            "v: &[u32], y: u32",
+            "v.iter().any(|x| *x == #[cfg(all())] y)",
+            "v.contains(&#[cfg(all())] y)",
+        ),
+        (
             "v: &[f64]",
             "v.iter().any(|x| *x == 1.5)",
             "v.contains(&1.5)",
