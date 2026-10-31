@@ -164,6 +164,55 @@ impl Lbl {
             _ => None,
         }
     }
+
+    /// The child labels in order: an operand, a callee before its arguments, or a graph's root
+    /// before its definitions.
+    pub(crate) fn children(&self) -> impl Iterator<Item = &Self> {
+        let (first, second, rest): (Option<&Self>, Option<&Self>, &[Self]) = match self {
+            Self::Not(inner) => (Some(inner), None, &[]),
+            Self::Op(_, left, right, _) => (Some(left), Some(right), &[]),
+            Self::Flat(_, children, _) | Self::Other(_, children) | Self::Select(children, _) => {
+                (None, None, children)
+            }
+            Self::Call(first, rest, _) | Self::Graph(first, rest) => (Some(first), None, rest),
+            Self::Int(..) | Self::Bool(_) | Self::Lit(_) | Self::Ref(_) | Self::Future(..) => {
+                (None, None, &[])
+            }
+        };
+        first.into_iter().chain(second).chain(rest)
+    }
+
+    /// The label with every child mapped through `f` in order, a flattened chain's leaves sorted
+    /// again.
+    fn map_children(&self, f: &mut impl FnMut(&Self) -> Self) -> Self {
+        match self {
+            Self::Not(inner) => Self::Not(Box::new(f(inner))),
+            Self::Op(op, left, right, prim) => {
+                let left = f(left);
+                Self::Op(*op, Box::new(left), Box::new(f(right)), *prim)
+            }
+            Self::Flat(op, leaves, prim) => {
+                let mut leaves: Vec<_> = leaves.iter().map(&mut *f).collect();
+                leaves.sort();
+                Self::Flat(*op, leaves, *prim)
+            }
+            Self::Other(kind, children) => {
+                Self::Other(kind.clone(), children.iter().map(f).collect())
+            }
+            Self::Select(children, prim) => Self::Select(children.iter().map(f).collect(), *prim),
+            Self::Call(callee, args, prim) => {
+                let callee = f(callee);
+                Self::Call(Box::new(callee), args.iter().map(f).collect(), *prim)
+            }
+            Self::Graph(root, definitions) => {
+                let root = f(root);
+                Self::Graph(Box::new(root), definitions.iter().map(f).collect())
+            }
+            Self::Int(..) | Self::Bool(_) | Self::Lit(_) | Self::Ref(_) | Self::Future(..) => {
+                self.clone()
+            }
+        }
+    }
 }
 
 /// The context a reference site holds: a value read or a storage
@@ -1104,17 +1153,7 @@ pub(crate) fn literal_label(prim: PrimTy, bits: u128) -> Lbl {
 
 /// Count source-label nodes before future projection.
 pub(crate) fn label_nodes(lbl: &Lbl) -> usize {
-    match lbl {
-        Lbl::Not(inner) => 1 + label_nodes(inner),
-        Lbl::Op(_, left, right, _) => 1 + label_nodes(left) + label_nodes(right),
-        Lbl::Flat(_, leaves, _) | Lbl::Other(_, leaves) | Lbl::Select(leaves, _) => {
-            1 + leaves.iter().map(label_nodes).sum::<usize>()
-        }
-        Lbl::Call(callee, args, _) => {
-            1 + label_nodes(callee) + args.iter().map(label_nodes).sum::<usize>()
-        }
-        _ => 1,
-    }
+    1 + lbl.children().map(label_nodes).sum::<usize>()
 }
 
 /// The text of `path`, the segments joined by `::`.
@@ -1337,6 +1376,10 @@ pub(crate) fn label_expr(
     {
         return label_expr(renamer, env, &chain, consumer, locals, orders);
     }
+    if let Some((tag, operands)) = operands(expr) {
+        let operands = operands.into_iter().flatten();
+        return label_exprs(tag, operands, renamer, env, consumer, locals, orders);
+    }
     match expr {
         syn::Expr::Lit(lit) => (label_lit(&lit.lit), Vec::new()),
         syn::Expr::Path(path) if path.qself.is_none() => label_path(env, &path.path),
@@ -1348,7 +1391,7 @@ pub(crate) fn label_expr(
         syn::Expr::Paren(paren) => label_expr(renamer, env, &paren.expr, consumer, locals, orders),
         syn::Expr::Group(group) => label_expr(renamer, env, &group.expr, consumer, locals, orders),
         syn::Expr::Tuple(tuple) => {
-            label_tuple(renamer, env, &tuple.elems, consumer, locals, orders)
+            label_exprs("t", &tuple.elems, renamer, env, consumer, locals, orders)
         }
         syn::Expr::Call(call) => label_call(renamer, env, call, consumer, locals, orders),
         syn::Expr::MethodCall(method) => {
@@ -1377,39 +1420,13 @@ pub(crate) fn label_expr(
         syn::Expr::Closure(closure) => {
             label_closure(renamer, env, closure, consumer, locals, orders)
         }
-        syn::Expr::Array(array) => label_array(renamer, env, array, consumer, locals, orders),
-        syn::Expr::Repeat(repeat) => label_repeat(renamer, env, repeat, consumer, locals, orders),
-        syn::Expr::Range(range) => label_range(renamer, env, range, consumer, locals, orders),
-        syn::Expr::Index(index_expr) => {
-            label_index(renamer, env, index_expr, consumer, locals, orders)
+        syn::Expr::Array(array) => {
+            label_exprs("arr", &array.elems, renamer, env, consumer, locals, orders)
         }
         syn::Expr::Field(field) => label_field(renamer, env, field, consumer, locals, orders),
         syn::Expr::Struct(struct_expr) => {
             label_struct_expr(renamer, env, struct_expr, consumer, locals, orders)
         }
-        syn::Expr::Let(let_expr) => {
-            label_let_expr(renamer, env, let_expr, consumer, locals, orders)
-        }
-        syn::Expr::Assign(assign) => label_assign(renamer, env, assign, consumer, locals, orders),
-        syn::Expr::Return(r#return) => label_optional_value(
-            "ret",
-            renamer,
-            env,
-            r#return.expr.as_deref(),
-            consumer,
-            locals,
-            orders,
-        ),
-        syn::Expr::Break(break_expr) => label_optional_value(
-            "br",
-            renamer,
-            env,
-            break_expr.expr.as_deref(),
-            consumer,
-            locals,
-            orders,
-        ),
-        syn::Expr::Try(try_expr) => label_try(renamer, env, try_expr, consumer, locals, orders),
         syn::Expr::TryBlock(block) => {
             label_blk(renamer, env, &block.block, consumer, locals, orders)
         }
@@ -1420,13 +1437,27 @@ pub(crate) fn label_expr(
             Lbl::Other("v".into(), vec![Lbl::Lit(tokens.to_string())]),
             Vec::new(),
         ),
-        syn::Expr::Await(await_expr) => {
-            label_await(renamer, env, await_expr, consumer, locals, orders)
-        }
         syn::Expr::Cast(cast) => label_cast(renamer, env, cast, consumer, locals, orders),
         syn::Expr::RawAddr(raw) => label_raw_addr(renamer, env, raw, consumer, locals, orders),
         _ => (Lbl::Other("e".into(), Vec::new()), Vec::new()),
     }
+}
+
+/// The tag and the operands in source order of an expression labeled as its tag over at most
+/// two operands.
+fn operands(expr: &syn::Expr) -> Option<(&'static str, [Option<&syn::Expr>; 2])> {
+    Some(match expr {
+        syn::Expr::Repeat(repeat) => ("rep", [Some(&*repeat.expr), Some(&*repeat.len)]),
+        syn::Expr::Range(range) => ("range", [range.start.as_deref(), range.end.as_deref()]),
+        syn::Expr::Index(index) => ("idx", [Some(&*index.expr), Some(&*index.index)]),
+        syn::Expr::Let(binding) => ("le", [Some(&*binding.expr), None]),
+        syn::Expr::Assign(assign) => ("as", [Some(&*assign.left), Some(&*assign.right)]),
+        syn::Expr::Return(r#return) => ("ret", [r#return.expr.as_deref(), None]),
+        syn::Expr::Break(r#break) => ("br", [r#break.expr.as_deref(), None]),
+        syn::Expr::Try(r#try) => ("try", [Some(&*r#try.expr), None]),
+        syn::Expr::Await(r#await) => ("aw", [Some(&*r#await.base), None]),
+        _ => return None,
+    })
 }
 
 /// The label and sites of a path, a single-segment unqualified name
@@ -1637,23 +1668,39 @@ fn value_sites(label: &Lbl, sites: &mut Vec<Site>) {
     }
 }
 
-/// The label of a tuple, its elements in source order.
-fn label_tuple(
+/// The label `tag` over `children`, labeled in order, with their sites in the same order.
+fn label_exprs<'e>(
+    tag: &str,
+    children: impl IntoIterator<Item = &'e syn::Expr>,
     renamer: &Renamer,
     env: &Env<'_>,
-    elems: &syn::punctuated::Punctuated<syn::Expr, syn::token::Comma>,
     consumer: usize,
     locals: &mut usize,
     orders: Option<&RefCell<FieldOrders>>,
 ) -> (Lbl, Vec<Site>) {
-    let mut children = Vec::new();
+    let mut labels = Vec::new();
     let mut sites = Vec::new();
-    for element in elems {
-        let (label, e_sites) = label_expr(renamer, env, element, consumer, locals, orders);
-        children.push(label);
-        sites.extend(e_sites);
+    for child in children {
+        let (label, child_sites) = label_expr(renamer, env, child, consumer, locals, orders);
+        labels.push(label);
+        sites.extend(child_sites);
     }
-    (Lbl::Other("t".into(), children), sites)
+    (Lbl::Other(tag.into(), labels), sites)
+}
+
+/// Bind every name `pat` declares in `env` to a fresh local port carrying `prim`.
+fn bind_locals(env: &mut Env<'_>, pat: &syn::Pat, prim: Option<PrimTy>, locals: &mut usize) {
+    for name in pat_names(pat) {
+        env.insert(
+            name,
+            Value {
+                port: Port::Local(*locals),
+                prim,
+                helper: None,
+            },
+        );
+        *locals += 1;
+    }
 }
 
 /// Label a call with its resolved callee and independently total ordered arguments.
@@ -1730,9 +1777,9 @@ fn total_helper(
             return None;
         }
     }
-    let mut scan = BranchScan::new();
+    let mut scan = values::Bounds::lenient();
     scan.visit_expr_call(call);
-    (scan.valid && !scan.attributed).then_some(facts.result)
+    (scan.valid && !scan.observed).then_some(facts.result)
 }
 
 /// The label of a method call, the receiver's sites marked on its storage,
@@ -2110,73 +2157,6 @@ pub(crate) fn condition_polarity(expr: &syn::Expr) -> (&syn::Expr, bool) {
     }
 }
 
-pub(crate) struct BranchScan {
-    pub(crate) attributed: bool,
-    pub(crate) depth: usize,
-    pub(crate) expr_depth: usize,
-    pub(crate) nodes: usize,
-    pub(crate) valid: bool,
-}
-
-impl BranchScan {
-    pub(crate) fn new() -> Self {
-        Self {
-            attributed: false,
-            depth: 0,
-            expr_depth: 0,
-            nodes: 0,
-            valid: true,
-        }
-    }
-}
-
-impl<'ast> Visit<'ast> for BranchScan {
-    fn visit_attribute(&mut self, _: &'ast syn::Attribute) {
-        self.attributed = true;
-    }
-
-    fn visit_block(&mut self, block: &'ast syn::Block) {
-        let expr_depth = core::mem::replace(&mut self.expr_depth, 0);
-        self.depth += 1;
-        if !self.valid || self.depth > MAX_BLOCK_DEPTH {
-            self.valid = false;
-        } else {
-            syn::visit::visit_block(self, block);
-        }
-        self.depth -= 1;
-        self.expr_depth = expr_depth;
-    }
-
-    fn visit_stmt(&mut self, stmt: &'ast syn::Stmt) {
-        self.nodes += 1;
-        if !self.valid || self.nodes > MAX_REGION_NODES {
-            self.valid = false;
-            return;
-        }
-        syn::visit::visit_stmt(self, stmt);
-    }
-
-    fn visit_expr(&mut self, expr: &'ast syn::Expr) {
-        self.nodes += 1;
-        self.expr_depth += 1;
-        if !self.valid || self.nodes > MAX_REGION_NODES || self.expr_depth > MAX_BLOCK_DEPTH {
-            self.valid = false;
-        } else {
-            syn::visit::visit_expr(self, expr);
-        }
-        self.expr_depth -= 1;
-    }
-
-    fn visit_item(&mut self, item: &'ast syn::Item) {
-        self.nodes += 1;
-        if !self.valid || self.nodes > MAX_REGION_NODES {
-            self.valid = false;
-            return;
-        }
-        syn::visit::visit_item(self, item);
-    }
-}
-
 /// Whether both ordinary branches are unattributed and within the shared bounds.
 pub(crate) fn branches_unattributed(
     attrs: &[syn::Attribute],
@@ -2186,10 +2166,10 @@ pub(crate) fn branches_unattributed(
     if !attrs.is_empty() {
         return false;
     }
-    let mut scan = BranchScan::new();
+    let mut scan = values::Bounds::lenient();
     scan.visit_block(then);
     scan.visit_expr_block(otherwise);
-    scan.valid && !scan.attributed
+    scan.valid && !scan.observed
 }
 
 /// Orient an unattributed conditional by its leading negation parity.
@@ -2360,17 +2340,7 @@ fn label_for_loop(
 ) -> (Lbl, Vec<Site>) {
     let (iterable, mut sites) = label_expr(renamer, env, &for_loop.expr, consumer, locals, orders);
     let mut inner = env.clone();
-    for name in pat_names(&for_loop.pat) {
-        inner.insert(
-            name,
-            Value {
-                port: Port::Local(*locals),
-                prim: None,
-                helper: None,
-            },
-        );
-        *locals += 1;
-    }
+    bind_locals(&mut inner, &for_loop.pat, None, locals);
     let (body, body_sites) = label_block(renamer, &inner, &for_loop.body, consumer, locals, orders);
     sites.extend(body_sites);
     (Lbl::Other("for".into(), vec![iterable, body]), sites)
@@ -2424,17 +2394,7 @@ fn label_match_expr(
     let mut children = vec![scrutinee];
     for arm in &r#match.arms {
         let mut inner = env.clone();
-        for name in pat_names(&arm.pat) {
-            inner.insert(
-                name,
-                Value {
-                    port: Port::Local(*locals),
-                    prim: None,
-                    helper: None,
-                },
-            );
-            *locals += 1;
-        }
+        bind_locals(&mut inner, &arm.pat, None, locals);
         let (guard_label, guard_sites) = match &arm.pat {
             syn::Pat::Guard(guard) => {
                 label_expr(renamer, &inner, &guard.guard, consumer, locals, orders)
@@ -2492,9 +2452,9 @@ pub(crate) fn boolean_match(
 
 /// The single bounded scalar tail of an unattributed arm body.
 fn arm_tail(body: &syn::Expr) -> Option<&syn::Expr> {
-    let mut scan = BranchScan::new();
+    let mut scan = values::Bounds::lenient();
     scan.visit_expr(body);
-    if !scan.valid || scan.attributed {
+    if !scan.valid || scan.observed {
         return None;
     }
     match body {
@@ -2555,17 +2515,7 @@ fn label_closure(
             syn::Pat::Type(pat_type) => renamer.param_prim(&pat_type.ty),
             _ => None,
         };
-        for name in pat_names(input) {
-            inner.insert(
-                name,
-                Value {
-                    port: Port::Local(*locals),
-                    prim,
-                    helper: None,
-                },
-            );
-            *locals += 1;
-        }
+        bind_locals(&mut inner, input, prim, locals);
     }
     let (body, body_sites) = match &*closure.body {
         syn::Expr::Block(block) => {
@@ -2581,79 +2531,6 @@ fn label_closure(
         })
         .collect();
     (Lbl::Other("cl".into(), vec![body]), sites)
-}
-
-/// The label of an array literal, its elements in source order.
-fn label_array(
-    renamer: &Renamer,
-    env: &Env<'_>,
-    array: &syn::ExprArray,
-    consumer: usize,
-    locals: &mut usize,
-    orders: Option<&RefCell<FieldOrders>>,
-) -> (Lbl, Vec<Site>) {
-    let mut children = Vec::new();
-    let mut sites = Vec::new();
-    for element in &array.elems {
-        let (label, e_sites) = label_expr(renamer, env, element, consumer, locals, orders);
-        children.push(label);
-        sites.extend(e_sites);
-    }
-    (Lbl::Other("arr".into(), children), sites)
-}
-
-/// The label of a repeat expression, its element and its length.
-fn label_repeat(
-    renamer: &Renamer,
-    env: &Env<'_>,
-    repeat: &syn::ExprRepeat,
-    consumer: usize,
-    locals: &mut usize,
-    orders: Option<&RefCell<FieldOrders>>,
-) -> (Lbl, Vec<Site>) {
-    let (element, mut sites) = label_expr(renamer, env, &repeat.expr, consumer, locals, orders);
-    let (length, l_sites) = label_expr(renamer, env, &repeat.len, consumer, locals, orders);
-    sites.extend(l_sites);
-    (Lbl::Other("rep".into(), vec![element, length]), sites)
-}
-
-/// The label of a range expression, its endpoints present when they are.
-fn label_range(
-    renamer: &Renamer,
-    env: &Env<'_>,
-    range: &syn::ExprRange,
-    consumer: usize,
-    locals: &mut usize,
-    orders: Option<&RefCell<FieldOrders>>,
-) -> (Lbl, Vec<Site>) {
-    let mut children = Vec::new();
-    let mut sites = Vec::new();
-    if let Some(start) = &range.start {
-        let (label, s_sites) = label_expr(renamer, env, start, consumer, locals, orders);
-        children.push(label);
-        sites.extend(s_sites);
-    }
-    if let Some(end) = &range.end {
-        let (label, s_sites) = label_expr(renamer, env, end, consumer, locals, orders);
-        children.push(label);
-        sites.extend(s_sites);
-    }
-    (Lbl::Other("range".into(), children), sites)
-}
-
-/// The label of an index expression, its base and its index.
-fn label_index(
-    renamer: &Renamer,
-    env: &Env<'_>,
-    index_expr: &syn::ExprIndex,
-    consumer: usize,
-    locals: &mut usize,
-    orders: Option<&RefCell<FieldOrders>>,
-) -> (Lbl, Vec<Site>) {
-    let (base, mut sites) = label_expr(renamer, env, &index_expr.expr, consumer, locals, orders);
-    let (idx, i_sites) = label_expr(renamer, env, &index_expr.index, consumer, locals, orders);
-    sites.extend(i_sites);
-    (Lbl::Other("idx".into(), vec![base, idx]), sites)
 }
 
 /// The label of a field projection, its base and the member's text.
@@ -2753,67 +2630,6 @@ fn permute_values<T>(values: &mut [T], order: &[usize]) {
     }
 }
 
-/// The label of a `let` expression, its scrutinee labeled.
-fn label_let_expr(
-    renamer: &Renamer,
-    env: &Env<'_>,
-    let_expr: &syn::ExprLet,
-    consumer: usize,
-    locals: &mut usize,
-    orders: Option<&RefCell<FieldOrders>>,
-) -> (Lbl, Vec<Site>) {
-    let (value, sites) = label_expr(renamer, env, &let_expr.expr, consumer, locals, orders);
-    (Lbl::Other("le".into(), vec![value]), sites)
-}
-
-/// The label of an assignment expression, its sides in operand order.
-fn label_assign(
-    renamer: &Renamer,
-    env: &Env<'_>,
-    assign: &syn::ExprAssign,
-    consumer: usize,
-    locals: &mut usize,
-    orders: Option<&RefCell<FieldOrders>>,
-) -> (Lbl, Vec<Site>) {
-    let (left, mut sites) = label_expr(renamer, env, &assign.left, consumer, locals, orders);
-    let (right, r_sites) = label_expr(renamer, env, &assign.right, consumer, locals, orders);
-    sites.extend(r_sites);
-    (Lbl::Other("as".into(), vec![left, right]), sites)
-}
-
-/// The label of an expression that may carry a value, a `return` or a
-/// `break`, the operand empty when the value is absent.
-fn label_optional_value(
-    tag: &str,
-    renamer: &Renamer,
-    env: &Env<'_>,
-    value: Option<&syn::Expr>,
-    consumer: usize,
-    locals: &mut usize,
-    orders: Option<&RefCell<FieldOrders>>,
-) -> (Lbl, Vec<Site>) {
-    match value {
-        Some(value) => {
-            let (label, sites) = label_expr(renamer, env, value, consumer, locals, orders);
-            (Lbl::Other(tag.into(), vec![label]), sites)
-        }
-        None => (Lbl::Other(tag.into(), Vec::new()), Vec::new()),
-    }
-}
-
-/// The label of a `try` expression, its operand labeled.
-fn label_try(
-    renamer: &Renamer,
-    env: &Env<'_>,
-    try_expr: &syn::ExprTry,
-    consumer: usize,
-    locals: &mut usize,
-    orders: Option<&RefCell<FieldOrders>>,
-) -> (Lbl, Vec<Site>) {
-    let (label, sites) = label_expr(renamer, env, &try_expr.expr, consumer, locals, orders);
-    (Lbl::Other("try".into(), vec![label]), sites)
-}
-
 /// The label of a block expression, a `try` block, an `unsafe` block, an
 /// `async` block, or a `const` block.
 fn label_blk(
@@ -2826,19 +2642,6 @@ fn label_blk(
 ) -> (Lbl, Vec<Site>) {
     let (label, sites) = label_block(renamer, env, block, consumer, locals, orders);
     (Lbl::Other("blk".into(), vec![label]), sites)
-}
-
-/// The label of an `await` expression, its operand labeled.
-fn label_await(
-    renamer: &Renamer,
-    env: &Env<'_>,
-    await_expr: &syn::ExprAwait,
-    consumer: usize,
-    locals: &mut usize,
-    orders: Option<&RefCell<FieldOrders>>,
-) -> (Lbl, Vec<Site>) {
-    let (label, sites) = label_expr(renamer, env, &await_expr.base, consumer, locals, orders);
-    (Lbl::Other("aw".into(), vec![label]), sites)
 }
 
 /// The label of a cast expression, its operand and its target type text.
@@ -3033,17 +2836,7 @@ fn label_block(
             } else {
                 None
             };
-            for name in pat_names(&local.pat) {
-                inner.insert(
-                    name,
-                    Value {
-                        port: Port::Local(*locals),
-                        prim,
-                        helper: None,
-                    },
-                );
-                *locals += 1;
-            }
+            bind_locals(&mut inner, &local.pat, prim, locals);
         }
         children.push(label);
     }
@@ -3169,57 +2962,11 @@ fn color_node(color: Color) -> Lbl {
 /// previous-round colors.
 fn color_substitute(lbl: &Lbl, colors: &[Color]) -> Lbl {
     match lbl {
-        Lbl::Ref(value) => {
-            if let Port::Node(index) = &value.port {
-                color_node(colors[*index])
-            } else {
-                lbl.clone()
-            }
-        }
-        Lbl::Not(inner) => Lbl::Not(Box::new(color_substitute(inner, colors))),
-        Lbl::Op(op, left, right, prim) => Lbl::Op(
-            *op,
-            Box::new(color_substitute(left, colors)),
-            Box::new(color_substitute(right, colors)),
-            *prim,
-        ),
-        Lbl::Flat(op, leaves, prim) => {
-            let mut leaves: Vec<_> = leaves
-                .iter()
-                .map(|leaf| color_substitute(leaf, colors))
-                .collect();
-            leaves.sort();
-            Lbl::Flat(*op, leaves, *prim)
-        }
-        Lbl::Other(kind, children) => Lbl::Other(
-            kind.clone(),
-            children
-                .iter()
-                .map(|child| color_substitute(child, colors))
-                .collect(),
-        ),
-        Lbl::Select(children, prim) => Lbl::Select(
-            children
-                .iter()
-                .map(|child| color_substitute(child, colors))
-                .collect(),
-            *prim,
-        ),
-        Lbl::Graph(root, definitions) => Lbl::Graph(
-            Box::new(color_substitute(root, colors)),
-            definitions
-                .iter()
-                .map(|definition| color_substitute(definition, colors))
-                .collect(),
-        ),
-        Lbl::Call(callee, args, prim) => Lbl::Call(
-            Box::new(color_substitute(callee, colors)),
-            args.iter()
-                .map(|arg| color_substitute(arg, colors))
-                .collect(),
-            *prim,
-        ),
-        other => other.clone(),
+        Lbl::Ref(Value {
+            port: Port::Node(index),
+            ..
+        }) => color_node(colors[*index]),
+        lbl => lbl.map_children(&mut |child| color_substitute(child, colors)),
     }
 }
 
@@ -3248,43 +2995,7 @@ where
 {
     match lbl {
         Lbl::Future(index, prim) => map_future(*index, *prim),
-        Lbl::Not(inner) => Lbl::Not(Box::new(future_substitute(inner, map_future))),
-        Lbl::Op(op, left, right, prim) => Lbl::Op(
-            *op,
-            Box::new(future_substitute(left, map_future)),
-            Box::new(future_substitute(right, map_future)),
-            *prim,
-        ),
-        Lbl::Flat(op, leaves, prim) => {
-            let mut leaves = leaves
-                .iter()
-                .map(|leaf| future_substitute(leaf, map_future))
-                .collect::<Vec<_>>();
-            leaves.sort();
-            Lbl::Flat(*op, leaves, *prim)
-        }
-        Lbl::Other(kind, children) => Lbl::Other(
-            kind.clone(),
-            children
-                .iter()
-                .map(|child| future_substitute(child, map_future))
-                .collect(),
-        ),
-        Lbl::Select(children, prim) => Lbl::Select(
-            children
-                .iter()
-                .map(|child| future_substitute(child, map_future))
-                .collect(),
-            *prim,
-        ),
-        Lbl::Call(callee, args, prim) => Lbl::Call(
-            Box::new(future_substitute(callee, map_future)),
-            args.iter()
-                .map(|arg| future_substitute(arg, map_future))
-                .collect(),
-            *prim,
-        ),
-        other => other.clone(),
+        lbl => lbl.map_children(&mut |child| future_substitute(child, map_future)),
     }
 }
 
@@ -3302,23 +3013,11 @@ fn future_color_substitute(lbl: &Lbl, colors: &[Color]) -> Lbl {
 fn future_refs(lbl: &Lbl, visit: &mut impl FnMut(usize)) {
     match lbl {
         Lbl::Future(index, _) => visit(*index),
-        Lbl::Not(inner) => future_refs(inner, visit),
-        Lbl::Op(_, left, right, _) => {
-            future_refs(left, visit);
-            future_refs(right, visit);
-        }
-        Lbl::Flat(_, children, _) | Lbl::Other(_, children) | Lbl::Select(children, _) => {
-            for child in children {
+        lbl => {
+            for child in lbl.children() {
                 future_refs(child, visit);
             }
         }
-        Lbl::Call(callee, args, _) => {
-            future_refs(callee, visit);
-            for arg in args {
-                future_refs(arg, visit);
-            }
-        }
-        _ => {}
     }
 }
 
@@ -3465,30 +3164,7 @@ fn future_summary(lbl: &Lbl) -> Lbl {
             definitions.sort();
             Lbl::Graph(Box::new(future_rank_substitute(root, &ranks)), definitions)
         }
-        Lbl::Not(inner) => Lbl::Not(Box::new(future_summary(inner))),
-        Lbl::Op(op, left, right, prim) => Lbl::Op(
-            *op,
-            Box::new(future_summary(left)),
-            Box::new(future_summary(right)),
-            *prim,
-        ),
-        Lbl::Flat(op, leaves, prim) => {
-            let mut leaves = leaves.iter().map(future_summary).collect::<Vec<_>>();
-            leaves.sort();
-            Lbl::Flat(*op, leaves, *prim)
-        }
-        Lbl::Other(kind, children) => {
-            Lbl::Other(kind.clone(), children.iter().map(future_summary).collect())
-        }
-        Lbl::Select(children, prim) => {
-            Lbl::Select(children.iter().map(future_summary).collect(), *prim)
-        }
-        Lbl::Call(callee, args, prim) => Lbl::Call(
-            Box::new(future_summary(callee)),
-            args.iter().map(future_summary).collect(),
-            *prim,
-        ),
-        other => other.clone(),
+        lbl => lbl.map_children(&mut future_summary),
     }
 }
 
@@ -4003,19 +3679,7 @@ fn label_affected(lbl: &Lbl, affected: &[bool]) -> bool {
             port: Port::Node(index),
             ..
         }) => affected[*index],
-        Lbl::Not(inner) => label_affected(inner, affected),
-        Lbl::Op(_, left, right, _) => {
-            label_affected(left, affected) || label_affected(right, affected)
-        }
-        Lbl::Flat(_, children, _) | Lbl::Other(_, children) | Lbl::Select(children, _) => {
-            children.iter().any(|child| label_affected(child, affected))
-        }
-        Lbl::Call(callee, args, _) => {
-            label_affected(callee, affected) || {
-                args.iter().any(|arg| label_affected(arg, affected))
-            }
-        }
-        _ => false,
+        lbl => lbl.children().any(|child| label_affected(child, affected)),
     }
 }
 
