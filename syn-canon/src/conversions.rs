@@ -247,7 +247,10 @@ impl Fold<'_, '_> {
                     }
                     Declared::String => associated_call(ident("String"), None, "new", None),
                     Declared::Vec => associated_call(ident("Vec"), None, "new", None),
-                    Declared::Str => return,
+                    Declared::Str => syn::Expr::Lit(syn::ExprLit {
+                        attrs: Vec::new(),
+                        lit: syn::Lit::Str(syn::LitStr::new("", proc_macro2::Span::call_site())),
+                    }),
                 };
             }
             _ => {}
@@ -320,10 +323,9 @@ impl Fold<'_, '_> {
         {
             return;
         }
-        let syn::Expr::Path(path) = call.func.as_mut() else {
-            return;
-        };
-        if let Some(last) = path.path.segments.last_mut() {
+        if let syn::Expr::Path(path) = call.func.as_mut()
+            && let Some(last) = path.path.segments.last_mut()
+        {
             last.ident = syn::Ident::new("take", last.ident.span());
         }
         call.args.pop();
@@ -458,13 +460,13 @@ fn owner_call(
         || path.path.leading_colon.is_some()
         || !method.arguments.is_none()
         || method.ident != name
+        || matches!(owner.arguments, syn::PathArguments::Parenthesized(_))
     {
         return None;
     }
     let arguments = match &owner.arguments {
-        syn::PathArguments::None => None,
         syn::PathArguments::AngleBracketed(arguments) => Some(arguments.clone()),
-        syn::PathArguments::Parenthesized(_) => return None,
+        _ => None,
     };
     Some((owner.ident.clone(), arguments))
 }

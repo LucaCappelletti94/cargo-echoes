@@ -56,6 +56,9 @@ fn declared_primitive_conversions_read_as_from() {
     rows("b: bool", "u8", &[&["b as u8", "b.into()"]]);
     rows("c: char", "u32", &[&["c as u32", "c.into()"]]);
     rows("b: u8", "char", &[&["b as char", "b.into()"]]);
+    rows("", "u32", &[&["u32::from('a')", "'a'.into()"]]);
+    rows("", "u8", &[&["u8::from(true)", "true.into()"]]);
+    rows("", "u32", &[&["u32::from(7u16)", "7u16.into()"]]);
 }
 
 #[test]
@@ -79,6 +82,7 @@ fn declared_string_conversions_read_as_from() {
 #[test]
 fn standard_defaults_read_as_their_values() {
     rows("", "u32", &[&["0", "u32::default()", "Default::default()"]]);
+    rows("", "&'static str", &[&["\"\"", "Default::default()"]]);
     rows(
         "",
         "i64",
@@ -167,6 +171,22 @@ fn undeclared_targets_lossy_conversions_and_user_defaults_stay_apart() {
         (
             function("v: &mut Vec<u32>", "Vec<u32>", "std::mem::replace(v, vec![1])"),
             function("v: &mut Vec<u32>", "Vec<u32>", "std::mem::take(v)"),
+        ),
+        (
+            function("v: &mut Vec<u32>", "Vec<u32>", "std::mem::replace(v, (make)())"),
+            function("v: &mut Vec<u32>", "Vec<u32>", "std::mem::take(v)"),
+        ),
+        (
+            function("", "u32", "5char.into()"),
+            function("", "u32", "u32::from(5char)"),
+        ),
+        (
+            function("", "u32", "1.5.into()"),
+            function("", "u32", "u32::from(1.5)"),
+        ),
+        (
+            function("v: &[u8]", "u64", "v.len().into()"),
+            function("v: &[u8]", "u64", "v.len() as u64"),
         ),
         (
             "struct Num;\nimpl Num { fn new() -> Num { Num } }\nfn f(v: &mut Num) -> Num { std::mem::replace(v, Num::new()) }".to_owned(),
