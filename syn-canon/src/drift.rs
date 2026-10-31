@@ -2875,13 +2875,13 @@ fn line_macro(
     rebound: u64,
 ) -> bool {
     let bare = path.leading_colon.is_none() && path.segments.len() == 1;
-    let Some(last) = path.segments.last_mut() else {
-        return false;
-    };
-    let Some(syn::Expr::Lit(syn::ExprLit {
-        attrs,
-        lit: syn::Lit::Str(format),
-    })) = args.iter_mut().nth(at)
+    let (
+        Some(last),
+        Some(syn::Expr::Lit(syn::ExprLit {
+            attrs,
+            lit: syn::Lit::Str(format),
+        })),
+    ) = (path.segments.last_mut(), args.iter_mut().nth(at))
     else {
         return false;
     };

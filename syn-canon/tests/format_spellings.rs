@@ -120,6 +120,10 @@ fn raw_carriage_argument_and_local_spellings_stay_apart() {
             function("let _ = format!(\"{x}\")"),
         ),
         (
+            function("let _ = format!(\"{a} {}\", a = x, y)"),
+            function("let _ = format!(\"{x} {y}\")"),
+        ),
+        (
             "macro_rules! println { ($($t:tt)*) => {} }\nfn f(x: u32) { print!(\"{}\\n\", x); }"
                 .to_owned(),
             "macro_rules! println { ($($t:tt)*) => {} }\nfn f(x: u32) { println!(\"{}\", x); }"
