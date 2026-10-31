@@ -278,6 +278,10 @@ pub mod alpha {
     pub fn widened(value: u16) -> u32 {
         value.into()
     }
+    pub fn listed() -> usize {
+        let items: Vec<u32> = Vec::new();
+        items.len()
+    }
 }
 mod custom {
     macro_rules! vec {

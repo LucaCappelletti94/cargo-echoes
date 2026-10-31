@@ -160,6 +160,41 @@ impl Fold {
         Some(Collection { kind, access })
     }
 
+    /// The owned `Vec` or `String` the unattributed call `init` of the standard `new` or
+    /// `with_capacity` builds.
+    fn constructed(&self, init: &syn::Expr) -> Option<Collection> {
+        let syn::Expr::Call(call) = init else {
+            return None;
+        };
+        let syn::Expr::Path(callee) = call.func.as_ref() else {
+            return None;
+        };
+        let [owner, method] = callee.path.segments.iter().collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        let arity = match ident_name(&method.ident).as_str() {
+            "new" => 0,
+            "with_capacity" => 1,
+            _ => return None,
+        };
+        let kind = match (ident_name(&owner.ident).as_str(), &owner.arguments) {
+            ("Vec", syn::PathArguments::None | syn::PathArguments::AngleBracketed(_)) => Kind::Vec,
+            ("String", syn::PathArguments::None) => Kind::String,
+            _ => return None,
+        };
+        (call.attrs.is_empty()
+            && call.args.len() == arity
+            && callee.attrs.is_empty()
+            && callee.qself.is_none()
+            && callee.path.leading_colon.is_none()
+            && method.arguments.is_none()
+            && self.named.contains(&kind))
+        .then_some(Collection {
+            kind,
+            access: Access::Owned,
+        })
+    }
+
     /// Bind the names of `pat`, a lone identifier to `kind` and every other name to `None`.
     fn bind(&mut self, pat: &syn::Pat, kind: Option<Collection>) {
         struct Names<'s>(
@@ -637,6 +672,14 @@ impl VisitMut for Fold {
             syn::Pat::Type(typed) if local.attrs.is_empty() => {
                 (typed.pat.as_ref(), self.collection(&typed.ty))
             }
+            pat if local.attrs.is_empty() => (
+                pat,
+                local
+                    .init
+                    .as_ref()
+                    .filter(|init| init.diverge.is_none())
+                    .and_then(|init| self.constructed(&init.expr)),
+            ),
             pat => (pat, None),
         };
         self.bind(pat, kind);

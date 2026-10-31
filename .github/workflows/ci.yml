@@ -686,3 +686,16 @@ jobs:
         with:
           name: declared-conversions-witnesses
           path: ${{ runner.temp }}/declared-conversions-witnesses.json
+      - name: Verify constructor annotation witnesses
+        id: constructor_annotations_witnesses
+        run: >-
+          python3 -B tests/dependency_constants_witnesses.py
+          --cases tests/fixtures/dependency/constructor_annotations_cases.json
+          --request-id "DG-CI-ANNOTATIONS-${{ github.run_id }}-${{ github.run_attempt }}"
+          --output "${{ runner.temp }}/constructor-annotations-witnesses.json"
+          --timeout 900
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && steps.constructor_annotations_witnesses.outcome != 'skipped'
+        with:
+          name: constructor-annotations-witnesses
+          path: ${{ runner.temp }}/constructor-annotations-witnesses.json

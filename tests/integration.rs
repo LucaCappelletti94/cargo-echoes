@@ -2335,6 +2335,43 @@ fn default_replacements_group_with_take() {
     assert_eq!(function_groups(&scan(3)).len(), 0);
 }
 
+const ANNOTATIONS_FIXTURE: &str = "tests/fixtures/annotationsws";
+
+#[test]
+fn annotated_constructor_doctests_group_with_their_turbofish() {
+    let report = Echoes::default().run(ANNOTATIONS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["annotationsws::Annotated", "annotationsws::Turbofish"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default()
+        .min_tokens(28)
+        .run(ANNOTATIONS_FIXTURE)
+        .unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default()
+        .min_tokens(29)
+        .run(ANNOTATIONS_FIXTURE)
+        .unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn imported_map_annotations_group_with_their_turbofish() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(ANNOTATIONS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["annotationsws::counts", "annotationsws::tallies"]];
+    for tokens in [0, 30] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(31)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

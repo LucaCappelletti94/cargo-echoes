@@ -1,4 +1,4 @@
-//! Conversions and defaults whose target a declaration fixes.
+//! Conversions, defaults and annotations whose type a declaration fixes.
 //!
 //! A `let` annotation or the declared return type of a function tail fixes the target of
 //! `x.into()` and `Default::default()`. With a primitive or `String` target and a source whose
@@ -8,6 +8,11 @@
 //! as the zero literal, `false`, `'\0'` or the empty constructor the standard impl returns, and
 //! `mem::replace(x, d)` with such a default reads as `mem::take(x)`, which the standard library
 //! defines as that call.
+//!
+//! A `let` annotation that repeats the type its initializer already fixes reads as that
+//! initializer alone: `let y: P = x` with `x` of the primitive `P` as `let y = x`, and
+//! `let v: C<T…> = C::new()` or `C::with_capacity(n)` of a standard collection `C` as
+//! `let v = C::<T…>::new()` and its `with_capacity` counterpart.
 
 use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, BTreeSet};
@@ -330,6 +335,94 @@ impl Fold<'_, '_> {
         }
     }
 
+    /// Drop the annotation of a `let` binding one identifier whose initializer already fixes
+    /// the annotated type, a primitive value or a standard collection constructor, moving a
+    /// collection's type arguments onto the constructor.
+    fn annotation(&self, local: &mut syn::Local, declared: Option<&Declared>) {
+        let syn::Pat::Type(typed) = &local.pat else {
+            return;
+        };
+        let Some(init) = &mut local.init else {
+            return;
+        };
+        let plain = matches!(typed.pat.as_ref(), syn::Pat::Ident(ident)
+            if ident.attrs.is_empty() && ident.by_ref.is_none() && ident.subpat.is_none());
+        if !local.attrs.is_empty() || !typed.attrs.is_empty() || !plain || init.diverge.is_some() {
+            return;
+        }
+        let stated = match (declared, self.source(&init.expr)) {
+            (Some(Declared::Prim(to, _)), Some(Declared::Prim(from, _))) => *to == from,
+            _ => self.constructor(&typed.ty, &mut init.expr),
+        };
+        if stated {
+            let binding = typed.pat.as_ref().clone();
+            local.pat = binding;
+        }
+    }
+
+    /// Move the type arguments of the annotation `ty` of a standard collection onto the
+    /// initializer `init` when it calls that collection's `new` or `with_capacity`, reporting
+    /// whether it did.
+    fn constructor(&self, ty: &syn::Type, init: &mut syn::Expr) -> bool {
+        let syn::Type::Path(annotation) = ty else {
+            return false;
+        };
+        let Some(collection) = self.renamer.standard_collection(&annotation.path) else {
+            return false;
+        };
+        let arguments = match annotation
+            .path
+            .segments
+            .last()
+            .map(|segment| &segment.arguments)
+        {
+            Some(syn::PathArguments::None) if collection == "String" => None,
+            Some(syn::PathArguments::AngleBracketed(arguments))
+                if collection != "String" && !infers(arguments) =>
+            {
+                Some(arguments.clone())
+            }
+            _ => return false,
+        };
+        let syn::Expr::Call(call) = init else {
+            return false;
+        };
+        let syn::Expr::Path(callee) = call.func.as_mut() else {
+            return false;
+        };
+        let mut owner = callee.path.clone();
+        let Some(method) = owner.segments.pop() else {
+            return false;
+        };
+        owner.segments.pop_punct();
+        let arity = match ident_name(&method.ident).as_str() {
+            "new" => 0,
+            "with_capacity" => 1,
+            _ => return false,
+        };
+        if annotation.qself.is_some()
+            || !call.attrs.is_empty()
+            || call.args.len() != arity
+            || !callee.attrs.is_empty()
+            || callee.qself.is_some()
+            || !method.arguments.is_none()
+            || owner
+                .segments
+                .last()
+                .is_none_or(|segment| !segment.arguments.is_none())
+            || self.renamer.standard_collection(&owner) != Some(collection)
+        {
+            return false;
+        }
+        if let Some(mut arguments) = arguments {
+            arguments.colon2_token = Some(syn::token::PathSep::default());
+            let count = callee.path.segments.len();
+            callee.path.segments[count - 2].arguments =
+                syn::PathArguments::AngleBracketed(arguments);
+        }
+        true
+    }
+
     fn scoped(&mut self, visit: impl FnOnce(&mut Self)) {
         self.scopes.push(BTreeMap::new());
         visit(self);
@@ -370,6 +463,7 @@ impl VisitMut for Fold<'_, '_> {
             }
             pat => (pat.clone(), None),
         };
+        let mut known = declared.clone();
         if let Some(init) = &mut local.init {
             self.visit_expr_mut(&mut init.expr);
             if let Some(target) = &declared {
@@ -377,9 +471,12 @@ impl VisitMut for Fold<'_, '_> {
             }
             if let Some((_, diverge)) = &mut init.diverge {
                 self.visit_expr_mut(diverge);
+            } else if !matches!(local.pat, syn::Pat::Type(_)) && local.attrs.is_empty() {
+                known = self.source(&init.expr);
             }
         }
-        self.bind(&pat, declared);
+        self.annotation(local, declared.as_ref());
+        self.bind(&pat, known);
     }
 
     fn visit_expr_closure_mut(&mut self, closure: &mut syn::ExprClosure) {
@@ -510,6 +607,19 @@ fn associated_call(
         paren_token: syn::token::Paren::default(),
         args: argument.into_iter().collect(),
     })
+}
+
+/// Whether `arguments` leave any type to inference with `_`.
+fn infers(arguments: &syn::AngleBracketedGenericArguments) -> bool {
+    struct Infer(bool);
+    impl syn::visit::Visit<'_> for Infer {
+        fn visit_type_infer(&mut self, _: &syn::TypeInfer) {
+            self.0 = true;
+        }
+    }
+    let mut infer = Infer(false);
+    syn::visit::Visit::visit_angle_bracketed_generic_arguments(&mut infer, arguments);
+    infer.0
 }
 
 fn ident(name: &str) -> syn::Ident {

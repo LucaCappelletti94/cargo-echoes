@@ -1795,6 +1795,69 @@ impl<'env> Renamer<'env> {
         .then_some(tag)
     }
 
+    /// The standard collection the type path `path` names, the arguments of its last segment
+    /// aside: `Vec` and `String` through the prelude, `Vec`, `String`, `VecDeque`, `BTreeMap`,
+    /// `BTreeSet`, `HashMap` and `HashSet` through an import of their standard path, or any of
+    /// them by that path.
+    pub(crate) fn standard_collection(&self, path: &syn::Path) -> Option<&'static str> {
+        let segments = path.segments.iter().collect::<Vec<_>>();
+        let (last, modules) = segments.split_last()?;
+        if modules.iter().any(|segment| !segment.arguments.is_none())
+            || path.leading_colon.is_some() && modules.is_empty()
+        {
+            return None;
+        }
+        let name = crate::scope::ident_name(&last.ident);
+        let collection = *STANDARD_COLLECTIONS
+            .iter()
+            .find(|collection| **collection == name)?;
+        let [head, rest @ ..] = modules else {
+            let Some(binding) = self.lookup_with_opaque(&[Ns::Type], collection, false) else {
+                return (matches!(collection, "Vec" | "String")
+                    && self.prelude
+                    && self.standard_unbound(collection))
+                .then_some(collection);
+            };
+            let target: Vec<&str> = match (binding.external, binding.target) {
+                (Some(external), _) => external.iter().map(String::as_str).collect(),
+                (None, Some(index)) => {
+                    let target = self.target_of(binding.domain, index);
+                    if target
+                        .segments
+                        .iter()
+                        .any(|segment| segment.origin.is_some())
+                    {
+                        return None;
+                    }
+                    target
+                        .segments
+                        .iter()
+                        .map(|segment| segment.name.as_str())
+                        .collect()
+                }
+                (None, None) => return None,
+            };
+            let [root, module @ ..] = target.as_slice() else {
+                return None;
+            };
+            let root = crate::macros::StandardRoot::named(root)?;
+            return standard_collection_path(root, module, collection).then_some(collection);
+        };
+        let head = crate::scope::ident_name(&head.ident);
+        let root = if path.leading_colon.is_some() {
+            crate::macros::StandardRoot::named(&head)?
+        } else {
+            self.standard_root(&head)?
+        };
+        let module: Vec<String> = rest
+            .iter()
+            .map(|segment| crate::scope::ident_name(&segment.ident))
+            .chain(core::iter::once(name))
+            .collect();
+        let module: Vec<&str> = module.iter().map(String::as_str).collect();
+        standard_collection_path(root, &module, collection).then_some(collection)
+    }
+
     fn standard_binding(&self, binding: Resolved<'_>) -> Option<crate::macros::MacroResolution> {
         binding.macro_resolution.or_else(|| {
             let target = self.target_of(binding.domain, binding.target?);
@@ -3114,6 +3177,43 @@ pub(crate) const ASCII_METHODS: [&str; 7] = [
 fn ascii_free_file(file: &syn::File) -> bool {
     crate::context::standard_imports(&file.items)
         && !crate::context::declares_trait_method(&file.items, &ASCII_METHODS)
+}
+
+/// The standard collections the constructor annotation reading moves type arguments onto.
+const STANDARD_COLLECTIONS: [&str; 7] = [
+    "Vec", "String", "VecDeque", "BTreeMap", "BTreeSet", "HashMap", "HashSet",
+];
+
+/// Whether `path`, below the standard crate `root`, names the standard `collection`: its own
+/// module's item, and for the `collections` types also their re-export from `collections`.
+fn standard_collection_path(
+    root: crate::macros::StandardRoot,
+    path: &[&str],
+    collection: &str,
+) -> bool {
+    use crate::macros::StandardRoot;
+    let (module, reexported) = match collection {
+        "Vec" => ("vec", false),
+        "String" => ("string", false),
+        "VecDeque" => ("vec_deque", true),
+        "BTreeMap" => ("btree_map", true),
+        "BTreeSet" => ("btree_set", true),
+        "HashMap" => ("hash_map", true),
+        _ => ("hash_set", true),
+    };
+    let hashed = matches!(collection, "HashMap" | "HashSet");
+    let rooted = match root {
+        StandardRoot::Std => true,
+        StandardRoot::Alloc => !hashed,
+        StandardRoot::Core => false,
+    };
+    rooted
+        && match path {
+            [owner, name] if reexported => *owner == "collections" && *name == collection,
+            [owner, name] => *owner == module && *name == collection,
+            ["collections", owner, name] if reexported => *owner == module && *name == collection,
+            _ => false,
+        }
 }
 
 /// True for an ident pattern that names a unit struct, variant, or

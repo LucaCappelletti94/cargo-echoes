@@ -63,7 +63,7 @@ fn temporary_evaluation_and_constraints_remain_observable() {
             "fn f(){let unused=if true{0}else{0u8};consume(unused);}",
             "fn f(){let unused=0;consume(unused);}",
         ),
-        ("fn f(x:u8)->u8{let y:u8=x;y}", "fn f(x:u8)->u8{x}"),
+        ("fn f(x:u8)->u8{let y:u8=g(x);y}", "fn f(x:u8)->u8{g(x)}"),
         ("fn f()->u32{let unused=effect();3u32}", "fn f()->u32{3u32}"),
         ("fn f()->u8{let unused=255u8+1u8;3u8}", "fn f()->u8{3u8}"),
         (
