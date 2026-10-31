@@ -1323,8 +1323,9 @@ impl<'env> Renamer<'env> {
         self.prelude && self.clone_free
     }
 
-    /// Whether the standard collection methods `iter`, `iter_mut`, `into_iter`, `len`,
-    /// `is_empty` and `as_str`, and the inherent `contains` of the standard ranges, answer their
+    /// Whether the standard collection methods `iter`, `iter_mut`, `into_iter`, `chars`,
+    /// `bytes`, `lines`, `len`, `is_empty` and `as_str`, and the inherent `contains` of the
+    /// standard slices and ranges, answer their
     /// calls: the standard prelude is active, every import in view comes from the standard
     /// library and no trait in view declares one of those names.
     pub(crate) fn collection_free(&self) -> bool {
@@ -3100,10 +3101,13 @@ fn clone_free_file(file: &syn::File) -> bool {
 }
 
 /// The trait method names the collection readings rely on.
-pub(crate) const COLLECTION_METHODS: [&str; 7] = [
+pub(crate) const COLLECTION_METHODS: [&str; 10] = [
     "iter",
     "iter_mut",
     "into_iter",
+    "chars",
+    "bytes",
+    "lines",
     "len",
     "is_empty",
     "contains",
