@@ -547,26 +547,12 @@ fn peel_paren(expr: &syn::Expr) -> &syn::Expr {
 
 /// Whether `op` is a compound assignment.
 pub(crate) fn is_assign_op(op: syn::BinOp) -> bool {
-    matches!(
-        op,
-        syn::BinOp::AddAssign(_)
-            | syn::BinOp::SubAssign(_)
-            | syn::BinOp::MulAssign(_)
-            | syn::BinOp::DivAssign(_)
-            | syn::BinOp::RemAssign(_)
-            | syn::BinOp::ShlAssign(_)
-            | syn::BinOp::ShrAssign(_)
-            | syn::BinOp::BitXorAssign(_)
-            | syn::BinOp::BitAndAssign(_)
-            | syn::BinOp::BitOrAssign(_)
-    )
+    plain_operator(op).is_some()
 }
 
-/// The plain operator a compound assignment applies to a target of the proven fixed-width
-/// integer or `bool` type `prim`, when the operand is a proven value the native operator
-/// accepts: any proven integer as a shift amount, a value of `prim` otherwise.
-pub(crate) fn compound_operator(op: syn::BinOp, prim: PrimTy, operand: &Lbl) -> Option<syn::BinOp> {
-    let plain = match op {
+/// The plain operator the compound assignment `op` applies.
+fn plain_operator(op: syn::BinOp) -> Option<syn::BinOp> {
+    Some(match op {
         syn::BinOp::AddAssign(_) => syn::BinOp::Add(syn::token::Plus::default()),
         syn::BinOp::SubAssign(_) => syn::BinOp::Sub(syn::token::Minus::default()),
         syn::BinOp::MulAssign(_) => syn::BinOp::Mul(syn::token::Star::default()),
@@ -578,7 +564,14 @@ pub(crate) fn compound_operator(op: syn::BinOp, prim: PrimTy, operand: &Lbl) -> 
         syn::BinOp::ShlAssign(_) => syn::BinOp::Shl(syn::token::Shl::default()),
         syn::BinOp::ShrAssign(_) => syn::BinOp::Shr(syn::token::Shr::default()),
         _ => return None,
-    };
+    })
+}
+
+/// The plain operator a compound assignment applies to a target of the proven fixed-width
+/// integer or `bool` type `prim`, when the operand is a proven value the native operator
+/// accepts: any proven integer as a shift amount, a value of `prim` otherwise.
+pub(crate) fn compound_operator(op: syn::BinOp, prim: PrimTy, operand: &Lbl) -> Option<syn::BinOp> {
+    let plain = plain_operator(op)?;
     if prim == PrimTy::Char || prim == PrimTy::Bool && BitwiseOp::from_bin_op(plain).is_none() {
         return None;
     }

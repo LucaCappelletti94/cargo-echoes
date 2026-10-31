@@ -45,15 +45,18 @@ impl Owner {
 
 /// A valid-identifier spelling of `text`, injective over its bytes.
 fn mangle_owner(text: &str) -> String {
-    const HEX: [char; 16] = [
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
-    ];
     let mut out = String::from("__dejadoc_self");
-    for byte in text.bytes() {
-        out.push(HEX[usize::from(byte >> 4)]);
-        out.push(HEX[usize::from(byte & 0x0f)]);
-    }
+    push_hex(&mut out, text);
     out
+}
+
+/// Append the bytes of `text` to `out` as lowercase hex digit pairs, an injective spelling.
+fn push_hex(out: &mut String, text: &str) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for byte in text.bytes() {
+        out.push(char::from(HEX[usize::from(byte >> 4)]));
+        out.push(char::from(HEX[usize::from(byte & 15)]));
+    }
 }
 
 /// The private id of an indexed module, file-based or inline.
@@ -144,7 +147,12 @@ impl FunctionView<'_> {
             sig,
             block: Box::new(self.block.clone()),
         };
-        let helpers = transfer_helpers(&self.ctx.helpers, self.sig, self.block, &mut item);
+        let helpers = crate::helpers::HelperSyntax::cloned_function(
+            &self.ctx.helpers,
+            self.sig,
+            self.block,
+            &mut item,
+        );
         if !self.entry.observed && !self.entry.enclosing_observed {
             crate::externals::root(
                 &mut item,
@@ -180,15 +188,6 @@ impl FunctionView<'_> {
             },
         )
     }
-}
-
-fn transfer_helpers(
-    helpers: &crate::helpers::HelperTable,
-    signature: &syn::Signature,
-    body: &syn::Block,
-    cloned: &mut syn::ItemFn,
-) -> crate::helpers::HelperSyntax {
-    crate::helpers::HelperSyntax::cloned_function(helpers, signature, body, cloned)
 }
 
 impl<'a> SourceContext<'a> {
@@ -647,12 +646,8 @@ pub(crate) fn qualified_name(module: &[String], name: &str) -> String {
 }
 
 pub(crate) fn qualified_part(out: &mut String, part: &str) {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
     out.push('_');
-    for byte in part.bytes() {
-        out.push(char::from(HEX[usize::from(byte >> 4)]));
-        out.push(char::from(HEX[usize::from(byte & 15)]));
-    }
+    push_hex(out, part);
 }
 
 #[derive(Clone)]

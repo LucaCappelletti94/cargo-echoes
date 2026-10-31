@@ -650,7 +650,7 @@ impl VisitMut for Drift<'_> {
     }
 
     fn visit_item_mut(&mut self, item: &mut syn::Item) {
-        if item_attrs(item).is_some_and(|attrs| has_macro_attribute(attrs)) {
+        if has_macro_attribute(crate::helpers::item_attrs(item)) {
             self.observed().visit_item_mut(item);
             return;
         }
@@ -665,7 +665,7 @@ impl VisitMut for Drift<'_> {
             }
             fold_std_derives(attrs);
         }
-        if let Some(attrs) = item_attrs(item) {
+        if let Some(attrs) = item_attrs_mut(item) {
             strip_inert_attrs(attrs);
         }
         let depth = self.generic_names.len();
@@ -2639,7 +2639,9 @@ pub(crate) fn expr_attrs(expr: &syn::Expr) -> &[syn::Attribute] {
     }
 }
 
-pub(crate) fn item_attrs(item: &mut syn::Item) -> Option<&mut Vec<syn::Attribute>> {
+/// The attributes of `item`, mutably, when its kind carries any. `helpers::item_attrs` reads the
+/// same kinds.
+pub(crate) fn item_attrs_mut(item: &mut syn::Item) -> Option<&mut Vec<syn::Attribute>> {
     Some(match item {
         syn::Item::Const(v) => &mut v.attrs,
         syn::Item::Enum(v) => &mut v.attrs,
@@ -2731,9 +2733,7 @@ fn hoist_block_items(stmts: &mut Vec<syn::Stmt>) {
     let mut rest = Vec::new();
     for mut stmt in region {
         let hoistable = match &mut stmt {
-            syn::Stmt::Item(item) => {
-                item_attrs(item).is_none_or(|attrs| attrs.iter().all(is_inert_attr))
-            }
+            syn::Stmt::Item(item) => crate::helpers::item_attrs(item).iter().all(is_inert_attr),
             _ => false,
         };
         if hoistable {
