@@ -146,6 +146,10 @@ fn longer_literals_unproven_receivers_and_replacements_stay_apart() {
             function("s: &str", "s.split(',').count()"),
         ),
         (
+            function("s: &str", "s.split(\",\"x).count()"),
+            function("s: &str", "s.split(',').count()"),
+        ),
+        (
             "fn f(s: &str) -> String { let mut t = String::new(); t.push_str(\"a\"); t }".to_owned(),
             "fn f(s: &str) -> String { let mut t = String::new(); t.push('a'); t }".to_owned(),
         ),
