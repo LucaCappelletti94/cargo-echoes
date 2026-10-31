@@ -131,6 +131,14 @@ fn unproven_receivers_and_other_accessors_stay_apart() {
             function("v: &[u32]", "Option<&u32>", "v.first()"),
         ),
         (
+            function("v: &[u32]", "u32", "sum(&v[..])"),
+            function("v: &[u32]", "u32", "sum(v.as_slice())"),
+        ),
+        (
+            function("s: Text", "usize", "s.as_bytes().len()"),
+            function("s: Text", "usize", "s.len()"),
+        ),
+        (
             function("s: &str", "bool", "s == \" \""),
             function("s: &str", "bool", "s.is_empty()"),
         ),
