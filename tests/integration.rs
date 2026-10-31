@@ -2372,6 +2372,37 @@ fn imported_map_annotations_group_with_their_turbofish() {
     assert_eq!(function_groups(&scan(31)).len(), 0);
 }
 
+const LOOPS_FIXTURE: &str = "tests/fixtures/loopsws";
+
+#[test]
+fn breaking_match_doctests_group_with_their_while_let() {
+    let report = Echoes::default().run(LOOPS_FIXTURE).unwrap();
+    assert_eq!(report.total, 3);
+    assert_eq!(report.unique, 2);
+    let expected = [vec!["loopsws::Looped", "loopsws::WhileLet"]];
+    assert_eq!(doctest_groups(&report), expected);
+    let kept = Echoes::default().min_tokens(33).run(LOOPS_FIXTURE).unwrap();
+    assert_eq!(doctest_groups(&kept), expected);
+    let dropped = Echoes::default().min_tokens(34).run(LOOPS_FIXTURE).unwrap();
+    assert_eq!(dropped.groups.len(), 0);
+}
+
+#[test]
+fn breaking_match_functions_group_with_their_while_let() {
+    let scan = |tokens| {
+        Echoes::default()
+            .functions()
+            .fn_min_tokens(tokens)
+            .run(LOOPS_FIXTURE)
+            .unwrap()
+    };
+    let expected = [vec!["loopsws::drain", "loopsws::pop_all"]];
+    for tokens in [0, 17] {
+        assert_eq!(function_groups(&scan(tokens)), expected);
+    }
+    assert_eq!(function_groups(&scan(18)).len(), 0);
+}
+
 const CONTEXT_FIXTURE: &str = "tests/fixtures/contextws";
 
 fn context_scan() -> Report {

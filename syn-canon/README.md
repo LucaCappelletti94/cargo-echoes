@@ -162,6 +162,8 @@ In compiling mode, a `let` annotation or the declared return type of a function 
 
 In compiling mode, a `let` annotation that repeats the type its initializer fixes reads as the initializer alone. `let y: P = x` with `x` declared or spelled as the primitive `P` reads as `let y = x`. `let v: C<T…> = C::new()` and `C::with_capacity(n)` read as `let v = C::<T…>::new()` and its `with_capacity` counterpart for `Vec`, `String`, `VecDeque`, `BTreeMap`, `BTreeSet`, `HashMap` and `HashSet`, proven standard through the prelude, an import of their standard path or that path itself, when the annotation writes every type argument without `_`. A binding initialized by `Vec::new()`, `String::new()` or their `with_capacity` counts as that collection for the iteration, emptiness, copy and pattern readings.
 
+In compiling mode, an unlabelled `loop` whose only content is `match e { P => body, _ => break }` reads as `while let P = e { body }`, the loop `while let` lowers to, so the scrutinee temporary lives through `body` in both. A `None => break` arm counts as `_ => break` where the prelude reads it so. A guarded first arm, a `body` that breaks the loop with a value, a labelled loop and the `let`-`else` spelling, which drops the scrutinee temporary before the body, keep their form.
+
 ## Stability
 
 `CanonicalForm` keys and hashes are comparable within a semver-compatible release series. Before `1.0`, each minor version defines a series, such as `0.5.x`. Incompatible normalization requires a new series.

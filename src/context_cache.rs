@@ -282,6 +282,16 @@ pub mod alpha {
         let items: Vec<u32> = Vec::new();
         items.len()
     }
+    pub fn drained(items: &mut Vec<u32>) -> u32 {
+        let mut total = 0u32;
+        loop {
+            match items.pop() {
+                Some(item) => total ^= item,
+                None => break,
+            }
+        }
+        total
+    }
 }
 mod custom {
     macro_rules! vec {
