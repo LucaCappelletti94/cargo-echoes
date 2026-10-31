@@ -60,6 +60,9 @@ pub(crate) struct Options<'a> {
     /// Every import in view comes from the standard library and no trait in view declares a
     /// method named in `ACCESSOR_METHODS`.
     pub(crate) accessor_free: bool,
+    /// Every import in view comes from the standard library and no trait in view declares a
+    /// method named in `PATTERN_METHODS`.
+    pub(crate) pattern_free: bool,
     /// The source context's helper summary table, when one is indexed.
     pub(crate) helper_table: Option<&'a crate::helpers::HelperTable>,
     pub(crate) helper_module: &'a [String],
@@ -358,6 +361,9 @@ pub(crate) struct Renamer<'env> {
     /// Every import in view comes from the standard library and no trait in view declares an
     /// accessor the collection accessor readings rely on.
     accessor_free: bool,
+    /// Every import in view comes from the standard library and no trait in view declares a
+    /// method the one-character pattern readings rely on.
+    pattern_free: bool,
     /// An enclosing block of the current item already read its owned strings and empty vectors.
     prelude_folded: bool,
     /// The inline modules around the traversal, whose frames stay on the stack.
@@ -425,6 +431,7 @@ impl<'env> Renamer<'env> {
             clone_free: false,
             collection_free: false,
             accessor_free: false,
+            pattern_free: false,
             prelude_folded: false,
             inline_depth: 0,
             observed: false,
@@ -484,6 +491,7 @@ impl<'env> Renamer<'env> {
         renamer.clone_free = options.clone_free;
         renamer.collection_free = options.collection_free;
         renamer.accessor_free = options.accessor_free;
+        renamer.pattern_free = options.pattern_free;
         renamer.observed = options.observed;
         renamer.tail_blocked = options.enclosing_observed;
         renamer.seed = options.seed;
@@ -1321,6 +1329,13 @@ impl<'env> Renamer<'env> {
     /// declares one of those names.
     pub(crate) fn accessor_free(&self) -> bool {
         self.prelude && self.accessor_free
+    }
+
+    /// Whether the standard `str` pattern methods and the `push_str` and `push` of `String`
+    /// answer their calls: the standard prelude is active, every import in view comes from the
+    /// standard library and no trait in view declares one of those names.
+    pub(crate) fn pattern_free(&self) -> bool {
+        self.prelude && self.pattern_free
     }
 
     /// Whether the collection readings may run: compiling source with the standard collection
@@ -2980,6 +2995,7 @@ pub(crate) fn normalize_file(
     renamer.clone_free &= clone_free_file(file);
     renamer.collection_free &= collection_free_file(file);
     renamer.accessor_free &= accessor_free_file(file);
+    renamer.pattern_free &= pattern_free_file(file);
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
 }
@@ -2991,6 +3007,7 @@ pub(crate) fn analyze_file(file: &mut syn::File, options: Options<'_>) -> Refere
     renamer.clone_free &= clone_free_file(file);
     renamer.collection_free &= collection_free_file(file);
     renamer.accessor_free &= accessor_free_file(file);
+    renamer.pattern_free &= pattern_free_file(file);
     renamer.analysis = true;
     renamer.visit_file_mut(file);
     renamer.into_reference_facts()
@@ -3030,6 +3047,37 @@ pub(crate) const ACCESSOR_METHODS: [&str; 6] =
 fn accessor_free_file(file: &syn::File) -> bool {
     crate::context::standard_imports(&file.items)
         && !crate::context::declares_trait_method(&file.items, &ACCESSOR_METHODS)
+}
+
+/// The trait method names the one-character pattern readings rely on.
+pub(crate) const PATTERN_METHODS: [&str; 20] = [
+    "split",
+    "rsplit",
+    "splitn",
+    "split_once",
+    "rsplit_once",
+    "contains",
+    "starts_with",
+    "ends_with",
+    "find",
+    "rfind",
+    "matches",
+    "replace",
+    "replacen",
+    "strip_prefix",
+    "strip_suffix",
+    "trim_matches",
+    "trim_start_matches",
+    "trim_end_matches",
+    "push_str",
+    "push",
+];
+
+/// Whether a file, bodies included, imports only from the standard library and declares no
+/// trait method a one-character pattern reading relies on.
+fn pattern_free_file(file: &syn::File) -> bool {
+    crate::context::standard_imports(&file.items)
+        && !crate::context::declares_trait_method(&file.items, &PATTERN_METHODS)
 }
 
 /// True for an ident pattern that names a unit struct, variant, or

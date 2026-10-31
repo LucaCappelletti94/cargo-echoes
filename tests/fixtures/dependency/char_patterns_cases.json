@@ -1,0 +1,233 @@
+[
+  {
+    "id": "pc_split",
+    "family": "char_patterns",
+    "a": "fn f(s: &str) -> Vec<&str> { s.split(\",\").collect() } fn main(){ println!(\"{:?}\", f(\"a,b,,c\")); }",
+    "b": "fn f(s: &str) -> Vec<&str> { s.split(',').collect() } fn main(){ println!(\"{:?}\", f(\"a,b,,c\")); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"a\", \"b\", \"\", \"c\"]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"a\", \"b\", \"\", \"c\"]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"a\", \"b\", \"\", \"c\"]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"a\", \"b\", \"\", \"c\"]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "pc_multibyte",
+    "family": "char_patterns",
+    "a": "fn f(s: String) -> Vec<String> { s.rsplit(\"\\u{e9}\").map(String::from).collect() } fn main(){ println!(\"{:?}\", f(String::from(\"a\\u{e9}b\\u{e9}\"))); }",
+    "b": "fn f(s: String) -> Vec<String> { s.rsplit('\\u{e9}').map(String::from).collect() } fn main(){ println!(\"{:?}\", f(String::from(\"a\\u{e9}b\\u{e9}\"))); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"\", \"b\", \"a\"]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"\", \"b\", \"a\"]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"\", \"b\", \"a\"]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"\", \"b\", \"a\"]\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "pc_replace",
+    "family": "char_patterns",
+    "a": "fn f(s: &str) -> (String, usize) { let r = s.replace(\",\", \";\"); let c = r.capacity(); (r, c) } fn main(){ println!(\"{:?}\", f(\"a,b,c\")); }",
+    "b": "fn f(s: &str) -> (String, usize) { let r = s.replace(',', \";\"); let c = r.capacity(); (r, c) } fn main(){ println!(\"{:?}\", f(\"a,b,c\")); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(\"a;b;c\", 5)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(\"a;b;c\", 5)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(\"a;b;c\", 5)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(\"a;b;c\", 5)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "pc_search",
+    "family": "char_patterns",
+    "a": "fn f(s: &str) -> (Option<usize>, Option<usize>, Option<(&str, &str)>, usize, &str) { (s.find(\"\\n\"), s.rfind(\"\\n\"), s.rsplit_once(\"\\n\"), s.splitn(2, \"\\n\").count(), s.trim_start_matches(\"\\n\")) } fn main(){ println!(\"{:?}\", f(\"\\nab\\ncd\")); }",
+    "b": "fn f(s: &str) -> (Option<usize>, Option<usize>, Option<(&str, &str)>, usize, &str) { (s.find('\\n'), s.rfind('\\n'), s.rsplit_once('\\n'), s.splitn(2, '\\n').count(), s.trim_start_matches('\\n')) } fn main(){ println!(\"{:?}\", f(\"\\nab\\ncd\")); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(Some(0), Some(3), Some((\"\\nab\", \"cd\")), 2, \"ab\\ncd\")\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(Some(0), Some(3), Some((\"\\nab\", \"cd\")), 2, \"ab\\ncd\")\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(Some(0), Some(3), Some((\"\\nab\", \"cd\")), 2, \"ab\\ncd\")\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(Some(0), Some(3), Some((\"\\nab\", \"cd\")), 2, \"ab\\ncd\")\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "pc_push",
+    "family": "char_patterns",
+    "a": "fn f(s: &mut String) { s.push_str(\"\\u{e9}\") } fn main(){ let mut s = String::with_capacity(1); for _ in 0..3 { f(&mut s); println!(\"{} {}\", s, s.capacity()); } }",
+    "b": "fn f(s: &mut String) { s.push('\\u{e9}') } fn main(){ let mut s = String::with_capacity(1); for _ in 0..3 { f(&mut s); println!(\"{} {}\", s, s.capacity()); } }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "é 8\néé 8\nééé 8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "é 8\néé 8\nééé 8\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "é 8\néé 8\nééé 8\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "é 8\néé 8\nééé 8\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "pc_push_ascii",
+    "family": "char_patterns",
+    "a": "fn f(s: &mut String) { s.push_str(\"a\") } fn main(){ let mut s = String::new(); for _ in 0..9 { f(&mut s); } println!(\"{} {}\", s, s.capacity()); }",
+    "b": "fn f(s: &mut String) { s.push('a') } fn main(){ let mut s = String::new(); for _ in 0..9 { f(&mut s); } println!(\"{} {}\", s, s.capacity()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "aaaaaaaaa 16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "aaaaaaaaa 16\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "aaaaaaaaa 16\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "aaaaaaaaa 16\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "pc_two_chars",
+    "family": "char_patterns",
+    "a": "fn f(s: &str) -> Vec<&str> { s.split(\"ab\").collect() } fn main(){ println!(\"{:?}\", f(\"xabyaz\")); }",
+    "b": "fn f(s: &str) -> Vec<&str> { s.split('a').collect() } fn main(){ println!(\"{:?}\", f(\"xabyaz\")); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"x\", \"yaz\"]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"x\", \"yaz\"]\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"x\", \"by\", \"z\"]\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[\"x\", \"by\", \"z\"]\n"
+        }
+      }
+    }
+  }
+]

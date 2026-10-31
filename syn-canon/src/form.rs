@@ -228,6 +228,7 @@ pub(crate) fn item_payload(
             clone_free: false,
             collection_free: false,
             accessor_free: false,
+            pattern_free: false,
             helper_table: proof.table,
             helper_module: &[],
             helper_blocked: false,
