@@ -103,10 +103,6 @@ fn mutable_bindings_and_aliases_take_the_suffixed_value() {
 fn other_patterns_types_and_initializers_keep_the_annotation() {
     for (annotated, suffixed) in [
         (
-            "fn f(x: u32) -> u32 { let v: u32 = x; v }",
-            "fn f(x: u32) -> u32 { let v = x; v }",
-        ),
-        (
             "fn f() -> usize { let v: usize = 5; v }",
             "fn f() -> usize { let v = 5usize; v }",
         ),

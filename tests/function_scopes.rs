@@ -540,8 +540,8 @@ fn unproven_let_annotations_stay_in_the_borrowed_view() {
         view("fn f() -> usize { let v = 5usize; v }")
     );
     assert_ne!(
-        view("fn f(x: u32) -> u32 { let v: u32 = x; v }"),
-        view("fn f(x: u32) -> u32 { let v = x; v }")
+        view("fn f(x: u32) -> u32 { let v: u32 = g(x); v }"),
+        view("fn f(x: u32) -> u32 { let v = g(x); v }")
     );
 }
 

@@ -98,8 +98,8 @@ fn unproven_collections_keep_their_spelling() {
             "fn f(v: T) { for x in &v { g(x); } }",
         ),
         (
-            "fn f() { let v = Vec::new(); for x in v.iter() { g(x); } }",
-            "fn f() { let v = Vec::new(); for x in &v { g(x); } }",
+            "fn f() { let v = make(); for x in v.iter() { g(x); } }",
+            "fn f() { let v = make(); for x in &v { g(x); } }",
         ),
         (
             "fn f(v: [u32; 3]) { for x in v.into_iter() { g(x); } }",

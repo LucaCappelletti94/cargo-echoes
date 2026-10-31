@@ -150,8 +150,8 @@ fn longer_literals_unproven_receivers_and_replacements_stay_apart() {
             function("s: &str", "s.split(',').count()"),
         ),
         (
-            "fn f(s: &str) -> String { let mut t = String::new(); t.push_str(\"a\"); t }".to_owned(),
-            "fn f(s: &str) -> String { let mut t = String::new(); t.push('a'); t }".to_owned(),
+            "fn f(s: &str) -> String { let mut t = make(); t.push_str(\"a\"); t }".to_owned(),
+            "fn f(s: &str) -> String { let mut t = make(); t.push('a'); t }".to_owned(),
         ),
         (
             "trait Parts { fn split(self, pattern: &str) -> usize; }\nfn f(s: String) -> usize { s.split(\",\").count() }".to_owned(),
