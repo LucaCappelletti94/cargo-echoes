@@ -1,0 +1,332 @@
+[
+  {
+    "id": "dc_into_let",
+    "family": "declared_conversions",
+    "a": "fn f(x: u16) -> u32 { let y: u32 = x.into(); y } fn main(){ println!(\"{} {}\", f(0), f(u16::MAX)); }",
+    "b": "fn f(x: u16) -> u32 { let y: u32 = u32::from(x); y } fn main(){ println!(\"{} {}\", f(0), f(u16::MAX)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 65535\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 65535\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 65535\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 65535\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_into_char",
+    "family": "declared_conversions",
+    "a": "fn f(c: char) -> u32 { c.into() } fn main(){ println!(\"{} {}\", f('\\0'), f(char::MAX)); }",
+    "b": "fn f(c: char) -> u32 { c as u32 } fn main(){ println!(\"{} {}\", f('\\0'), f(char::MAX)); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 1114111\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 1114111\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 1114111\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 1114111\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_into_str",
+    "family": "declared_conversions",
+    "a": "fn f(t: &str) -> String { t.into() } fn main(){ let s = f(\"abc\"); println!(\"{} {}\", s, s.capacity()); }",
+    "b": "fn f(t: &str) -> String { t.to_string() } fn main(){ let s = f(\"abc\"); println!(\"{} {}\", s, s.capacity()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "abc 3\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_into_char_string",
+    "family": "declared_conversions",
+    "a": "fn f(c: char) -> String { c.into() } fn main(){ let s = f('\\u{e9}'); println!(\"{} {}\", s, s.capacity()); }",
+    "b": "fn f(c: char) -> String { String::from(c) } fn main(){ let s = f('\\u{e9}'); println!(\"{} {}\", s, s.capacity()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "é 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "é 2\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "é 2\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "é 2\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_default_int",
+    "family": "declared_conversions",
+    "a": "fn f() -> i64 { Default::default() } fn h() -> char { char::default() } fn main(){ println!(\"{} {}\", f(), h() as u32); }",
+    "b": "fn f() -> i64 { 0 } fn h() -> char { '\\0' } fn main(){ println!(\"{} {}\", f(), h() as u32); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_default_string",
+    "family": "declared_conversions",
+    "a": "fn f() -> (String, usize) { let s: String = Default::default(); let c = s.capacity(); (s, c) } fn main(){ println!(\"{:?}\", f()); }",
+    "b": "fn f() -> (String, usize) { let s: String = String::new(); let c = s.capacity(); (s, c) } fn main(){ println!(\"{:?}\", f()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(\"\", 0)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(\"\", 0)\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(\"\", 0)\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "(\"\", 0)\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_default_vec",
+    "family": "declared_conversions",
+    "a": "fn f() -> usize { Vec::<u32>::default().capacity() } fn main(){ println!(\"{}\", f()); }",
+    "b": "fn f() -> usize { Vec::<u32>::new().capacity() } fn main(){ println!(\"{}\", f()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_take_new",
+    "family": "declared_conversions",
+    "a": "fn f(v: &mut Vec<u32>) -> Vec<u32> { std::mem::replace(v, Vec::new()) } fn main(){ let mut v = Vec::with_capacity(8); v.push(1u32); let t = f(&mut v); println!(\"{:?} {} {:?} {}\", t, t.capacity(), v, v.capacity()); }",
+    "b": "fn f(v: &mut Vec<u32>) -> Vec<u32> { std::mem::take(v) } fn main(){ let mut v = Vec::with_capacity(8); v.push(1u32); let t = f(&mut v); println!(\"{:?} {} {:?} {}\", t, t.capacity(), v, v.capacity()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1] 8 [] 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1] 8 [] 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1] 8 [] 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1] 8 [] 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_take_default",
+    "family": "declared_conversions",
+    "a": "fn f(s: &mut String) -> String { core::mem::replace(s, Default::default()) } fn main(){ let mut s = String::with_capacity(8); s.push('a'); let t = f(&mut s); println!(\"{:?} {} {:?} {}\", t, t.capacity(), s, s.capacity()); }",
+    "b": "fn f(s: &mut String) -> String { core::mem::take(s) } fn main(){ let mut s = String::with_capacity(8); s.push('a'); let t = f(&mut s); println!(\"{:?} {} {:?} {}\", t, t.capacity(), s, s.capacity()); }",
+    "expected": "same",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\" 8 \"\" 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\" 8 \"\" 0\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\" 8 \"\" 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "\"a\" 8 \"\" 0\n"
+        }
+      }
+    }
+  },
+  {
+    "id": "dc_replace_value",
+    "family": "declared_conversions",
+    "a": "fn f(v: &mut Vec<u32>) -> Vec<u32> { std::mem::replace(v, vec![2]) } fn main(){ let mut v = Vec::with_capacity(8); v.push(1u32); let t = f(&mut v); println!(\"{:?} {} {:?} {}\", t, t.capacity(), v, v.capacity()); }",
+    "b": "fn f(v: &mut Vec<u32>) -> Vec<u32> { std::mem::take(v) } fn main(){ let mut v = Vec::with_capacity(8); v.push(1u32); let t = f(&mut v); println!(\"{:?} {} {:?} {}\", t, t.capacity(), v, v.capacity()); }",
+    "expected": "different",
+    "expect": {
+      "a": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1] 8 [2] 1\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1] 8 [2] 1\n"
+        }
+      },
+      "b": {
+        "off": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1] 8 [] 0\n"
+        },
+        "on": {
+          "compile": "ok",
+          "run": "value",
+          "stdout": "[1] 8 [] 0\n"
+        }
+      }
+    }
+  }
+]
