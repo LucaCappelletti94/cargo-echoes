@@ -158,7 +158,7 @@ dependencies = [
 
 [[package]]
 name = "echoes"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "blake3",
  "cargo-config2",
@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "syn-canon"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "proc-macro2",
  "quote",
