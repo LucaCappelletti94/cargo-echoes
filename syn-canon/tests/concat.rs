@@ -1,34 +1,14 @@
 //! Built-in `concat!` of string literals over resolved macro names.
 
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
+use parse::parse;
+
 #[path = "support/view.rs"]
 mod view;
-
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(concatenated: &str, literal: &str) {
-    let left = syn_canon::canonicalize(parse(concatenated));
-    let right = syn_canon::canonicalize(parse(literal));
-    assert_eq!(left, right, "{concatenated}\n{literal}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens());
-    assert_eq!(left.body_units(), right.body_units());
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(concatenated)),
-        syn_canon::canonicalize_failing(parse(literal)),
-        "{concatenated}\n{literal}",
-    );
-}
-
-fn separate(concatenated: &str, literal: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(concatenated)),
-            canonicalize(parse(literal)),
-            "{concatenated}\n{literal}"
-        );
-    }
-}
 
 fn function(body: &str) -> String {
     format!("fn f() -> &'static str {{ {body} }}")

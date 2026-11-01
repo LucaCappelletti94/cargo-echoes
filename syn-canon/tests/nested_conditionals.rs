@@ -1,36 +1,16 @@
 //! Nested conditionals over proven conditions and boolean matches with a wildcard arm.
 
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
+use parse::parse;
+
 #[path = "support/view.rs"]
 mod view;
 
 use syn_canon::ContextKind;
-
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(written: &str, merged: &str) {
-    let left = syn_canon::canonicalize(parse(written));
-    let right = syn_canon::canonicalize(parse(merged));
-    assert_eq!(left, right, "{written}\n{merged}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens(), "{written}");
-    assert_eq!(left.body_units(), right.body_units(), "{written}");
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(written)),
-        syn_canon::canonicalize_failing(parse(merged)),
-        "{written}\n{merged}"
-    );
-}
-
-fn separate(written: &str, merged: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(written)),
-            canonicalize(parse(merged)),
-            "{written}\n{merged}"
-        );
-    }
-}
 
 fn function(body: &str) -> String {
     format!("fn f(p: bool, q: bool, r: bool, x: u32, y: u32) -> u32 {{ {body} }}")

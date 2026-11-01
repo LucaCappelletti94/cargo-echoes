@@ -1,10 +1,10 @@
 //! In function views, a file-level import of an external crate path reads as the rooted path.
 
-use syn_canon::Edition;
+#[path = "support/parse.rs"]
+mod parse;
+use parse::parse;
 
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
+use syn_canon::Edition;
 
 /// The view of the function `f` in the module at `module` of a context holding `files`.
 fn view(files: &[(&[&str], &str)], module: &[&str], edition: Edition) -> syn_canon::CanonicalForm {

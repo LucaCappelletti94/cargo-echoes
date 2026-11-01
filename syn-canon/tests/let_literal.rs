@@ -1,36 +1,16 @@
 //! Integer type annotations on `let` bindings whose initializer is an integer literal.
 
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
+use parse::parse;
+
 #[path = "support/view.rs"]
 mod view;
 
 use syn_canon::ContextKind;
-
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(annotated: &str, suffixed: &str) {
-    let left = syn_canon::canonicalize(parse(annotated));
-    let right = syn_canon::canonicalize(parse(suffixed));
-    assert_eq!(left, right, "{annotated}\n{suffixed}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens(), "{annotated}");
-    assert_eq!(left.body_units(), right.body_units(), "{annotated}");
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(annotated)),
-        syn_canon::canonicalize_failing(parse(suffixed)),
-        "{annotated}\n{suffixed}"
-    );
-}
-
-fn separate(annotated: &str, suffixed: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(annotated)),
-            canonicalize(parse(suffixed)),
-            "{annotated}\n{suffixed}"
-        );
-    }
-}
 
 #[test]
 fn annotated_literals_match_suffixed_literals_in_every_integer_type() {

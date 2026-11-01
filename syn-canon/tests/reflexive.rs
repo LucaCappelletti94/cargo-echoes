@@ -1,36 +1,16 @@
 //! Reflexive equality under resolved total scalar proofs.
 
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
+use parse::parse;
+
 #[path = "support/view.rs"]
 mod view;
 
 use syn_canon::ContextKind;
-
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(written: &str, folded: &str) {
-    assert_eq!(
-        syn_canon::canonicalize(parse(written)),
-        syn_canon::canonicalize(parse(folded)),
-        "{written}\n{folded}"
-    );
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(written)),
-        syn_canon::canonicalize_failing(parse(folded)),
-        "{written}\n{folded}"
-    );
-}
-
-fn separate(written: &str, folded: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(written)),
-            canonicalize(parse(folded)),
-            "{written}\n{folded}"
-        );
-    }
-}
 
 #[test]
 fn reflexive_equality_folds_existing_primitive_domains() {

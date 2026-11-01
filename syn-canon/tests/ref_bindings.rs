@@ -1,32 +1,11 @@
 //! A pattern whose every binding is `ref` reads as the binding-mode spelling over a borrow of
 //! its place scrutinee.
 
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(explicit: &str, ergonomic: &str) {
-    let left = syn_canon::canonicalize(parse(explicit));
-    let right = syn_canon::canonicalize(parse(ergonomic));
-    assert_eq!(left, right, "{explicit}\n{ergonomic}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens(), "{explicit}");
-    assert_eq!(left.body_units(), right.body_units(), "{explicit}");
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(explicit)),
-        syn_canon::canonicalize_failing(parse(ergonomic)),
-        "{explicit}\n{ergonomic}"
-    );
-}
-
-fn separate(left: &str, right: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(left)),
-            canonicalize(parse(right)),
-            "{left}\n{right}"
-        );
-    }
-}
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
 
 #[test]
 fn ref_bindings_read_as_borrowed_scrutinees() {

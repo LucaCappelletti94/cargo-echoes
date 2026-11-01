@@ -1,31 +1,10 @@
 //! `matches!`, literal disjunctions and literal ranges over a proven integer place.
 
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(written: &str, canonical: &str) {
-    let left = syn_canon::canonicalize(parse(written));
-    let right = syn_canon::canonicalize(parse(canonical));
-    assert_eq!(left, right, "{written}\n{canonical}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens(), "{written}");
-    assert_eq!(left.body_units(), right.body_units(), "{written}");
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(written)),
-        syn_canon::canonicalize_failing(parse(canonical)),
-        "{written}\n{canonical}"
-    );
-}
-
-fn separate(written: &str, canonical: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(written)),
-            canonicalize(parse(canonical)),
-            "{written}\n{canonical}"
-        );
-    }
-}
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
 
 fn test(ty: &str, body: &str) -> String {
     format!("fn f(x: {ty}) -> bool {{ {body} }}")

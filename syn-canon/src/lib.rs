@@ -976,16 +976,10 @@ mod tests {
 
     #[test]
     fn six_fold_empty_closure_output() {
-        for (a, b) in [
+        assert_both(&[
             ("let f = || -> () {};", "let f = || {};"),
             ("let f = |x: u8| -> () {};", "let f = |x: u8| {};"),
-        ] {
-            assert_eq!(canonicalize(a).text, canonicalize(b).text);
-            assert_eq!(
-                super::canonicalize_failing(parse(a)).to_string(),
-                super::canonicalize_failing(parse(b)).to_string()
-            );
-        }
+        ]);
     }
 
     #[test]
@@ -1037,11 +1031,7 @@ mod tests {
         for suffix in ["i8", "i16", "i32", "i64", "i128", "isize"] {
             let a = format!("let x = -0x0{suffix};");
             let b = format!("let x = 0{suffix};");
-            assert_eq!(canonicalize(&a).text, canonicalize(&b).text);
-            assert_eq!(
-                super::canonicalize_failing(parse(&a)).to_string(),
-                super::canonicalize_failing(parse(&b)).to_string()
-            );
+            assert_both(&[(&a, &b)]);
         }
     }
 
@@ -2597,7 +2587,7 @@ mod tests {
 
     #[test]
     fn grammar_drift_empty_path_arguments() {
-        for (a, b) in [
+        assert_both(&[
             ("struct S; type A = S<>;", "struct S; type A = S;"),
             (
                 "fn f() {} fn main() { f::<>(); }",
@@ -2619,14 +2609,7 @@ mod tests {
                 "fn f<T>(x: T) { missing(x); } fn main() { f::<>(7); }",
                 "fn f<T>(x: T) { missing(x); } fn main() { f(7); }",
             ),
-        ] {
-            assert_eq!(canonicalize(a).text, canonicalize(b).text, "{a}");
-            assert_eq!(
-                super::canonicalize_failing(parse(a)).to_string(),
-                super::canonicalize_failing(parse(b)).to_string(),
-                "{a}"
-            );
-        }
+        ]);
     }
 
     #[test]
@@ -2762,7 +2745,7 @@ mod tests {
 
     #[test]
     fn grammar_drift_generic_list_commas() {
-        for (a, b) in [
+        assert_both(&[
             ("struct S<T,>(T);", "struct S<T>(T);"),
             (
                 "fn f<'a, T, const N: usize,>(x: &'a T) {}",
@@ -2771,25 +2754,15 @@ mod tests {
             ("fn f(x: Vec<u8,>) {}", "fn f(x: Vec<u8>) {}"),
             ("fn f() { g::<u8,>(); }", "fn f() { g::<u8>(); }"),
             ("fn f() { x.g::<u8,>(); }", "fn f() { x.g::<u8>(); }"),
-        ] {
-            assert_eq!(canonicalize(a).text, canonicalize(b).text, "{a}");
-            assert_eq!(
-                super::canonicalize_failing(parse(a)).to_string(),
-                super::canonicalize_failing(parse(b)).to_string(),
-                "{a}"
-            );
-        }
+        ]);
     }
 
     #[test]
     fn grammar_drift_closure_parameter_commas() {
-        let a = "fn f() { let c = |x: u8,| x + 1; c(7); }";
-        let b = "fn f() { let c = |x: u8| x + 1; c(7); }";
-        assert_eq!(canonicalize(a).text, canonicalize(b).text);
-        assert_eq!(
-            super::canonicalize_failing(parse(a)).to_string(),
-            super::canonicalize_failing(parse(b)).to_string()
-        );
+        assert_both(&[(
+            "fn f() { let c = |x: u8,| x + 1; c(7); }",
+            "fn f() { let c = |x: u8| x + 1; c(7); }",
+        )]);
     }
 
     #[test]
@@ -4970,6 +4943,19 @@ mod tests {
     fn assert_split(pairs: &[(&str, &str)]) {
         for (a, b) in pairs {
             assert_ne!(canonicalize(a).text, canonicalize(b).text, "{a} vs {b}");
+        }
+    }
+
+    /// Asserts each pair in `pairs` canonicalizes alike whether or not canonicalization may
+    /// assume the source compiles.
+    fn assert_both(pairs: &[(&str, &str)]) {
+        for (a, b) in pairs {
+            assert_eq!(canonicalize(a).text, canonicalize(b).text, "{a} vs {b}");
+            assert_eq!(
+                super::canonicalize_failing(parse(a)).to_string(),
+                super::canonicalize_failing(parse(b)).to_string(),
+                "{a} vs {b}",
+            );
         }
     }
 

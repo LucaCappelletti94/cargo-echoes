@@ -1,34 +1,14 @@
 //! Operand order of native integer `wrapping_add` over resolved total scalar values.
 
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
+use parse::parse;
+
 #[path = "support/view.rs"]
 mod view;
-
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(written: &str, reordered: &str) {
-    let left = syn_canon::canonicalize(parse(written));
-    let right = syn_canon::canonicalize(parse(reordered));
-    assert_eq!(left, right, "{written}\n{reordered}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens());
-    assert_eq!(left.body_units(), right.body_units());
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(written)),
-        syn_canon::canonicalize_failing(parse(reordered)),
-        "{written}\n{reordered}",
-    );
-}
-
-fn separate(written: &str, reordered: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(written)),
-            canonicalize(parse(reordered)),
-            "{written}\n{reordered}"
-        );
-    }
-}
 
 fn function(ty: &str, body: &str) -> String {
     format!("fn f(x: {ty}, y: {ty}, z: {ty}) -> {ty} {{ {body} }}")
