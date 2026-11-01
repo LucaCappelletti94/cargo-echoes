@@ -1,36 +1,16 @@
 //! Adjacent arms with equal bodies join into or-patterns, and `let`-`else` reads as `match`.
 
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
+use parse::parse;
+
 #[path = "support/view.rs"]
 mod view;
 
 use syn_canon::ContextKind;
-
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(written: &str, joined: &str) {
-    let left = syn_canon::canonicalize(parse(written));
-    let right = syn_canon::canonicalize(parse(joined));
-    assert_eq!(left, right, "{written}\n{joined}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens(), "{written}");
-    assert_eq!(left.body_units(), right.body_units(), "{written}");
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(written)),
-        syn_canon::canonicalize_failing(parse(joined)),
-        "{written}\n{joined}"
-    );
-}
-
-fn separate(written: &str, joined: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(written)),
-            canonicalize(parse(joined)),
-            "{written}\n{joined}"
-        );
-    }
-}
 
 fn function(body: &str) -> String {
     format!(

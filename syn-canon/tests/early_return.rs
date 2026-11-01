@@ -1,5 +1,12 @@
 //! Early returns before a tail expression read as `else` branches.
 
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
+use parse::parse;
+
 #[path = "support/view.rs"]
 mod view;
 
@@ -13,33 +20,6 @@ impl Drop for D {
     fn drop(&mut self) { let _ = writeln!(std::io::stdout(), "drop {}", self.0); }
 }
 "#;
-
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(written: &str, branched: &str) {
-    let left = syn_canon::canonicalize(parse(written));
-    let right = syn_canon::canonicalize(parse(branched));
-    assert_eq!(left, right, "{written}\n{branched}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens(), "{written}");
-    assert_eq!(left.body_units(), right.body_units(), "{written}");
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(written)),
-        syn_canon::canonicalize_failing(parse(branched)),
-        "{written}\n{branched}"
-    );
-}
-
-fn separate(written: &str, branched: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(written)),
-            canonicalize(parse(branched)),
-            "{written}\n{branched}"
-        );
-    }
-}
 
 fn function(body: &str) -> String {
     format!("fn f(p: bool, q: bool, x: u32, y: u32) -> u32 {{ {body} }}")

@@ -1,5 +1,12 @@
 //! Temporary-scope boundaries across return normalization.
 
+#[path = "support/compare.rs"]
+mod compare;
+#[path = "support/parse.rs"]
+mod parse;
+use compare::compare;
+use parse::parse;
+
 #[path = "support/view.rs"]
 mod view;
 
@@ -14,18 +21,6 @@ impl Drop for D {
     fn drop(&mut self) { let _ = writeln!(std::io::stdout(), "drop {}", self.0); }
 }
 "#;
-
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn compare(left: &str, right: &str, equal: bool) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        let a = canonicalize(parse(left));
-        let b = canonicalize(parse(right));
-        assert_eq!(a == b, equal, "{left}\n{right}\n{a:?}\n{b:?}");
-    }
-}
 
 #[test]
 fn destructor_temporaries_keep_returns_at_every_function_boundary() {

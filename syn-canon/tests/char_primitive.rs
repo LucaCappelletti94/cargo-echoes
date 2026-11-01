@@ -1,46 +1,16 @@
 //! `char` joins the proven primitives: comparisons, ranges, ASCII predicates and casts.
 
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(written: &str, read: &str) {
-    let left = syn_canon::canonicalize(parse(written));
-    let right = syn_canon::canonicalize(parse(read));
-    assert_eq!(left, right, "{written}\n{read}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens(), "{written}");
-    assert_eq!(left.body_units(), right.body_units(), "{written}");
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(written)),
-        syn_canon::canonicalize_failing(parse(read)),
-        "{written}\n{read}"
-    );
-}
-
-fn separate(left: &str, right: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(left)),
-            canonicalize(parse(right)),
-            "{left}\n{right}"
-        );
-    }
-}
-
-fn function(params: &str, ret: &str, body: &str) -> String {
-    format!("fn f({params}) -> {ret} {{ {body} }}")
-}
-
-fn rows(params: &str, ret: &str, groups: &[&[&str]]) {
-    for group in groups {
-        for written in &group[1..] {
-            equivalent(
-                &function(params, ret, written),
-                &function(params, ret, group[0]),
-            );
-        }
-    }
-}
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/function.rs"]
+mod function;
+#[path = "support/parse.rs"]
+mod parse;
+#[path = "support/rows.rs"]
+mod rows;
+use canon::{equivalent, separate};
+use function::function;
+use rows::rows;
 
 #[test]
 fn char_comparisons_take_the_integer_orientation() {

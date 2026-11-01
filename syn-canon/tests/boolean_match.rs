@@ -1,34 +1,14 @@
 //! Exhaustive literal boolean matches over proven total scalar values.
 
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
+use parse::parse;
+
 #[path = "support/view.rs"]
 mod view;
-
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(matched: &str, conditional: &str) {
-    let left = syn_canon::canonicalize(parse(matched));
-    let right = syn_canon::canonicalize(parse(conditional));
-    assert_eq!(left, right, "{matched}\n{conditional}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens());
-    assert_eq!(left.body_units(), right.body_units());
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(matched)),
-        syn_canon::canonicalize_failing(parse(conditional)),
-        "{matched}\n{conditional}",
-    );
-}
-
-fn separate(matched: &str, conditional: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(matched)),
-            canonicalize(parse(conditional)),
-            "{matched}\n{conditional}"
-        );
-    }
-}
 
 fn function(ty: &str, body: &str) -> String {
     format!("fn f(p: bool, q: bool, x: {ty}, y: {ty}) -> {ty} {{ {body} }}")

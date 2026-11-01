@@ -1,36 +1,14 @@
 //! Predicates and conversions of bindings declared as the prelude `Option` or `Result` read
 //! as the `match` they perform.
 
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(written: &str, read: &str) {
-    let left = syn_canon::canonicalize(parse(written));
-    let right = syn_canon::canonicalize(parse(read));
-    assert_eq!(left, right, "{written}\n{read}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens(), "{written}");
-    assert_eq!(left.body_units(), right.body_units(), "{written}");
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(written)),
-        syn_canon::canonicalize_failing(parse(read)),
-        "{written}\n{read}"
-    );
-}
-
-fn separate(left: &str, right: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(left)),
-            canonicalize(parse(right)),
-            "{left}\n{right}"
-        );
-    }
-}
-
-fn function(params: &str, ret: &str, body: &str) -> String {
-    format!("fn f({params}) -> {ret} {{ {body} }}")
-}
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/function.rs"]
+mod function;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
+use function::function;
 
 #[test]
 fn option_predicates_read_as_one_form() {

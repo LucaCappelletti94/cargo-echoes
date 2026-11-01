@@ -1,5 +1,12 @@
 //! Significant punctuation across comparison surfaces.
 
+#[path = "support/compare.rs"]
+mod compare;
+#[path = "support/parse.rs"]
+mod parse;
+use compare::compare;
+use parse::parse;
+
 #[path = "support/view.rs"]
 mod view;
 
@@ -30,20 +37,8 @@ const STANDARD_MACROS: [(&str, &str); 21] = [
     ("writeln", "std::io::stdout(), \"a\""),
 ];
 
-fn file(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn compare(left: &str, right: &str, equal: bool) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        let a = canonicalize(file(left));
-        let b = canonicalize(file(right));
-        assert_eq!(a == b, equal, "{left}\n{right}\n{a:?}\n{b:?}");
-    }
-}
-
 fn bodies_of(source: &str) -> Vec<String> {
-    let file = file(source);
+    let file = parse(source);
     let mut forms = Vec::new();
     syn_canon::contexts(&file, &mut |context, form| {
         if context.kind == ContextKind::FunctionBody {
@@ -225,8 +220,8 @@ fn macro_definition_patterns_keep_their_punctuation() {
 #[test]
 fn invalid_repetition_trailing_commas_stay_distinct() {
     assert_ne!(
-        syn_canon::canonicalize_failing(file("fn f() { let _ = vec![1; 2,]; }")),
-        syn_canon::canonicalize_failing(file("fn f() { let _ = vec![1; 2]; }")),
+        syn_canon::canonicalize_failing(parse("fn f() { let _ = vec![1; 2,]; }")),
+        syn_canon::canonicalize_failing(parse("fn f() { let _ = vec![1; 2]; }")),
     );
 }
 
@@ -272,7 +267,7 @@ fn function_views_keep_the_macro_punctuation_contracts() {
             false,
         ),
     ] {
-        let file = file(&format!(
+        let file = parse(&format!(
             "{prefix} fn first() {{ {path}![1, 2,]; }} fn second() {{ {path}![1, 2]; }}"
         ));
         let a = view_of(&file, "first");
@@ -293,7 +288,7 @@ fn ambiguous_and_gated_imports_keep_macro_punctuation() {
             false,
         );
         let source = format!("{imports} fn first() {{ v![1, 2]; }} fn second() {{ v![1, 2,]; }}");
-        let file = file(&source);
+        let file = parse(&source);
         assert_ne!(view_of(&file, "first"), view_of(&file, "second"));
         let bodies = bodies_of(&source);
         assert_ne!(bodies[0], bodies[1]);

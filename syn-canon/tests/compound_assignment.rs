@@ -1,36 +1,16 @@
 //! Compound assignment to proven fixed-width integer and `bool` locals.
 
+#[path = "support/canon.rs"]
+mod canon;
+#[path = "support/parse.rs"]
+mod parse;
+use canon::{equivalent, separate};
+use parse::parse;
+
 #[path = "support/view.rs"]
 mod view;
 
 use syn_canon::ContextKind;
-
-fn parse(source: &str) -> syn::File {
-    syn::parse_str(source).unwrap_or_else(|error| panic!("{source}\n{error}"))
-}
-
-fn equivalent(written: &str, expanded: &str) {
-    let left = syn_canon::canonicalize(parse(written));
-    let right = syn_canon::canonicalize(parse(expanded));
-    assert_eq!(left, right, "{written}\n{expanded}");
-    assert_eq!(left.leaf_tokens(), right.leaf_tokens(), "{written}");
-    assert_eq!(left.body_units(), right.body_units(), "{written}");
-    assert_ne!(
-        syn_canon::canonicalize_failing(parse(written)),
-        syn_canon::canonicalize_failing(parse(expanded)),
-        "{written}\n{expanded}"
-    );
-}
-
-fn separate(written: &str, expanded: &str) {
-    for canonicalize in [syn_canon::canonicalize, syn_canon::canonicalize_failing] {
-        assert_ne!(
-            canonicalize(parse(written)),
-            canonicalize(parse(expanded)),
-            "{written}\n{expanded}"
-        );
-    }
-}
 
 fn function(ty: &str, statement: &str) -> String {
     format!("fn f(mut x: {ty}, y: {ty}) -> {ty} {{ {statement}; x }}")
