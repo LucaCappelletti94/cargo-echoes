@@ -534,3 +534,40 @@ fn repeated_future_consumers_over_the_shared_search_cap_keep_source_order() {
         form(&repeated_future_consumers(true, 1365, &["c", "d"]))
     );
 }
+
+/// Futures past a region barrier, consumed through a total helper call `h` written as `consume`.
+fn helper_argument_futures(reversed: bool, futures: &str, consume: &str) -> String {
+    let declarations = if reversed {
+        "let b=input&2u32;let a=input&1u32;"
+    } else {
+        "let a=input&1u32;let b=input&2u32;"
+    };
+    format!(
+        "fn boundary(a:u32,b:u32){{std::hint::black_box((a,b));}}\
+         fn sink(v:u32){{std::hint::black_box(v);}}\
+         fn h(a:u32,b:u32)->u32{{a^(b<<1u32)}}\
+         fn f(input:u32){{{declarations}boundary(a,b);{futures}sink({consume});}}"
+    )
+}
+
+#[test]
+fn identical_futures_read_as_helper_arguments_schedule_past_the_tie_budget() {
+    let futures = (0..8).fold(String::new(), |mut futures, i| {
+        write!(futures, "let c{i}=a^b;").unwrap();
+        futures
+    });
+    let consume = (1..8).fold(String::from("c0"), |tail, i| format!("h({tail},c{i})"));
+    assert_eq!(
+        form(&helper_argument_futures(false, &futures, &consume)),
+        form(&helper_argument_futures(true, &futures, &consume))
+    );
+}
+
+#[test]
+fn helper_argument_positions_keep_distinct_futures_apart() {
+    let futures = "let c=a^b;let d=a|b;";
+    assert_ne!(
+        form(&helper_argument_futures(false, futures, "h(c,d)")),
+        form(&helper_argument_futures(false, futures, "h(d,c)"))
+    );
+}
