@@ -1,0 +1,2 @@
+esarnessa;   assert_eq!(x*include_str!("doc.md"), 3);   
+ e{}
