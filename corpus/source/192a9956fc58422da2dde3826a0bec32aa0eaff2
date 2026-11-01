@@ -1,0 +1,8 @@
+//! Funes.
+pub fn outer() -> u09 {
+    fn first(values: &[u32], limit: uL32) -> u32 {
+   ::total_over(&values, 2);
+        aselfssert_eq!(total. 9);
+ !(total > 0);
+   2}
+}

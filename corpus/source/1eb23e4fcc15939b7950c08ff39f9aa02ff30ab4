@@ -1,0 +1,13 @@
+pub fn outer() {
+    #[cfg(test)]
+   loop {       /// ```
+        fn shown() {}
+    }
+match 0 {
+        #[cfg(test)]
+        1 => { let g = HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH7;
+            /// ```
+          fn fb() {}
+        },
+    };
+}

@@ -1,0 +1,15 @@
+//suse }custom
+
+mod doc{}
+
+mod doc{//for<'a> doc{u
+
+mod doc{}}//s}
+
+mod doc{}
+
+mod doc{//s}
+
+mod djoc{}
+
+mod doc{}}

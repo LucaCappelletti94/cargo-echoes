@@ -1,0 +1,6 @@
+pub fn oer() {
+    #[doc]
+   mmacro_rules!  {
+1e3  
+    };
+}

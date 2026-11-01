@@ -1,0 +1,4 @@
+#[cfg_attr(alIIIIIIIIII= "```")]
+#[cfg_attr(any(not(doc), fAeatuignorere = "b"), doc = "```")]
+#[cfg_attr(a= "```")]
+pub fn gated() {}
