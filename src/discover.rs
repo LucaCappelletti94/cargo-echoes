@@ -25,6 +25,26 @@ pub(crate) struct Target {
     pub(crate) edition: syn_canon::Edition,
 }
 
+impl Target {
+    /// The cargo target `target` of `package`, its source root at `src`, its binaries and
+    /// examples scanned for doctests when `all_targets` holds.
+    pub(crate) fn cargo(
+        package: &cargo_metadata::Package,
+        target: &cargo_metadata::Target,
+        src: PathBuf,
+        all_targets: bool,
+    ) -> Self {
+        Self {
+            name: target.name.clone(),
+            package: package.name.to_string(),
+            src,
+            doc: scan_target(&target.kind, all_targets),
+            library: library_target(&target.kind),
+            edition: edition(Some(target.edition.as_str())),
+        }
+    }
+}
+
 /// The edition a manifest's `edition` value names. Cargo reads an absent key as Rust 2015,
 /// and a value naming no edition this crate knows reads as 2015 too, the edition under which
 /// no reading relies on how `use` paths resolve.
@@ -67,14 +87,12 @@ pub(crate) fn workspace(
     {
         selected = true;
         for target in &package.targets {
-            targets.push(Target {
-                name: target.name.clone(),
-                package: package.name.to_string(),
-                src: target.src_path.clone().into(),
-                doc: scan_target(&target.kind, all_targets),
-                library: library_target(&target.kind),
-                edition: edition(Some(target.edition.as_str())),
-            });
+            targets.push(Target::cargo(
+                package,
+                target,
+                target.src_path.clone().into(),
+                all_targets,
+            ));
         }
     }
     if let Some(name) = package
@@ -89,7 +107,7 @@ pub(crate) fn workspace(
 }
 
 /// Whether a cargo target's doctests are scanned, from its kind list.
-pub(crate) fn scan_target(kinds: &[cargo_metadata::TargetKind], all_targets: bool) -> bool {
+fn scan_target(kinds: &[cargo_metadata::TargetKind], all_targets: bool) -> bool {
     use cargo_metadata::TargetKind as CargoTargetKind;
 
     if kinds
@@ -105,7 +123,7 @@ pub(crate) fn scan_target(kinds: &[cargo_metadata::TargetKind], all_targets: boo
 }
 
 /// Whether a target exposes a library API.
-pub(crate) fn library_target(kinds: &[cargo_metadata::TargetKind]) -> bool {
+fn library_target(kinds: &[cargo_metadata::TargetKind]) -> bool {
     kinds.iter().any(|kind| {
         matches!(
             kind,

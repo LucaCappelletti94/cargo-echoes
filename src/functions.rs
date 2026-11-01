@@ -100,14 +100,10 @@ pub(crate) fn functions(
     library: bool,
     context: &syn_canon::SourceContext<'_>,
 ) -> Vec<FnSite> {
-    let path = file
-        .path
-        .strip_prefix(root)
-        .and_then(|p| p.strip_prefix('/'))
-        .unwrap_or(&file.path);
+    let path = crate::site_relative(&file.path, root);
     let lines: Vec<&str> = file.text.lines().collect();
     let mut walk = Walk {
-        path,
+        path: &path,
         crate_root,
         library,
         lines: &lines,
@@ -301,7 +297,7 @@ fn exports(meta: &syn::Meta) -> bool {
 }
 
 /// The whole type as written, `Foo<u8>` and `a::Foo` telling apart types one last segment would merge.
-fn type_text(ty: &syn::Type) -> String {
+pub(crate) fn type_text(ty: &syn::Type) -> String {
     let printed = quote::ToTokens::to_token_stream(ty).to_string();
     let word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
     let mut out = String::with_capacity(printed.len());

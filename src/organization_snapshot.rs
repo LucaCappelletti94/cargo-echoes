@@ -156,14 +156,12 @@ fn package_targets(
     let mut targets = Vec::new();
     for target in &package.targets {
         match std::fs::canonicalize(&target.src_path) {
-            Ok(src) if src.starts_with(root) => targets.push(crate::discover::Target {
-                name: target.name.clone(),
-                package: package.name.to_string(),
+            Ok(src) if src.starts_with(root) => targets.push(crate::discover::Target::cargo(
+                package,
+                target,
                 src,
-                doc: crate::discover::scan_target(&target.kind, all_targets),
-                library: crate::discover::library_target(&target.kind),
-                edition: crate::discover::edition(Some(target.edition.as_str())),
-            }),
+                all_targets,
+            )),
             _ => failures.push(qualify(
                 root,
                 &manifest_path,
@@ -189,7 +187,7 @@ fn manifest_identity(manifest: &Path) -> std::io::Result<PathBuf> {
 fn invoke_metadata(
     home: &Path,
     manifest: &Path,
-) -> Result<cargo_metadata::Metadata, ManifestError> {
+) -> Result<cargo_metadata::Metadata, crate::dependencies::MetadataError> {
     let mut command = std::process::Command::new("cargo");
     command
         .args([
@@ -214,39 +212,7 @@ fn invoke_metadata(
             command.env(key, value);
         }
     }
-    let id = crate::dependencies::next_proc_id();
-    let output = crate::dependencies::run_bounded(&mut command, METADATA_DEADLINE, &id)?;
-    if !output.status.success() {
-        return Err(ManifestError::Status {
-            status: output.status,
-            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        });
-    }
-    serde_json::from_slice(&output.stdout).map_err(|source| ManifestError::Output { source })
-}
-
-/// One manifest the bounded cargo metadata job could not resolve.
-#[derive(Debug, thiserror::Error)]
-enum ManifestError {
-    /// The bounded subprocess itself failed.
-    #[error("{source}")]
-    Process {
-        #[from]
-        source: crate::dependencies::ProcessError,
-    },
-    /// cargo finished with a nonzero status, for a malformed manifest or an
-    /// unresolvable workspace.
-    #[error("cargo metadata finished with {status}: {stderr}")]
-    Status {
-        status: std::process::ExitStatus,
-        stderr: String,
-    },
-    /// cargo succeeded but returned no parseable metadata.
-    #[error("cargo metadata returned no parseable metadata")]
-    Output {
-        #[source]
-        source: serde_json::Error,
-    },
+    crate::dependencies::cargo_metadata(&mut command, METADATA_DEADLINE)
 }
 
 /// Walk the snapshot tree, queue every canonical `Cargo.toml` once, follow

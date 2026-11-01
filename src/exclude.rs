@@ -70,11 +70,7 @@ pub(crate) fn excluded(excludes: &[Exclude], organization: bool, root: &str, pat
     if excludes.is_empty() {
         return false;
     }
-    let relative = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .trim_start_matches(['/', '\\'])
-        .replace('\\', "/");
+    let relative = crate::site_relative(path, root);
     let (repository, relative) = if organization {
         // Every organization scan path starts with its `owner/repo`.
         let mut parts = relative.splitn(3, '/');
@@ -85,7 +81,7 @@ pub(crate) fn excluded(excludes: &[Exclude], organization: bool, root: &str, pat
             parts.next().unwrap_or_default(),
         )
     } else {
-        (None, relative.as_str())
+        (None, relative.as_ref())
     };
     excludes.iter().any(|exclude| {
         exclude.repository.as_deref().is_none_or(|limited| {

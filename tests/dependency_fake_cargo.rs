@@ -18,6 +18,8 @@ if [ "$nodeps" = "1" ]; then
     fail-nodeps) echo boom >&2; exit 1 ;;
     no-packages) printf '%s' '{"version":1}'; exit 0 ;;
     no-manifest-path) cat "$DJD_NOMANIFEST_JSON"; exit 0 ;;
+    not-json) printf '%s' 'not json'; exit 0 ;;
+    oversized) head -c 16777217 /dev/zero; exit 0 ;;
   esac
   cat "$DJD_MEMBERS_JSON"
   exit 0
@@ -291,12 +293,14 @@ fn scenario_body() {
             assert!(reuse.groups.is_empty(), "{reuse:?}");
             assert!(!reuse.coverage.complete, "{:?}", reuse.coverage);
         }
-        "nodeps_no_packages" => {
+        "nodeps_no_packages" | "nodeps_not_json" | "nodeps_oversized" => {
+            let reported = match scenario.as_str() {
+                "nodeps_no_packages" => "no-deps metadata lists no packages",
+                "nodeps_not_json" => "parse no-deps metadata:",
+                _ => "cargo output exceeds the 16777216 byte limit",
+            };
             let reuse = run_dependency(&root, options(&cache, None, 1));
-            assert!(
-                failures(&reuse).contains("no-deps metadata lists no packages"),
-                "{reuse:?}"
-            );
+            assert!(failures(&reuse).contains(reported), "{reuse:?}");
             assert!(!reuse.coverage.complete, "{:?}", reuse.coverage);
         }
         "no_manifest_path" => {
@@ -560,6 +564,44 @@ fn nodeps_metadata_without_packages_is_reported() {
             ("DJD_MEMBERS_JSON", members_json(&root, true)),
             ("DJD_FULL_JSON", full_json(&root, &[], Vec::new())),
             ("DJD_CARGO_MODE", "no-packages".to_owned()),
+        ],
+    );
+}
+
+#[test]
+fn nodeps_metadata_that_is_not_json_is_reported() {
+    if std::env::var_os("DJD_SCENARIO").is_some() {
+        scenario_body();
+        return;
+    }
+    let root = fixture_root();
+    scenario(
+        "nodeps_metadata_that_is_not_json_is_reported",
+        "nodeps_not_json",
+        &root,
+        &[
+            ("DJD_MEMBERS_JSON", members_json(&root, true)),
+            ("DJD_FULL_JSON", full_json(&root, &[], Vec::new())),
+            ("DJD_CARGO_MODE", "not-json".to_owned()),
+        ],
+    );
+}
+
+#[test]
+fn nodeps_metadata_over_the_output_limit_is_reported() {
+    if std::env::var_os("DJD_SCENARIO").is_some() {
+        scenario_body();
+        return;
+    }
+    let root = fixture_root();
+    scenario(
+        "nodeps_metadata_over_the_output_limit_is_reported",
+        "nodeps_oversized",
+        &root,
+        &[
+            ("DJD_MEMBERS_JSON", members_json(&root, true)),
+            ("DJD_FULL_JSON", full_json(&root, &[], Vec::new())),
+            ("DJD_CARGO_MODE", "oversized".to_owned()),
         ],
     );
 }

@@ -1087,12 +1087,13 @@ impl Discovery {
         }
         let mut complete = tree.failures.is_empty();
         let file_count = tree.files.len();
+        let root = src.root.to_string_lossy();
         let mut fingerprint: BTreeMap<String, String> = tree
             .files
             .iter()
             .map(|file| {
                 (
-                    relative(&file.path, &src.root),
+                    crate::site_relative(&file.path, &root).into_owned(),
                     blake3::hash(file.text.as_bytes()).to_hex().to_string(),
                 )
             })
@@ -1299,23 +1300,13 @@ fn run_metadata(
     }
     // The working directory stays at the original root, so the original cargo
     // config and rustup toolchain are honored.
-    let id = next_proc_id();
-    let out = run_bounded(
+    let value: serde_json::Value = cargo_metadata(
         std::process::Command::new("cargo")
             .args(&args)
             .current_dir(root),
         METADATA_PROCESS_DEADLINE,
-        &id,
     )
-    .map_err(|error| error.to_string())?;
-    if !out.status.success() {
-        return Err(format!(
-            "cargo metadata failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
-    let value = serde_json::from_slice::<serde_json::Value>(&out.stdout)
-        .map_err(|err| format!("parse cargo metadata: {err}"))?;
+    .map_err(|error| error.described("cargo metadata", "cargo metadata"))?;
     let (temp_root, original_root) = workspace.remap();
     let value = crate::context_manifest::remap_value(value, &temp_root, &original_root);
     let mut targeted: BTreeMap<String, Vec<ManifestDep>> = BTreeMap::new();
@@ -1349,23 +1340,13 @@ fn discover_members(root: &Path) -> Result<Vec<crate::context_manifest::MemberIn
         "--manifest-path".to_owned(),
         manifest.to_string_lossy().into_owned(),
     ];
-    let id = next_proc_id();
-    let out = run_bounded(
+    let value: serde_json::Value = cargo_metadata(
         std::process::Command::new("cargo")
             .args(&args)
             .current_dir(root),
         FAST_PROCESS_DEADLINE,
-        &id,
     )
-    .map_err(|error| error.to_string())?;
-    if !out.status.success() {
-        return Err(format!(
-            "cargo metadata --no-deps failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
-    let value = serde_json::from_slice::<serde_json::Value>(&out.stdout)
-        .map_err(|err| format!("parse no-deps metadata: {err}"))?;
+    .map_err(|error| error.described("cargo metadata --no-deps", "no-deps metadata"))?;
     let Some(packages) = value.get("packages").and_then(serde_json::Value::as_array) else {
         return Err("no-deps metadata lists no packages".to_owned());
     };
@@ -1474,6 +1455,58 @@ impl ProcessError {
             source,
         }
     }
+}
+
+/// A bounded `cargo metadata` run that produced no metadata.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum MetadataError {
+    /// The bounded subprocess itself failed.
+    #[error("{source}")]
+    Process {
+        #[from]
+        source: ProcessError,
+    },
+    /// cargo finished with a nonzero status, for a malformed manifest or an
+    /// unresolvable workspace.
+    #[error("cargo metadata finished with {status}: {stderr}")]
+    Status {
+        status: std::process::ExitStatus,
+        stderr: String,
+    },
+    /// cargo succeeded but returned no parseable metadata.
+    #[error("cargo metadata returned no parseable metadata")]
+    Output {
+        #[source]
+        source: serde_json::Error,
+    },
+}
+
+impl MetadataError {
+    /// The one-line diagnostic of the failed run `run`, a parse failure reported against
+    /// `parsed`.
+    fn described(self, run: &str, parsed: &str) -> String {
+        match self {
+            Self::Process { source } => source.to_string(),
+            Self::Status { stderr, .. } => format!("{run} failed: {stderr}"),
+            Self::Output { source } => format!("parse {parsed}: {source}"),
+        }
+    }
+}
+
+/// The metadata a bounded `cargo metadata` run of `command` prints, refused past `deadline`.
+pub(crate) fn cargo_metadata<T: serde::de::DeserializeOwned>(
+    command: &mut std::process::Command,
+    deadline: std::time::Duration,
+) -> Result<T, MetadataError> {
+    let id = next_proc_id();
+    let output = run_bounded(command, deadline, &id)?;
+    if !output.status.success() {
+        return Err(MetadataError::Status {
+            status: output.status,
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        });
+    }
+    serde_json::from_slice(&output.stdout).map_err(|source| MetadataError::Output { source })
 }
 
 struct Process(std::process::Child);
@@ -2073,14 +2106,6 @@ fn same_site(
 fn source_key(kind: &str, value: &str) -> String {
     let digest = blake3::hash(value.as_bytes()).to_hex();
     format!("{kind}-{}", &digest[..16])
-}
-
-/// A package-relative site path against `root`.
-fn relative(path: &str, root: &Path) -> String {
-    Path::new(path).strip_prefix(root).map_or_else(
-        |_| path.to_owned(),
-        |rel| rel.to_string_lossy().into_owned(),
-    )
 }
 
 #[cfg(test)]
@@ -4111,15 +4136,6 @@ iota = { version = "4", optional = true }
         assert_eq!(by_name["theta"].kind, DependencyKind::Build);
         assert!(matches!(by_name["iota"].target, Some(Platform::Cfg(_))));
         assert!(by_name["iota"].optional);
-    }
-
-    #[test]
-    fn relative_keeps_paths_outside_the_root() {
-        assert_eq!(
-            relative("/other/file.rs", Path::new("/root")),
-            "/other/file.rs"
-        );
-        assert_eq!(relative("/root/a/b.rs", Path::new("/root")), "a/b.rs");
     }
 
     #[test]

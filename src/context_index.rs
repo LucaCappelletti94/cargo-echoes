@@ -1,8 +1,9 @@
 //! Source-only metadata extraction for indexed context records.
 
 use crate::cfg::{path_claims, render_conjunction};
+use crate::functions::type_text;
 use crate::reuse::ContextAccess;
-use crate::{ContextSite, TargetScan};
+use crate::{ContextSite, TargetScan, site_relative};
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use alloc::format;
 use alloc::string::{String, ToString};
@@ -48,13 +49,14 @@ pub fn extract(
 ) -> Vec<IndexedContext> {
     let layout = crate_layout(target);
     let model = CrateModel::new(target, &layout);
-    let crate_root = workspace_relative(target.files.first().map_or("", |f| f.path.as_str()), root);
+    let crate_root =
+        site_relative(target.files.first().map_or("", |f| f.path.as_str()), root).into_owned();
     let mut out = Vec::new();
     for file in target.files.iter().filter(|file| scanned(file)) {
-        let path = workspace_relative(&file.path, root);
+        let path = site_relative(&file.path, root).into_owned();
         let memberships = layout
             .memberships
-            .get(&workspace_relative(&file.path, ""))
+            .get(&site_relative(&file.path, "").into_owned())
             .expect("a layout file");
         let meta = context_meta(&file.parsed);
         let mut extractor = Extractor {
@@ -276,34 +278,9 @@ fn classify_item(
     visible: Vis,
     conditions: Vec<String>,
 ) -> (ContextAccess, Option<String>, Vec<String>, Vec<String>) {
-    let mut notes = Vec::new();
-    if !clf.library {
-        notes.push(not_established());
-        return (ContextAccess::Unresolved, None, conditions, notes);
-    }
-    if nested {
-        notes.push(nested_note());
-        return (ContextAccess::InternalFunction, None, conditions, notes);
-    }
-    match item_route(clf.model, path, visible == Vis::Public) {
-        Established::Public {
-            route,
-            conditions: carried,
-        } => {
-            let conditions = merge_conditions(clf.model, conditions, carried, &route);
-            (
-                ContextAccess::PublicFunction,
-                Some(qualify(clf.name, route)),
-                conditions,
-                notes,
-            )
-        }
-        Established::Internal => (ContextAccess::InternalFunction, None, conditions, notes),
-        Established::Unknown(reason) => {
-            notes.push(reason);
-            (ContextAccess::Unresolved, None, conditions, notes)
-        }
-    }
+    settle(clf, &FUNCTION, nested, conditions, |_| {
+        Some(item_route(clf.model, path, visible == Vis::Public))
+    })
 }
 
 /// The route of a whole method body, decided by the receiver.
@@ -316,37 +293,22 @@ fn classify_method(
     fn_name: &str,
     conditions: Vec<String>,
 ) -> (ContextAccess, Option<String>, Vec<String>, Vec<String>) {
-    let mut notes = Vec::new();
-    if !clf.library {
-        notes.push(not_established());
-        return (ContextAccess::Unresolved, None, conditions, notes);
-    }
-    if nested {
-        notes.push(nested_note());
-        return (ContextAccess::InternalMethod, None, conditions, notes);
-    }
-    if visible != Vis::Public {
-        return (ContextAccess::InternalMethod, None, conditions, notes);
-    }
-    match receiver_route(clf.model, module_rel, self_type) {
-        Established::Public {
-            route,
-            conditions: carried,
-        } => (
-            ContextAccess::PublicMethod,
-            Some(qualify(clf.name, join_path([route.as_str(), fn_name]))),
-            merge_conditions(clf.model, conditions, carried, &route),
-            notes,
-        ),
-        Established::Internal => {
-            notes.push(format!("the receiver {self_type} is internal to the crate"));
-            (ContextAccess::InternalMethod, None, conditions, notes)
-        }
-        Established::Unknown(reason) => {
-            notes.push(reason);
-            (ContextAccess::Unresolved, None, conditions, notes)
-        }
-    }
+    settle(
+        clf,
+        &BodyKind::method(fn_name),
+        nested,
+        conditions,
+        |notes| {
+            if visible != Vis::Public {
+                return None;
+            }
+            let established = receiver_route(clf.model, module_rel, self_type);
+            if matches!(established, Established::Internal) {
+                notes.push(format!("the receiver {self_type} is internal to the crate"));
+            }
+            Some(established)
+        },
+    )
 }
 
 /// The route of a whole trait default body, following the trait.
@@ -358,6 +320,46 @@ fn classify_trait_default(
     fn_name: &str,
     conditions: Vec<String>,
 ) -> (ContextAccess, Option<String>, Vec<String>, Vec<String>) {
+    settle(clf, &BodyKind::method(fn_name), nested, conditions, |_| {
+        Some(item_route(clf.model, path, trait_visible == Vis::Public))
+    })
+}
+
+/// The accesses a classified body takes, and the method name its public route ends in.
+struct BodyKind<'a> {
+    public: ContextAccess,
+    internal: ContextAccess,
+    method: Option<&'a str>,
+}
+
+/// A free function body.
+const FUNCTION: BodyKind<'static> = BodyKind {
+    public: ContextAccess::PublicFunction,
+    internal: ContextAccess::InternalFunction,
+    method: None,
+};
+
+impl<'a> BodyKind<'a> {
+    /// A method or trait default body named `name`.
+    fn method(name: &'a str) -> Self {
+        Self {
+            public: ContextAccess::PublicMethod,
+            internal: ContextAccess::InternalMethod,
+            method: Some(name),
+        }
+    }
+}
+
+/// The route of a body of `kind` whose route `establish` settles, `None` for a body its
+/// visibility keeps internal. A body outside a library is unresolved and a nested body is
+/// internal before `establish` runs.
+fn settle(
+    clf: &Classifier,
+    kind: &BodyKind<'_>,
+    nested: bool,
+    conditions: Vec<String>,
+    establish: impl FnOnce(&mut Vec<String>) -> Option<Established>,
+) -> (ContextAccess, Option<String>, Vec<String>, Vec<String>) {
     let mut notes = Vec::new();
     if !clf.library {
         notes.push(not_established());
@@ -365,19 +367,29 @@ fn classify_trait_default(
     }
     if nested {
         notes.push(nested_note());
-        return (ContextAccess::InternalMethod, None, conditions, notes);
+        return (kind.internal, None, conditions, notes);
     }
-    match item_route(clf.model, path, trait_visible == Vis::Public) {
+    let Some(established) = establish(&mut notes) else {
+        return (kind.internal, None, conditions, notes);
+    };
+    match established {
         Established::Public {
             route,
             conditions: carried,
-        } => (
-            ContextAccess::PublicMethod,
-            Some(qualify(clf.name, join_path([route.as_str(), fn_name]))),
-            merge_conditions(clf.model, conditions, carried, &route),
-            notes,
-        ),
-        Established::Internal => (ContextAccess::InternalMethod, None, conditions, notes),
+        } => {
+            let conditions = merge_conditions(clf.model, conditions, carried, &route);
+            let route = match kind.method {
+                Some(name) => join_path([route.as_str(), name]),
+                None => route,
+            };
+            (
+                kind.public,
+                Some(qualify(clf.name, route)),
+                conditions,
+                notes,
+            )
+        }
+        Established::Internal => (kind.internal, None, conditions, notes),
         Established::Unknown(reason) => {
             notes.push(reason);
             (ContextAccess::Unresolved, None, conditions, notes)
@@ -795,19 +807,6 @@ fn qualify(name: &str, route: String) -> String {
     join_path([name.to_string(), route])
 }
 
-/// `path` as a workspace-relative site path with forward slashes and no leading `./` or `/`.
-fn workspace_relative(path: &str, root: &str) -> String {
-    let stripped = path.strip_prefix(root).unwrap_or(path);
-    let mut out = stripped.replace('\\', "/");
-    while let Some(rest) = out.strip_prefix("./") {
-        out = rest.to_string();
-    }
-    while let Some(rest) = out.strip_prefix('/') {
-        out = rest.to_string();
-    }
-    out
-}
-
 /// The directory of `path`, `""` at the top.
 fn dir_of(path: &str) -> String {
     match path.rfind('/') {
@@ -1156,20 +1155,6 @@ fn cfgs(attrs: &[syn::Attribute]) -> impl Iterator<Item = String> + '_ {
         .map(|a| a.to_token_stream().to_string())
 }
 
-/// The type as written, `Foo<u8>` and `a::Foo` kept whole.
-fn type_text(ty: &syn::Type) -> String {
-    let printed = ty.to_token_stream().to_string();
-    let word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
-    let mut out = String::with_capacity(printed.len());
-    let mut chars = printed.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c != ' ' || (word(out.chars().last()) && word(chars.peek().copied())) {
-            out.push(c);
-        }
-    }
-    out
-}
-
 /// The crate model with modules, type definitions and import bindings by module path.
 struct CrateModel {
     /// Modules by target-relative path.
@@ -1220,13 +1205,13 @@ impl CrateModel {
         let file_set: BTreeSet<String> = target
             .files
             .iter()
-            .map(|f| workspace_relative(&f.path, ""))
+            .map(|f| site_relative(&f.path, "").into_owned())
             .collect();
         let mut types = BTreeMap::new();
         let mut bindings: BTreeMap<String, Vec<Binding>> = BTreeMap::new();
         let mut resolved = true;
         for file in &target.files {
-            let path = workspace_relative(&file.path, "");
+            let path = site_relative(&file.path, "").into_owned();
             let file_decls = layout.decls.get(&path).expect("a drained file");
             let memberships = layout.memberships.get(&path).expect("a layout file");
             let items = item_defs(&file.parsed);
@@ -1406,20 +1391,20 @@ fn crate_layout(target: &TargetScan) -> CrateLayout {
     let file_set: BTreeSet<String> = target
         .files
         .iter()
-        .map(|f| workspace_relative(&f.path, ""))
+        .map(|f| site_relative(&f.path, "").into_owned())
         .collect();
     let file_index: BTreeMap<String, usize> = target
         .files
         .iter()
         .enumerate()
-        .map(|(index, f)| (workspace_relative(&f.path, ""), index))
+        .map(|(index, f)| (site_relative(&f.path, "").into_owned(), index))
         .collect();
     let mut decls = BTreeMap::new();
     let mut memberships: BTreeMap<String, Vec<Membership>> = BTreeMap::new();
     let mut contexts: BTreeMap<String, FileClaim> = BTreeMap::new();
     let mut queue: VecDeque<String> = VecDeque::new();
     for file in &target.files {
-        let path = workspace_relative(&file.path, "");
+        let path = site_relative(&file.path, "").into_owned();
         if !memberships.contains_key(&path) {
             memberships.insert(
                 path.clone(),
