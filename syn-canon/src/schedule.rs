@@ -3140,6 +3140,16 @@ fn future_context_walk(node: &Lbl, owner: &Lbl, path: &mut Vec<Lbl>, contexts: &
                 path.pop();
             }
         }
+        Lbl::Call(callee, args, prim) => {
+            for (position, child) in core::iter::once(callee.as_ref()).chain(args).enumerate() {
+                path.push(Lbl::Other(
+                    "call".into(),
+                    vec![Lbl::Int(0, Some(*prim)), Lbl::Lit(position.to_string())],
+                ));
+                future_context_walk(child, owner, path, contexts);
+                path.pop();
+            }
+        }
         _ => {}
     }
 }
