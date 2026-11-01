@@ -1,1 +1,0 @@
-assert!(match v { x => x > 0 })
