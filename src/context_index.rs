@@ -1,10 +1,9 @@
 //! Source-only metadata extraction for indexed context records.
 
 use crate::cfg::{path_claims, render_conjunction};
-use crate::discover::site_relative;
 use crate::functions::type_text;
 use crate::reuse::ContextAccess;
-use crate::{ContextSite, TargetScan};
+use crate::{ContextSite, TargetScan, site_relative};
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use alloc::format;
 use alloc::string::{String, ToString};

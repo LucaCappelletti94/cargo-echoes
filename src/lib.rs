@@ -465,9 +465,10 @@ impl Echoes {
                 .iter()
                 .filter(|target| roots.insert(target.files.first().map(|f| f.path.as_str())));
             let sites = crates.flat_map(|target| {
-                let crate_root = target.files.first().map_or(Cow::Borrowed(""), |f| {
-                    discover::site_relative(&f.path, root)
-                });
+                let crate_root = target
+                    .files
+                    .first()
+                    .map_or(Cow::Borrowed(""), |f| site_relative(&f.path, root));
                 let context = syn_canon::SourceContext::new(
                     target
                         .files
@@ -640,7 +641,7 @@ impl Echoes {
             let legacy_crates: BTreeSet<Cow<'_, str>> = targets
                 .iter()
                 .filter_map(|target| target.files.first())
-                .map(|file| discover::site_relative(&file.path, root))
+                .map(|file| site_relative(&file.path, root))
                 .collect();
             let selected: Vec<_> = entries
                 .iter()
@@ -805,6 +806,39 @@ fn module_prefix(target: &TargetScan, file: &SourceFile) -> String {
         Some(_) => format!("{}::{}", target.name, file.segments.join("::")),
         None => target.name.clone(),
     }
+}
+
+/// `path` as a site path relative to `root`, with forward slashes and no leading `./` or `/`.
+/// A path whose components do not start with those of `root` stays whole.
+pub(crate) fn site_relative<'a>(path: &'a str, root: &str) -> Cow<'a, str> {
+    site_relative_in(path, root, cfg!(windows))
+}
+
+/// `site_relative` on a platform where `\` separates components when `backslash` holds, as on
+/// Windows, and is an ordinary file name character otherwise.
+fn site_relative_in<'a>(path: &'a str, root: &str, backslash: bool) -> Cow<'a, str> {
+    let separator = |c: char| c == '/' || (backslash && c == '\\');
+    let Some(rest) = path.strip_prefix(root).filter(|rest| {
+        root.is_empty()
+            || root.ends_with(separator)
+            || rest.is_empty()
+            || rest.starts_with(separator)
+    }) else {
+        return Cow::Borrowed(path);
+    };
+    if backslash && rest.contains('\\') {
+        Cow::Owned(site_trim(&rest.replace('\\', "/")).to_string())
+    } else {
+        Cow::Borrowed(site_trim(rest))
+    }
+}
+
+/// `path` without its leading `./` and `/` runs.
+fn site_trim(mut path: &str) -> &str {
+    while let Some(rest) = path.strip_prefix("./").or_else(|| path.strip_prefix('/')) {
+        path = rest;
+    }
+    path
 }
 
 /// Whether `text` declares itself generated in its first five lines, where rustfmt looks: by
@@ -1521,6 +1555,41 @@ fn names_its_item(site: &DocTest) -> bool {
 mod tests {
     use super::*;
     use alloc::vec;
+
+    #[test]
+    fn site_paths_under_the_root_lose_the_root_and_leading_separators() {
+        assert_eq!(site_relative("/r/src/a.rs", "/r"), "src/a.rs");
+        assert_eq!(site_relative("/r/src/a.rs", "/r/"), "src/a.rs");
+        assert_eq!(site_relative("/r//src/a.rs", "/r"), "src/a.rs");
+        assert_eq!(site_relative("./src/a.rs", ""), "src/a.rs");
+        assert_eq!(site_relative("/abs/a.rs", ""), "abs/a.rs");
+    }
+
+    #[test]
+    fn windows_site_paths_take_forward_slashes() {
+        assert_eq!(
+            site_relative_in(r"C:\w\src\a.rs", r"C:\w", true),
+            "src/a.rs"
+        );
+        assert_eq!(
+            site_relative_in(r"C:\w\.\src\a.rs", r"C:\w", true),
+            "src/a.rs"
+        );
+    }
+
+    #[test]
+    fn unix_site_paths_keep_backslashes_in_file_names() {
+        assert_eq!(site_relative_in(r"/r/a\b.rs", "/r", false), r"a\b.rs");
+        assert_eq!(site_relative_in(r"/r\x/a.rs", "/r", false), r"/r\x/a.rs");
+        assert_eq!(site_relative_in(r"/r\x/a.rs", "/r", true), "x/a.rs");
+    }
+
+    #[test]
+    fn site_paths_outside_the_root_stay_whole() {
+        assert_eq!(site_relative("/other/file.rs", "/root"), "/other/file.rs");
+        assert_eq!(site_relative("/rooted/file.rs", "/root"), "/rooted/file.rs");
+        assert_eq!(site_relative("/root", "/root"), "");
+    }
 
     #[test]
     #[cfg(feature = "std")]

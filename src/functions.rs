@@ -100,7 +100,7 @@ pub(crate) fn functions(
     library: bool,
     context: &syn_canon::SourceContext<'_>,
 ) -> Vec<FnSite> {
-    let path = crate::discover::site_relative(&file.path, root);
+    let path = crate::site_relative(&file.path, root);
     let lines: Vec<&str> = file.text.lines().collect();
     let mut walk = Walk {
         path: &path,

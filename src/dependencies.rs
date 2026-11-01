@@ -1093,7 +1093,7 @@ impl Discovery {
             .iter()
             .map(|file| {
                 (
-                    crate::discover::site_relative(&file.path, &root).into_owned(),
+                    crate::site_relative(&file.path, &root).into_owned(),
                     blake3::hash(file.text.as_bytes()).to_hex().to_string(),
                 )
             })

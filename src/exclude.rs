@@ -70,7 +70,7 @@ pub(crate) fn excluded(excludes: &[Exclude], organization: bool, root: &str, pat
     if excludes.is_empty() {
         return false;
     }
-    let relative = crate::discover::site_relative(path, root);
+    let relative = crate::site_relative(path, root);
     let (repository, relative) = if organization {
         // Every organization scan path starts with its `owner/repo`.
         let mut parts = relative.splitn(3, '/');
