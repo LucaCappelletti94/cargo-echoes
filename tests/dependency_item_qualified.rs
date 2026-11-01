@@ -1,25 +1,21 @@
 //! Qualified owners, import-target aliases, and crate-root proof regressions.
 
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/method_form.rs"]
 mod method_form;
+#[path = "support/separate.rs"]
+mod separate;
 
+use failing::failing;
+use form::form;
 use method_form::method_form;
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_file(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_file(source).unwrap())
-}
+use separate::separate;
 
 fn folded(left: &str, right: &str) {
     assert_eq!(form(left), form(right), "{left}\n{right}");
-    assert_ne!(failing(left), failing(right), "{left}\n{right}");
-}
-
-fn distinct(left: &str, right: &str) {
-    assert_ne!(form(left), form(right), "{left}\n{right}");
     assert_ne!(failing(left), failing(right), "{left}\n{right}");
 }
 
@@ -57,7 +53,7 @@ fn nested_qualified_owner_impl_blocks_fold_through_module_frames() {
 
 #[test]
 fn qualified_owner_keeps_different_terminals_separate() {
-    distinct(
+    separate(
         "mod m { pub struct S; pub struct T; } impl m::S { fn one() -> u32 { 1 } }",
         "mod m { pub struct S; pub struct T; } impl m::T { fn one() -> u32 { 1 } }",
     );
@@ -65,7 +61,7 @@ fn qualified_owner_keeps_different_terminals_separate() {
 
 #[test]
 fn qualified_owner_keeps_different_alias_targets_separate() {
-    distinct(
+    separate(
         "mod m { pub struct S; pub struct T; } use m::S as A; impl A { fn one() -> u32 { 1 } }",
         "mod m { pub struct S; pub struct T; } use m::T as A; impl A { fn one() -> u32 { 1 } }",
     );
@@ -89,7 +85,7 @@ fn qualified_owner_mixed_spellings_fold_through_one_route() {
 
 #[test]
 fn qualified_owner_self_keeps_module_shadow_separate() {
-    distinct(
+    separate(
         "struct S; mod m { pub struct S; } impl m::S { fn f() -> u32 { Self::g() } } impl m::S { fn g() -> u32 { 1 } }",
         "struct S; mod m { pub struct S; } impl S { fn f() -> u32 { Self::g() } } impl S { fn g() -> u32 { 1 } }",
     );
@@ -105,11 +101,11 @@ fn qualified_built_in_print_macro_folds_when_unshadowed() {
 
 #[test]
 fn qualified_built_in_print_macro_freezes_when_type_shadowed() {
-    distinct(
+    separate(
         "struct std; fn one() -> u32 { 1 } fn two() -> u32 { 2 } fn main() { std::println!(\"{:?}\", (one(), two())); }",
         "struct std; fn two() -> u32 { 2 } fn one() -> u32 { 1 } fn main() { std::println!(\"{:?}\", (one(), two())); }",
     );
-    distinct(
+    separate(
         "struct m; fn one() -> u32 { 1 } fn two() -> u32 { 2 } fn main() { m::println!(\"{:?}\", (one(), two())); }",
         "struct m; fn two() -> u32 { 2 } fn one() -> u32 { 1 } fn main() { m::println!(\"{:?}\", (one(), two())); }",
     );
@@ -117,7 +113,7 @@ fn qualified_built_in_print_macro_freezes_when_type_shadowed() {
 
 #[test]
 fn unproven_print_macro_root_keeps_item_groups_atomic() {
-    distinct(
+    separate(
         "fn one() -> u32 { 1 } fn two() -> u32 { 2 } fn main() { observer::println!(\"{:?}\", (one(), two())); }",
         "fn two() -> u32 { 2 } fn one() -> u32 { 1 } fn main() { observer::println!(\"{:?}\", (one(), two())); }",
     );
@@ -133,7 +129,7 @@ fn crate_root_paths_fold_when_unshadowed() {
 
 #[test]
 fn crate_root_paths_freeze_when_import_shadowed() {
-    distinct(
+    separate(
         "use foo::std; fn one() -> usize { let n = 1u32; std::mem::size_of_val(&n) } fn two() -> u32 { 2 } fn main() { println!(\"{:?}\", (one(), two())); }",
         "use foo::std; fn two() -> u32 { 2 } fn one() -> usize { let n = 1u32; std::mem::size_of_val(&n) } fn main() { println!(\"{:?}\", (one(), two())); }",
     );
@@ -141,7 +137,7 @@ fn crate_root_paths_freeze_when_import_shadowed() {
 
 #[test]
 fn prelude_names_fold_only_through_imports() {
-    distinct(
+    separate(
         "fn one() -> Vec<u32> { Vec::new() } fn two() -> u32 { 2 } fn main() { println!(\"{:?}\", (one(), two())); }",
         "fn two() -> u32 { 2 } fn one() -> Vec<u32> { Vec::new() } fn main() { println!(\"{:?}\", (one(), two())); }",
     );
@@ -161,7 +157,7 @@ fn crate_root_owner_spellings_fold_under_module_shadow() {
 
 #[test]
 fn crate_root_owner_keeps_root_and_module_terminals_separate() {
-    distinct(
+    separate(
         "struct S; mod m { pub struct S; } impl crate::S { fn f() -> u32 { Self::g() } } impl crate::S { fn g() -> u32 { 1 } }",
         "struct S; mod m { pub struct S; } impl crate::m::S { fn f() -> u32 { Self::g() } } impl crate::m::S { fn g() -> u32 { 1 } }",
     );
@@ -202,7 +198,7 @@ fn nested_trait_self_alpha_fold_inside_inherent_method() {
 
 #[test]
 fn nested_trait_self_keeps_outer_target_separate() {
-    distinct(
+    separate(
         "struct S; impl S { fn g() -> u32 { 9 } fn outer() -> u32 { trait T { fn g() -> u32 { 1 } fn f(&self) -> u32 { Self::g() } } 0 } }",
         "struct S; impl S { fn g() -> u32 { 9 } fn outer() -> u32 { trait T { fn g() -> u32 { 1 } fn f(&self) -> u32 { S::g() } } 0 } }",
     );
@@ -210,7 +206,7 @@ fn nested_trait_self_keeps_outer_target_separate() {
 
 #[test]
 fn crate_root_owner_does_not_merge_with_a_lexically_shadowing_owner() {
-    distinct(
+    separate(
         "struct S; mod m { pub struct S; impl crate::S { fn one() -> u32 { 1 } } impl S { fn two() -> u32 { 2 } } }",
         "struct S; mod m { pub struct S; impl S { fn one() -> u32 { 1 } fn two() -> u32 { 2 } } }",
     );
@@ -322,7 +318,7 @@ fn crate_root_owner_partition_folds_in_a_closed_module_context() {
 
 #[test]
 fn exported_owner_keeps_inherent_partitions_opaque() {
-    distinct(
+    separate(
         "mod m { struct S; } pub struct S; impl crate::S { fn one() -> u32 { 1 } } impl crate::S { fn two() -> u32 { 2 } }",
         "mod m { struct S; } pub struct S; impl S { fn one() -> u32 { 1 } fn two() -> u32 { 2 } }",
     );

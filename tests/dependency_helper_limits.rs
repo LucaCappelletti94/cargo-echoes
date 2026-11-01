@@ -2,6 +2,11 @@
 
 use std::fmt::Write as _;
 
+#[path = "support/form.rs"]
+mod form;
+
+use form::form;
+
 #[derive(Default)]
 struct DeclarationNodes {
     stmt: usize,
@@ -70,10 +75,6 @@ fn expression_depth(file: &syn::File, name: &str) -> usize {
     let mut count = ExprDepth::default();
     syn::visit::visit_block(&mut count, &function.block);
     count.best
-}
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
 }
 
 fn summary_endpoint(extra: usize, reversed: bool, tail: &str) -> String {

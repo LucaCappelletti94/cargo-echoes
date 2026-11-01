@@ -1,17 +1,15 @@
 //! Local helper scheduling through public comparison.
 
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
+#[path = "support/separate.rs"]
+mod separate;
 
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_str(source).unwrap())
-}
-
-fn distinct(a: &str, b: &str) {
-    assert_ne!(form(a), form(b), "{a}\n{b}");
-    assert_ne!(failing(a), failing(b), "{a}\n{b}");
-}
+use failing::failing;
+use form::form;
+use separate::separate;
 
 /// A pair that keeps its source order, both in the passing and the failing form.
 fn ordered(a: &str, b: &str) {
@@ -42,7 +40,7 @@ fn with_module_stack(name: &str, check: impl FnOnce() + Send + 'static) {
 #[test]
 fn helper_origins_keep_different_results_distinct() {
     let prefix = "fn low(x:u32)->u32{x&15u32} fn high(x:u32)->u32{x>>4}";
-    distinct(
+    separate(
         &format!("{prefix} fn f(x:u32)->u32{{low(x)}}"),
         &format!("{prefix} fn f(x:u32)->u32{{high(x)}}"),
     );
@@ -50,7 +48,7 @@ fn helper_origins_keep_different_results_distinct() {
 
 #[test]
 fn helper_results_with_distinct_widths_stay_distinct() {
-    distinct(
+    separate(
         "fn low(x:u32)->u32{x&15u32} fn f(x:u32)->u32{low(x)}",
         "fn low(x:u64)->u64{x&15u64} fn f(x:u64)->u64{low(x)}",
     );
@@ -59,7 +57,7 @@ fn helper_results_with_distinct_widths_stay_distinct() {
 #[test]
 fn helper_purity_does_not_prove_argument_purity() {
     let prefix = "fn pure(x:u32)->u32{x&15u32} fn effect(x:u32)->u32{println!(\"{x}\");x}";
-    distinct(
+    separate(
         &format!(
             "{prefix} fn f()->(u32,u32){{let a=pure(effect(1u32));let b=pure(effect(2u32));(a,b)}}"
         ),
@@ -315,11 +313,11 @@ fn helper_calls_compose_with_the_value_folds() {
         "the dead caller binding erases around the retained helper call"
     );
     // The call is not inlined into the caller and not merged with itself.
-    distinct(
+    separate(
         composed,
         "fn f(input:u32)->(u32,u32){((input&15u32)^3u32,input>>4u32)}",
     );
-    distinct(
+    separate(
         "fn low(x:u32)->u32{x&15u32} fn f(x:u32)->(u32,u32){let a=low(x);let b=low(x);(a,b)}",
         "fn low(x:u32)->u32{x&15u32} fn f(x:u32)->(u32,u32){let a=low(x);(a,a)}",
     );
@@ -354,7 +352,7 @@ fn helper_future_roles_keep_joint_dependency_identity() {
             "{prefix}fn f(x:u32)->(u32,u32){{let b=low(x);let a=low(x);let c=low(x^1u32);let e=low(b^c);let d=low(a^c);(d,e)}}"
         ),
     );
-    distinct(
+    separate(
         &format!(
             "{prefix}fn f(x:u32)->(u32,u32){{let a=low(x);let b=low(x);let c=low(x^1u32);let d=low(a^c);let e=low(b^c);(d,e)}}"
         ),
@@ -419,7 +417,7 @@ fn tied_helper_futures_keep_repeated_current_roles() {
             "{prefix}fn f(x:u32)->(u32,u32){{let b=low(x);let a=low(x);println!(\"barrier\");let d=low(x^1u32);let c=low(x^1u32);let g=low(b^c);let e=low(a^d);(e,g)}}"
         ),
     );
-    distinct(
+    separate(
         &format!(
             "{prefix}fn f(x:u32)->(u32,u32){{let a=low(x);let b=low(x);println!(\"barrier\");let c=low(x^1u32);let d=low(x^1u32);let e=low(a^c);let g=low(b^d);(e,g)}}"
         ),
@@ -440,7 +438,7 @@ fn nested_helper_calls_in_primitive_operations_keep_their_future_roles() {
             "{prefix}fn f(x:u32)->(u32,u32){{let b=low(x);let a=low(x);println!(\"barrier\");let c=low(x^1u32);let e=low(c)^b;let d=low(c)^a;(d,e)}}"
         ),
     );
-    distinct(
+    separate(
         &format!(
             "{prefix}fn f(x:u32)->(u32,u32){{let a=low(x);let b=low(x);println!(\"barrier\");let c=low(x^1u32);let d=low(c)^a;let e=low(c)^b;(d,e)}}"
         ),
@@ -461,7 +459,7 @@ fn future_ordered_helper_call_arguments_keep_their_roles() {
             "{prefix}fn f(x:u32)->(u32,u32){{let b=low(x);let a=low(x);println!(\"barrier\");let d=low(x^2u32);let c=low(x^1u32);let e=pair(c,d);let g=b^e;(g,a)}}"
         ),
     );
-    distinct(
+    separate(
         &format!(
             "{prefix}fn f(x:u32)->(u32,u32){{let a=low(x);let b=low(x);println!(\"barrier\");let c=low(x^1u32);let d=low(x^2u32);let e=pair(c,d);let g=a^e;(g,b)}}"
         ),

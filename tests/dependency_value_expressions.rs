@@ -2,22 +2,16 @@
 
 use std::fmt::Write as _;
 
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/grouped_file.rs"]
 mod grouped;
+#[path = "support/separate.rs"]
+mod separate;
 
+use form::form;
 use grouped::grouped_file;
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
-
-fn separate(left: &str, right: &str) {
-    assert_ne!(form(left), form(right), "{left}\n{right}");
-    assert_ne!(
-        syn_canon::canonicalize_failing(syn::parse_str(left).unwrap()),
-        syn_canon::canonicalize_failing(syn::parse_str(right).unwrap())
-    );
-}
+use separate::separate;
 
 fn grouped(source: &str) -> syn_canon::CanonicalForm {
     syn_canon::canonicalize(grouped_file(source))

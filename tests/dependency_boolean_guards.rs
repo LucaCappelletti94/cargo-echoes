@@ -1,25 +1,21 @@
 //! Public guards for the boolean folds' wrappers, attributes, items and walk bounds.
 
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/same.rs"]
 mod same;
+#[path = "support/separate.rs"]
+mod separate;
 
+use failing::failing;
+use form::form;
 use same::same;
+use separate::separate;
 use std::fmt::Write as _;
 
 use syn::visit_mut::VisitMut as _;
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_str(source).unwrap())
-}
-
-fn separate(left: &str, right: &str) {
-    assert_ne!(form(left), form(right), "{left}\n{right}");
-    assert_ne!(failing(left), failing(right));
-}
 
 fn names(count: usize) -> Vec<String> {
     (0..count).map(|index| format!("a{index}")).collect()

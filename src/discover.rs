@@ -599,6 +599,25 @@ mod tests {
             .collect()
     }
 
+    /// Write `files` into a tempdir, the first being the crate root, and walk its
+    /// module tree with doctests on or off, each file as its basename and
+    /// its rustdoc route.
+    fn rustdoc_tree(files: &[(&str, &str)], doc: bool) -> Vec<(String, bool)> {
+        let dir = tempfile::tempdir().unwrap();
+        for (path, text) in files {
+            let path = dir.path().join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        }
+        let mut root = target(&dir.path().join(files[0].0));
+        root.doc = doc;
+        module_tree(&root, None)
+            .files
+            .into_iter()
+            .map(|f| (f.path.rsplit('/').next().unwrap().to_string(), f.rustdoc))
+            .collect()
+    }
+
     /// The tempdir-relative paths `walk` reaches.
     fn paths(files: &[(&str, &str)]) -> Vec<String> {
         walk(files).into_iter().map(|(path, _)| path).collect()
@@ -833,8 +852,7 @@ mod tests {
 
     #[test]
     fn cfg_off_mod_files_are_collected_outside_rustdoc() {
-        let dir = tempfile::tempdir().unwrap();
-        for (path, text) in [
+        let files = [
             (
                 "lib.rs",
                 "#[cfg(test)]\nmod tests;\n#[cfg(test)]\nmod inner { mod deep; }\n#[cfg(not(test))]\npub mod kept;\n#[cfg(windows)]\nmod absent;\n",
@@ -842,51 +860,36 @@ mod tests {
             ("tests.rs", "pub fn g() {}\n"),
             ("inner/deep.rs", "pub fn g() {}\n"),
             ("kept.rs", "pub fn g() {}\n"),
-        ] {
-            let path = dir.path().join(path);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, text).unwrap();
-        }
-        let got: Vec<(String, bool)> = module_tree(&target(&dir.path().join("lib.rs")), None)
-            .files
-            .into_iter()
-            .map(|f| (f.path.rsplit('/').next().unwrap().to_string(), f.rustdoc))
-            .collect();
+        ];
         let want = [
             ("lib.rs", true),
             ("kept.rs", true),
             ("tests.rs", false),
             ("deep.rs", false),
         ];
-        assert_eq!(got, want.map(|(p, r)| (p.to_string(), r)));
-        let mut lib = target(&dir.path().join("lib.rs"));
-        lib.doc = false;
-        assert!(module_tree(&lib, None).files.iter().all(|f| !f.rustdoc));
+        assert_eq!(
+            rustdoc_tree(&files, true),
+            want.map(|(p, r)| (p.to_string(), r))
+        );
+        assert!(rustdoc_tree(&files, false).iter().all(|file| !file.1));
     }
 
     #[test]
     fn a_file_declared_under_exclusive_cfgs_stays_with_rustdoc() {
         // diesel declares `exists` once per side of a feature flag, the off one first.
-        let dir = tempfile::tempdir().unwrap();
-        for (path, text) in [
+        let files = [
             (
                 "lib.rs",
                 "#[cfg(not(feature = \"x\"))]\npub(crate) mod exists;\n#[cfg(feature = \"x\")]\npub mod exists;\n",
             ),
             ("exists.rs", "#[cfg(test)]\nmod inner;\npub fn g() {}\n"),
             ("exists/inner.rs", "pub fn h() {}\n"),
-        ] {
-            let path = dir.path().join(path);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, text).unwrap();
-        }
-        let got: Vec<(String, bool)> = module_tree(&target(&dir.path().join("lib.rs")), None)
-            .files
-            .into_iter()
-            .map(|f| (f.path.rsplit('/').next().unwrap().to_string(), f.rustdoc))
-            .collect();
+        ];
         let want = [("lib.rs", true), ("exists.rs", true), ("inner.rs", false)];
-        assert_eq!(got, want.map(|(p, r)| (p.to_string(), r)));
+        assert_eq!(
+            rustdoc_tree(&files, true),
+            want.map(|(p, r)| (p.to_string(), r))
+        );
     }
 
     #[test]
@@ -1364,46 +1367,32 @@ mod tests {
     fn inline_mod_children_stay_on_the_rustdoc_route() {
         // An inline module's children collect with the doctest walk before queued
         // files, and a cfg-off file module never reaches rustdoc.
-        let dir = tempfile::tempdir().unwrap();
-        for (path, text) in [
+        let files = [
             (
                 "lib.rs",
                 "pub mod plain { mod deep; }\n#[cfg(test)] mod b;\n",
             ),
             ("plain/deep.rs", "pub fn g() {}\n"),
             ("b.rs", "pub fn p() {}\n"),
-        ] {
-            let path = dir.path().join(path);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, text).unwrap();
-        }
-        let got: Vec<(String, bool)> = module_tree(&target(&dir.path().join("lib.rs")), None)
-            .files
-            .into_iter()
-            .map(|f| (f.path.rsplit('/').next().unwrap().to_string(), f.rustdoc))
-            .collect();
+        ];
         let want = [("lib.rs", true), ("deep.rs", true), ("b.rs", false)];
-        assert_eq!(got, want.map(|(p, r)| (p.to_string(), r)));
+        assert_eq!(
+            rustdoc_tree(&files, true),
+            want.map(|(p, r)| (p.to_string(), r))
+        );
     }
 
     #[test]
     fn a_name_value_attribute_other_than_path_is_not_a_module_path() {
         // A doc attribute on a module declaration is not a module path claim.
-        let dir = tempfile::tempdir().unwrap();
-        for (path, text) in [
+        let files = [
             ("lib.rs", "#[doc = \"a docs line\"]\npub mod named;\n"),
             ("named.rs", "pub fn g() {}\n"),
-        ] {
-            let path = dir.path().join(path);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, text).unwrap();
-        }
-        let got: Vec<(String, bool)> = module_tree(&target(&dir.path().join("lib.rs")), None)
-            .files
-            .into_iter()
-            .map(|f| (f.path.rsplit('/').next().unwrap().to_string(), f.rustdoc))
-            .collect();
+        ];
         let want = [("lib.rs", true), ("named.rs", true)];
-        assert_eq!(got, want.map(|(p, r)| (p.to_string(), r)));
+        assert_eq!(
+            rustdoc_tree(&files, true),
+            want.map(|(p, r)| (p.to_string(), r))
+        );
     }
 }

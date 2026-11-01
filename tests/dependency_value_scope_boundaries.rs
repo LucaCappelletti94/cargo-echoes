@@ -1,16 +1,9 @@
 //! Storage, version and scope boundaries of primitive value erasure.
 
-fn separate(left: &str, right: &str) {
-    assert_ne!(
-        syn_canon::canonicalize(syn::parse_str(left).unwrap()),
-        syn_canon::canonicalize(syn::parse_str(right).unwrap()),
-        "{left}\n{right}"
-    );
-    assert_ne!(
-        syn_canon::canonicalize_failing(syn::parse_str(left).unwrap()),
-        syn_canon::canonicalize_failing(syn::parse_str(right).unwrap())
-    );
-}
+#[path = "support/separate.rs"]
+mod separate;
+
+use separate::separate;
 
 #[test]
 fn aliases_keep_original_versions_and_storage() {

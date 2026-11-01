@@ -5,15 +5,13 @@
 use serde_json::Value;
 use std::path::Path;
 
+#[path = "support/put.rs"]
+mod put;
+
 mod support;
 
+use put::put;
 use support::run_cli;
-
-fn put(root: &Path, path: &str, text: &str) {
-    let file = root.join(path);
-    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-    std::fs::write(file, text).unwrap();
-}
 
 fn scan(root: &Path, args: &[&str]) -> Value {
     let mut all: Vec<&str> = vec![

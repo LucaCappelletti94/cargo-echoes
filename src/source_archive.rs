@@ -437,15 +437,15 @@ pub(crate) mod tests {
         encoder.finish().unwrap()
     }
 
-    /// A safe archive with one root and one regular file.
-    fn safe_archive(root: &str) -> Vec<u8> {
+    /// A safe archive with one root and one regular file at `file` holding `bytes`.
+    pub(crate) fn safe_archive(root: &str, file: &str, bytes: &[u8]) -> Vec<u8> {
         packed(vec![
             (b'5', format!("{root}/").into(), String::new(), Vec::new()),
             (
                 0,
-                format!("{root}/src/lib.rs").into(),
+                format!("{root}/{file}").into(),
                 String::new(),
-                b"pub fn f() {}\n".to_vec(),
+                bytes.to_vec(),
             ),
         ])
     }
@@ -459,7 +459,8 @@ pub(crate) mod tests {
     #[test]
     fn unusable_destinations_are_refused_untouched() {
         let dir = tempfile::tempdir().unwrap();
-        let archive = archive_file(dir.path(), "dep.crate", &safe_archive("dep-1.0.0"));
+        let bytes = safe_archive("dep-1.0.0", "src/lib.rs", b"pub fn f() {}\n");
+        let archive = archive_file(dir.path(), "dep.crate", &bytes);
         let error = extract_archive(&archive, Path::new("nv"), ArchiveKind::Crate).unwrap_err();
         assert!(
             matches!(error, ArchiveError::Io(source) if source.kind() == io::ErrorKind::InvalidInput)
@@ -474,7 +475,8 @@ pub(crate) mod tests {
     #[test]
     fn a_single_root_archive_is_extracted() {
         let dir = tempfile::tempdir().unwrap();
-        let archive = archive_file(dir.path(), "dep.crate", &safe_archive("dep-1.0.0"));
+        let bytes = safe_archive("dep-1.0.0", "src/lib.rs", b"pub fn f() {}\n");
+        let archive = archive_file(dir.path(), "dep.crate", &bytes);
         let dest = dir.path().join("out").join("dep-1.0.0");
         extract_archive(&archive, &dest, ArchiveKind::Crate).expect("extract the archive");
         assert_eq!(
@@ -981,7 +983,8 @@ pub(crate) mod tests {
     #[test]
     fn an_existing_destination_is_reused_without_reextraction() {
         let dir = tempfile::tempdir().unwrap();
-        let safe = archive_file(dir.path(), "dep.crate", &safe_archive("dep-1.0.0"));
+        let bytes = safe_archive("dep-1.0.0", "src/lib.rs", b"pub fn f() {}\n");
+        let safe = archive_file(dir.path(), "dep.crate", &bytes);
         let dest = dir.path().join("out").join("dep-1.0.0");
         extract_archive(&safe, &dest, ArchiveKind::Crate).expect("extract the archive");
         let poison = archive_file(

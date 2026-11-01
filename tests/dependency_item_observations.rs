@@ -1,14 +1,13 @@
 //! Item observation roots and bounded original-producer projections.
 
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
+
+use failing::failing;
+use form::form;
 use std::fmt::Write as _;
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_file(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_file(source).unwrap())
-}
 
 #[test]
 fn independent_items_fold_with_a_clean_observation_context() {

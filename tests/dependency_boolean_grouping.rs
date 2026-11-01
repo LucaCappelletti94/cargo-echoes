@@ -3,6 +3,8 @@
 #[path = "support/dependency.rs"]
 mod support;
 
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/function.rs"]
 mod functions;
 #[path = "support/group_members.rs"]
@@ -15,6 +17,7 @@ mod public_sites;
 mod site_src;
 
 use echoes::{Echoes, SourceFile, TargetScan, group};
+use form::form;
 use functions::function;
 use group_members::members;
 use impl_item::impl_method;
@@ -215,10 +218,6 @@ fn wiped_form(source: &str, compiles: bool) -> syn_canon::CanonicalForm {
     } else {
         syn_canon::canonicalize_failing(file)
     }
-}
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
 }
 
 #[test]

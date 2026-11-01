@@ -699,12 +699,6 @@ mod tests {
         hashes
     }
 
-    fn write_source_file(root: &Path, rel: &str, text: &str) {
-        let path = root.join(rel);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, text).unwrap();
-    }
-
     fn vcs_info(root: &Path, sha: &str) {
         std::fs::write(
             root.join(".cargo_vcs_info.json"),
@@ -771,18 +765,135 @@ mod tests {
         }
     }
 
-    fn upstream(cache: &Path, fixture: &Fixture) -> Upstream {
-        Upstream::with_base(cache, &fixture.api_base(), &fixture.raw_base())
+    /// One test world for the `enrich` tests. A package directory under a temporary
+    /// root, an isolated cache path, a fixture server, and the client that reads them.
+    struct Harness {
+        dir: tempfile::TempDir,
+        root: PathBuf,
+        cache: PathBuf,
+        fixture: Fixture,
+        package: PackageSource,
+        up: Upstream,
     }
 
-    /// Run `enrich` over owned candidates, returning the distinct conditions.
-    fn enrich_owned(
+    impl Harness {
+        /// A package at `<temp>/dep` with a client pointed at a fresh fixture.
+        fn new(repository: Option<&str>, source: &str, hashes: BTreeMap<String, String>) -> Self {
+            let dir = tempfile::tempdir().unwrap();
+            let root = dir.path().join("dep");
+            std::fs::create_dir_all(&root).unwrap();
+            let cache = dir.path().join("cache");
+            let fixture = Fixture::start();
+            let package = make_package(&root, repository, source, hashes);
+            let up = Upstream::with_base(&cache, &fixture.api_base(), &fixture.raw_base());
+            Self {
+                dir,
+                root,
+                cache,
+                fixture,
+                package,
+                up,
+            }
+        }
+
+        /// A package at `<temp>/checkout/crates/dep` under a git checkout holding
+        /// the given `.git/config` and a pinned git source.
+        fn checkout(config: &str, source: &str) -> Self {
+            let dir = tempfile::tempdir().unwrap();
+            let root = checkout_root(dir.path(), config);
+            let cache = dir.path().join("cache");
+            let fixture = Fixture::start();
+            let package = make_package(
+                &root,
+                Some("https://github.com/o/repo"),
+                source,
+                lib_hashes(),
+            );
+            let up = Upstream::with_base(&cache, &fixture.api_base(), &fixture.raw_base());
+            Self {
+                dir,
+                root,
+                cache,
+                fixture,
+                package,
+                up,
+            }
+        }
+
+        /// The temporary root of this world.
+        fn dir(&self) -> &Path {
+            self.dir.path()
+        }
+
+        /// The package root.
+        fn root(&self) -> &Path {
+            &self.root
+        }
+
+        /// The cache path handed to the client.
+        fn cache(&self) -> &Path {
+            &self.cache
+        }
+
+        /// The fixture server this world's client points at.
+        fn fixture(&self) -> &Fixture {
+            &self.fixture
+        }
+
+        /// Record the package's `.cargo_vcs_info.json` with one sha.
+        fn vcs_info(&self, sha: &str) {
+            vcs_info(&self.root, sha);
+        }
+
+        /// Record the package's `.cargo_vcs_info.json` with a monorepo path.
+        fn vcs_info_with_path(&self, sha: &str, path: &str) {
+            vcs_info_with_path(&self.root, sha, path);
+        }
+
+        /// Re-point the client at alternate API and raw bases, such as dead ports.
+        fn retarget(&mut self, api_base: &str, raw_base: &str) {
+            self.up = Upstream::with_base(&self.cache, api_base, raw_base);
+        }
+
+        /// Enrich `candidates` against the harness package, returning the
+        /// distinct conditions and the enriched candidates.
+        fn enrich(
+            &mut self,
+            candidates: Vec<DependencyCandidate>,
+        ) -> (Vec<String>, Vec<DependencyCandidate>) {
+            enrich_package(&mut self.up, &self.package, candidates)
+        }
+    }
+
+    /// Run `enrich` over `candidates` for `package`, returning the distinct
+    /// conditions and the enriched candidates.
+    fn enrich_package(
         up: &mut Upstream,
         package: &PackageSource,
-        candidates: &mut [DependencyCandidate],
-    ) -> Vec<String> {
+        candidates: Vec<DependencyCandidate>,
+    ) -> (Vec<String>, Vec<DependencyCandidate>) {
+        let mut candidates = candidates;
         let mut batch: Vec<&mut DependencyCandidate> = candidates.iter_mut().collect();
-        up.enrich(package, &mut batch)
+        let warnings = up.enrich(package, &mut batch);
+        (warnings, candidates)
+    }
+
+    /// The package root of a git checkout layout under `dir`, at
+    /// `checkout/crates/dep`, holding the given `.git/config`.
+    fn checkout_root(dir: &Path, config: &str) -> PathBuf {
+        let checkout = dir.join("checkout");
+        let git = checkout.join(".git");
+        std::fs::create_dir_all(&git).unwrap();
+        std::fs::write(git.join("config"), config).unwrap();
+        let root = checkout.join("crates").join("dep");
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    /// A loopback port with no listener.
+    fn dead_port() -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
     }
 
     fn verified_fixture(fixture: &Fixture) {
@@ -923,22 +1034,16 @@ mod tests {
 
     #[test]
     fn enrich_verifies_source_and_builds_request() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        verified_fixture(&fixture);
-        let package = make_package(
-            &root,
-            Some("https://github.com/O/Repo.git"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/O/Repo.git"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        verified_fixture(h.fixture());
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         let c = &candidates[0];
         assert_eq!(c.repository.as_deref(), Some("o/repo"));
@@ -960,26 +1065,20 @@ mod tests {
 
     #[test]
     fn enrich_source_mismatch_withholds_link() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture().route(
             &format!("/raw/o/repo/{SHA}/{FILE}"),
             200,
             b"different upstream text",
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert_eq!(c.repository.as_deref(), Some("o/repo"));
         assert!(c.source_url.is_none());
@@ -991,26 +1090,22 @@ mod tests {
                 .contains("differs")
         );
         assert!(warnings.iter().any(|w| w.contains("differs")));
-        assert_eq!(fixture.hits("/api/search/issues"), 0);
+        assert_eq!(h.fixture().hits("/api/search/issues"), 0);
     }
 
     #[test]
     fn enrich_missing_snapshot_withholds_link() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            BTreeMap::new(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, BTreeMap::new());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert!(c.source_url.is_none());
         assert!(
@@ -1024,56 +1119,40 @@ mod tests {
                 .iter()
                 .any(|w| w.contains("no indexed source snapshot"))
         );
-        assert_eq!(fixture.hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 0);
+        assert_eq!(h.fixture().hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 0);
     }
 
     #[test]
     fn enrich_memoizes_repeat_reads() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        verified_fixture(&fixture);
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        verified_fixture(h.fixture());
+        h.enrich(vec![
             candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9),
             candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9),
-        ];
-        let mut up = upstream(&cache, &fixture);
-        enrich_owned(&mut up, &package, &mut candidates);
-        assert_eq!(fixture.hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 1);
-        assert_eq!(fixture.hits("/api/search/issues"), 1);
-        enrich_owned(&mut up, &package, &mut candidates);
-        assert_eq!(fixture.hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 1);
-        assert_eq!(fixture.hits("/api/search/issues"), 1);
+        ]);
+        assert_eq!(h.fixture().hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 1);
+        assert_eq!(h.fixture().hits("/api/search/issues"), 1);
+        h.enrich(vec![
+            candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9),
+            candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9),
+        ]);
+        assert_eq!(h.fixture().hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 1);
+        assert_eq!(h.fixture().hits("/api/search/issues"), 1);
     }
 
     #[test]
     fn enrich_request_body_carries_only_the_permalink() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        verified_fixture(&fixture);
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        verified_fixture(h.fixture());
+        let (_, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let issue_url = candidates[0].issue_url.clone().expect("prefilled request");
         let params = query_params(issue_url.split_once('?').expect("query").1);
         let title = percent_decode(params.get("title").expect("title param"));
@@ -1082,39 +1161,34 @@ mod tests {
         assert!(body.contains(permalink(SHA).as_str()));
         assert!(body.contains("<!-- echoes"));
         assert!(!body.contains("value + 1u32"));
-        assert!(!body.contains(dir.path().to_str().unwrap()));
+        assert!(!body.contains(h.dir().to_str().unwrap()));
         assert!(!body.contains("crates.io"));
     }
 
     #[test]
     fn enrich_existing_closed_request_replaces_creation_link() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
         let item = issue_item(
             7,
             "closed",
             &format!("please extract {}", permalink(SHA)),
             TITLE,
         );
-        fixture.route(
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[item]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         let c = &candidates[0];
         let existing = c.existing_issue.as_ref().expect("existing request");
@@ -1126,14 +1200,10 @@ mod tests {
 
     #[test]
     fn enrich_open_request_wins_over_closed() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
         let closed = issue_item(
             7,
             "closed",
@@ -1146,19 +1216,18 @@ mod tests {
             &format!("please extract {}", permalink(SHA)),
             TITLE,
         );
-        fixture.route(
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[closed, open]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (_, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let existing = candidates[0]
             .existing_issue
             .as_ref()
@@ -1170,29 +1239,24 @@ mod tests {
 
     #[test]
     fn enrich_false_search_match_rejected() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
         let near = format!("https://github.com/o/repo/blob/{SHA}/{FILE}#L1-L5");
         let item = issue_item(3, "open", &format!("please extract {near}"), TITLE);
-        fixture.route(
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[item]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         let c = &candidates[0];
         assert!(c.existing_issue.is_none());
@@ -1217,28 +1281,23 @@ mod tests {
             (format!("{p}?ref=main"), false),
             (format!("{p}/more"), false),
         ] {
-            let dir = tempfile::tempdir().unwrap();
-            let root = dir.path().join("dep");
-            std::fs::create_dir_all(&root).unwrap();
-            write_source_file(&root, FILE, BODY);
-            vcs_info(&root, SHA);
-            let cache = dir.path().join("cache");
-            let fixture = Fixture::start();
-            fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+            let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+            h.vcs_info(SHA);
+            h.fixture()
+                .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
             let item = issue_item(4, "open", &body, TITLE);
-            fixture.route(
+            h.fixture().route(
                 "/api/search/issues",
                 200,
                 search_json(&[item]).to_string().as_bytes(),
             );
-            let package = make_package(
-                &root,
-                Some("https://github.com/o/repo"),
-                SOURCE,
-                lib_hashes(),
-            );
-            let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-            enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+            let (_, candidates) = h.enrich(vec![candidate(
+                ReuseAction::RequestExtraction,
+                FILE,
+                1,
+                4,
+                9,
+            )]);
             assert_eq!(
                 candidates[0].existing_issue.is_some(),
                 match_expected,
@@ -1250,14 +1309,10 @@ mod tests {
 
     #[test]
     fn enrich_pull_request_result_ignored() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
         let mut item = issue_item(
             5,
             "open",
@@ -1265,79 +1320,68 @@ mod tests {
             TITLE,
         );
         item["pull_request"] = serde_json::json!({"url": "https://github.com/o/repo/pull/5"});
-        fixture.route(
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[item]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (_, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(candidates[0].existing_issue.is_none());
         assert!(candidates[0].issue_url.is_some());
     }
 
     #[test]
     fn enrich_untagged_title_is_not_a_match() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
         let item = issue_item(
             6,
             "open",
             &format!("please extract {}", permalink(SHA)),
             "extract a helper please",
         );
-        fixture.route(
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[item]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (_, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(candidates[0].existing_issue.is_none());
         assert!(candidates[0].issue_url.is_some());
     }
 
     #[test]
     fn enrich_unknown_repository_keeps_candidate_bare() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
-        fixture.route(
+        let mut h = Harness::new(Some("https://gitlab.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://gitlab.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert_eq!(c.repository.as_deref(), Some("https://gitlab.com/o/repo"));
         assert!(c.source_url.is_none());
@@ -1349,33 +1393,28 @@ mod tests {
                 .contains("not on GitHub")
         );
         assert!(warnings.iter().any(|w| w.contains("not on GitHub")));
-        assert_eq!(fixture.hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 0);
-        assert_eq!(fixture.hits("/api/search/issues"), 0);
+        assert_eq!(h.fixture().hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 0);
+        assert_eq!(h.fixture().hits("/api/search/issues"), 0);
     }
 
     #[test]
     fn enrich_git_pin_source_uses_pinned_commit() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{PIN}/{FILE}"), 200, BODY.as_bytes());
-        fixture.route(
+        let source = format!("git+https://github.com/o/repo?branch=main#{PIN}");
+        let mut h = Harness::new(Some("https://github.com/o/repo"), &source, lib_hashes());
+        h.fixture()
+            .route(&format!("/raw/o/repo/{PIN}/{FILE}"), 200, BODY.as_bytes());
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[]).to_string().as_bytes(),
         );
-        let source = format!("git+https://github.com/o/repo?branch=main#{PIN}");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            &source,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (_, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert_eq!(
             candidates[0].source_url.as_deref(),
             Some(permalink(PIN).as_str())
@@ -1384,31 +1423,25 @@ mod tests {
 
     #[test]
     fn enrich_monorepo_path_in_vcs_prefixes_the_path() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info_with_path(&root, SHA, "crates/dep");
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info_with_path(SHA, "crates/dep");
+        h.fixture().route(
             &format!("/raw/o/repo/{SHA}/crates/dep/{FILE}"),
             200,
             BODY.as_bytes(),
         );
-        fixture.route(
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(
             candidates[0].source_url.as_deref(),
@@ -1418,31 +1451,25 @@ mod tests {
 
     #[test]
     fn enrich_rejects_a_path_in_vcs_that_leaves_the_repository() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info_with_path(&root, SHA, "../../../other/repo/main");
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info_with_path(SHA, "../../../other/repo/main");
+        h.fixture().route(
             &format!("/raw/o/repo/{SHA}/../../../other/repo/main/{FILE}"),
             200,
             BODY.as_bytes(),
         );
-        fixture.route(
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert_eq!(candidates[0].source_url, None);
         assert_eq!(candidates[0].issue_url, None);
         assert!(
@@ -1453,66 +1480,48 @@ mod tests {
 
     #[test]
     fn enrich_git_checkout_prefix_verifies_the_origin() {
-        let dir = tempfile::tempdir().unwrap();
-        let checkout = dir.path().join("checkout");
-        let root = checkout.join("crates").join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        let git_dir = checkout.join(".git");
-        std::fs::create_dir_all(&git_dir).unwrap();
-        std::fs::write(
-            git_dir.join("config"),
+        let source = format!("git+https://github.com/o/repo?branch=main#{PIN}");
+        let mut h = Harness::checkout(
             "[remote \"origin\"]\n\turl = https://github.com/o/repo\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n",
-        ).unwrap();
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(
+            &source,
+        );
+        h.fixture().route(
             &format!("/raw/o/repo/{PIN}/crates/dep/{FILE}"),
             200,
             BODY.as_bytes(),
         );
-        fixture.route(
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[]).to_string().as_bytes(),
         );
-        let source = format!("git+https://github.com/o/repo?branch=main#{PIN}");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            &source,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(
             candidates[0].source_url.as_deref(),
             Some(format!("https://github.com/o/repo/blob/{PIN}/crates/dep/{FILE}#L1-L4").as_str())
         );
-        let foreign = tempfile::tempdir().unwrap();
-        let foreign_checkout = foreign.path().join("checkout");
-        let foreign_root = foreign_checkout.join("crates").join("dep");
-        std::fs::create_dir_all(&foreign_root).unwrap();
-        write_source_file(&foreign_root, FILE, BODY);
-        let foreign_git = foreign_checkout.join(".git");
-        std::fs::create_dir_all(&foreign_git).unwrap();
-        std::fs::write(
-            foreign_git.join("config"),
+        let foreign_dir = tempfile::tempdir().unwrap();
+        let foreign_root = checkout_root(
+            foreign_dir.path(),
             "[remote \"origin\"]\n\turl = https://github.com/other/repo\n",
-        )
-        .unwrap();
+        );
         let foreign_package = make_package(
             &foreign_root,
             Some("https://github.com/o/repo"),
             &source,
             lib_hashes(),
         );
-        let mut foreign_candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let foreign_warnings = enrich_owned(
-            &mut upstream(&cache, &fixture),
+        let (foreign_warnings, foreign_candidates) = enrich_package(
+            &mut h.up,
             &foreign_package,
-            &mut foreign_candidates,
+            vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)],
         );
         assert!(foreign_candidates[0].source_url.is_none());
         assert!(
@@ -1524,138 +1533,124 @@ mod tests {
 
     #[test]
     fn enrich_tag_resolution_uses_version_tags() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.fixture().route(
             "/api/repos/o/repo/git/ref/tags/v1.2.3",
             200,
             serde_json::json!({"object": {"type": "tag", "sha": TAG_OBJECT}})
                 .to_string()
                 .as_bytes(),
         );
-        fixture.route(
+        h.fixture().route(
             format!("/api/repos/o/repo/git/tags/{TAG_OBJECT}").as_str(),
             200,
             serde_json::json!({"object": {"type": "commit", "sha": SHA}})
                 .to_string()
                 .as_bytes(),
         );
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
-        fixture.route(
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (_, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert_eq!(
             candidates[0].source_url.as_deref(),
             Some(permalink(SHA).as_str())
         );
-        let provenance = std::fs::read_to_string(cache.join("private/upstream/provenance.json"))
-            .unwrap_or_default();
+        let provenance =
+            std::fs::read_to_string(h.cache().join("private/upstream/provenance.json"))
+                .unwrap_or_default();
         assert!(!provenance.contains(SOURCE), "{provenance}");
     }
 
     #[test]
     fn enrich_persists_and_reuses_immutable_provenance() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        verified_fixture(&fixture);
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
-        let provenance = std::fs::read_to_string(cache.join("private/upstream/provenance.json"))
-            .expect("provenance file");
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        verified_fixture(h.fixture());
+        h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
+        let provenance =
+            std::fs::read_to_string(h.cache().join("private/upstream/provenance.json"))
+                .expect("provenance file");
         assert!(provenance.contains(SHA), "{provenance}");
-        std::fs::remove_file(root.join(".cargo_vcs_info.json")).unwrap();
-        let fixture = Fixture::start();
-        verified_fixture(&fixture);
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        std::fs::remove_file(h.root().join(".cargo_vcs_info.json")).unwrap();
+        h.fixture = Fixture::start();
+        verified_fixture(h.fixture());
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(
             candidates[0].source_url.as_deref(),
             Some(permalink(SHA).as_str())
         );
-        assert_eq!(fixture.hits("/api/repos/o/repo/git/ref/tags/v1.2.3"), 0);
+        assert_eq!(h.fixture().hits("/api/repos/o/repo/git/ref/tags/v1.2.3"), 0);
     }
 
     #[test]
     fn enrich_local_evidence_wins_over_persisted_provenance() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let provenance_dir = cache.join("private/upstream");
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        let provenance_dir = h.cache().join("private/upstream");
         std::fs::create_dir_all(&provenance_dir).unwrap();
         let key = format!("dep@1.2.3|{SOURCE}");
         let mut provenance = BTreeMap::new();
         provenance.insert(key, PIN.to_string());
         let text = serde_json::to_string(&provenance).unwrap();
         std::fs::write(provenance_dir.join("provenance.json"), text).unwrap();
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
-        fixture.route(
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (_, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert_eq!(
             candidates[0].source_url.as_deref(),
             Some(permalink(SHA).as_str())
         );
-        assert_eq!(fixture.hits(&format!("/raw/o/repo/{PIN}/{FILE}")), 0);
+        assert_eq!(h.fixture().hits(&format!("/raw/o/repo/{PIN}/{FILE}")), 0);
     }
 
     #[test]
     fn enrich_discloses_http_failures() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 500, b"{}");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 500, b"{}");
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert!(c.source_url.is_none());
         assert!(c.issue_url.is_none());
@@ -1670,50 +1665,33 @@ mod tests {
 
     #[test]
     fn enrich_memoizes_failed_reads() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 500, b"{}");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 500, b"{}");
+        h.enrich(vec![
             candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9),
             candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9),
-        ];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
-        assert_eq!(fixture.hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 1);
+        ]);
+        assert_eq!(h.fixture().hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 1);
     }
 
     #[test]
     fn enrich_source_read_bound_disclosed() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.fill_route(
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture().fill_route(
             &format!("/raw/o/repo/{SHA}/{FILE}"),
             200,
             crate::context_network::SOURCE_LIMIT + 1,
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert!(c.source_url.is_none());
         assert!(
@@ -1731,23 +1709,18 @@ mod tests {
 
     #[test]
     fn enrich_rate_limited_search_keeps_unchecked_link() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
-        fixture.rate_limited_route("/api/search/issues");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        h.fixture().rate_limited_route("/api/search/issues");
+        let (_, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert_eq!(c.source_url.as_deref(), Some(permalink(SHA).as_str()));
         assert!(
@@ -1767,23 +1740,18 @@ mod tests {
 
     #[test]
     fn enrich_permission_403_is_not_a_rate_limit() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
-        fixture.route("/api/search/issues", 403, b"{}");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        h.fixture().route("/api/search/issues", 403, b"{}");
+        let (_, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert_eq!(c.source_url.as_deref(), Some(permalink(SHA).as_str()));
         assert!(
@@ -1800,28 +1768,24 @@ mod tests {
 
     #[test]
     fn enrich_incomplete_search_disclosed() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
         let incomplete = serde_json::json!({
             "total_count": 0,
             "incomplete_results": true,
             "items": [],
         });
-        fixture.route("/api/search/issues", 200, incomplete.to_string().as_bytes());
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        h.fixture()
+            .route("/api/search/issues", 200, incomplete.to_string().as_bytes());
+        let (_, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert!(
             c.issue_url
@@ -1839,27 +1803,23 @@ mod tests {
 
     #[test]
     fn enrich_missing_items_disclose_unchecked_lookup() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
         let no_items = serde_json::json!({
             "total_count": 0,
             "incomplete_results": false,
         });
-        fixture.route("/api/search/issues", 200, no_items.to_string().as_bytes());
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        h.fixture()
+            .route("/api/search/issues", 200, no_items.to_string().as_bytes());
+        let (_, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert!(
             c.issue_url
@@ -1878,14 +1838,10 @@ mod tests {
 
     #[test]
     fn enrich_search_pagination_walks_pages() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
         let page_one: Vec<serde_json::Value> = (0u64..100)
             .map(|n| issue_item(n, "open", "unrelated tagged request", TITLE))
             .collect();
@@ -1895,49 +1851,43 @@ mod tests {
             &format!("please extract {}", permalink(SHA)),
             TITLE,
         )];
-        fixture.page_route(
+        h.fixture().page_route(
             "/api/search/issues",
             vec![
                 (200, search_json(&page_one).to_string().into_bytes()),
                 (200, search_json(&page_two).to_string().into_bytes()),
             ],
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         let c = &candidates[0];
         let existing = c.existing_issue.as_ref().expect("existing request");
         assert_eq!(existing.url, "https://github.com/o/repo/issues/5");
         assert_eq!(existing.state, "closed");
         assert!(c.issue_url.is_none());
-        assert_eq!(fixture.hits("/api/search/issues"), 2);
+        assert_eq!(h.fixture().hits("/api/search/issues"), 2);
     }
 
     #[test]
     fn enrich_search_query_targets_the_repository() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        verified_fixture(&fixture);
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
-        let target = fixture
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        verified_fixture(h.fixture());
+        h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
+        let target = h
+            .fixture()
             .last_target("/api/search/issues")
             .expect("search target");
         assert!(target.contains("q=repo%3Ao%2Fr"), "{target}");
@@ -1947,49 +1897,33 @@ mod tests {
 
     #[test]
     fn enrich_api_candidates_get_evidence_links_without_issue_buttons() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        verified_fixture(&fixture);
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::ReuseApi, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        verified_fixture(h.fixture());
+        let (warnings, candidates) =
+            h.enrich(vec![candidate(ReuseAction::ReuseApi, FILE, 1, 4, 9)]);
         assert!(warnings.is_empty(), "{warnings:?}");
         let c = &candidates[0];
         assert_eq!(c.source_url.as_deref(), Some(permalink(SHA).as_str()));
         assert!(c.issue_url.is_none());
         assert!(c.existing_issue.is_none());
         assert!(c.lookup_warning.is_none());
-        assert_eq!(fixture.hits("/api/search/issues"), 0);
+        assert_eq!(h.fixture().hits("/api/search/issues"), 0);
     }
 
     #[test]
     fn enrich_empty_range_withholds_link() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 5, 5, 1)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            5,
+            5,
+            1,
+        )]);
         let c = &candidates[0];
         assert!(c.source_url.is_none());
         assert!(
@@ -1999,26 +1933,22 @@ mod tests {
                 .contains("is empty")
         );
         assert!(warnings.iter().any(|w| w.contains("is empty")));
-        assert_eq!(fixture.hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 0);
+        assert_eq!(h.fixture().hits(&format!("/raw/o/repo/{SHA}/{FILE}")), 0);
     }
     #[test]
     fn enrich_missing_commit_requires_a_version_tag() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route("/api/repos/o/repo/git/ref/tags/v1.2.3", 404, b"");
-        fixture.route("/api/repos/o/repo/git/ref/tags/1.2.3", 404, b"");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.fixture()
+            .route("/api/repos/o/repo/git/ref/tags/v1.2.3", 404, b"");
+        h.fixture()
+            .route("/api/repos/o/repo/git/ref/tags/1.2.3", 404, b"");
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert!(c.source_url.is_none());
         assert!(c.issue_url.is_none());
@@ -2032,26 +1962,17 @@ mod tests {
 
     #[test]
     fn enrich_discloses_a_source_transport_failure() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let dead_port = {
-            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-            listener.local_addr().unwrap().port()
-        };
-        let dead_base = format!("http://127.0.0.1:{dead_port}");
-        let mut up = Upstream::with_base(&cache, "http://127.0.0.1:1", &dead_base);
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut up, &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        let dead_base = format!("http://127.0.0.1:{}", dead_port());
+        h.retarget("http://127.0.0.1:1", &dead_base);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert!(c.source_url.is_none());
         assert!(
@@ -2070,22 +1991,17 @@ mod tests {
 
     #[test]
     fn enrich_missing_source_at_commit_withholds_link() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 404, b"");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 404, b"");
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(candidates[0].source_url.is_none());
         assert!(
             warnings.iter().any(|w| w.contains("is not at commit")),
@@ -2095,31 +2011,16 @@ mod tests {
 
     #[test]
     fn enrich_memoizes_unavailable_lookups() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let dead_port = {
-            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-            listener.local_addr().unwrap().port()
-        };
-        let api_base = format!("http://127.0.0.1:{dead_port}");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
-        let mut up = Upstream::with_base(&cache, &api_base, &fixture.raw_base());
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let api_base = format!("http://127.0.0.1:{}", dead_port());
+        h.retarget(&api_base, h.fixture().raw_base().as_str());
+        let (warnings, candidates) = h.enrich(vec![
             candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9),
             candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9),
-        ];
-        let warnings = enrich_owned(&mut up, &package, &mut candidates);
+        ]);
         for c in &candidates {
             assert!(
                 c.lookup_warning
@@ -2139,23 +2040,18 @@ mod tests {
 
     #[test]
     fn enrich_unavailable_search_http_status() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
-        fixture.route("/api/search/issues", 500, b"{}");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        h.fixture().route("/api/search/issues", 500, b"{}");
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let warning = candidates[0].lookup_warning.as_deref().unwrap_or_default();
         assert!(
             warning.contains("issue lookup unavailable HTTP 500"),
@@ -2169,23 +2065,18 @@ mod tests {
 
     #[test]
     fn enrich_unavailable_search_invalid_json() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
-        fixture.route("/api/search/issues", 200, b"not json");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        h.fixture().route("/api/search/issues", 200, b"not json");
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let warning = candidates[0].lookup_warning.as_deref().unwrap_or_default();
         assert!(
             warning.contains("issue lookup unavailable invalid JSON"),
@@ -2199,14 +2090,10 @@ mod tests {
 
     #[test]
     fn enrich_search_skips_items_missing_fields() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
         let p = permalink(SHA);
         let no_title = serde_json::json!({
             "number": 1,
@@ -2225,21 +2112,20 @@ mod tests {
             "title": TITLE,
             "body": format!("please extract {p}"),
         });
-        fixture.route(
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[no_title, no_body, no_url])
                 .to_string()
                 .as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         let c = &candidates[0];
         assert!(c.existing_issue.is_none());
@@ -2248,29 +2134,24 @@ mod tests {
 
     #[test]
     fn enrich_search_page_cap_discloses_truncation() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
         let page: Vec<serde_json::Value> = (0u64..100)
             .map(|n| issue_item(n, "open", "unrelated tagged request", TITLE))
             .collect();
         let pages: Vec<(u16, Vec<u8>)> = (0u16..10)
             .map(|_| (200, search_json(&page).to_string().into_bytes()))
             .collect();
-        fixture.page_route("/api/search/issues", pages);
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        h.fixture().page_route("/api/search/issues", pages);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         let c = &candidates[0];
         assert!(c.existing_issue.is_none());
         assert!(c.issue_url.is_some());
@@ -2280,58 +2161,46 @@ mod tests {
                 .any(|w| w.contains("issue search was incomplete")),
             "{warnings:?}"
         );
-        assert_eq!(fixture.hits("/api/search/issues"), 10);
+        assert_eq!(h.fixture().hits("/api/search/issues"), 10);
     }
 
     #[test]
     fn enrich_provenance_write_failure_is_best_effort() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        std::fs::create_dir_all(&cache).unwrap();
-        std::fs::write(cache.join("private"), "blocked").unwrap();
-        let fixture = Fixture::start();
-        verified_fixture(&fixture);
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        std::fs::create_dir_all(h.cache()).unwrap();
+        std::fs::write(h.cache().join("private"), "blocked").unwrap();
+        verified_fixture(h.fixture());
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(
             candidates[0].source_url.as_deref(),
             Some(permalink(SHA).as_str())
         );
-        assert!(!cache.join("private/upstream").exists());
+        assert!(!h.cache().join("private/upstream").exists());
     }
 
     #[test]
     fn enrich_provenance_rename_failure_removes_the_part() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let provenance_dir = cache.join("private/upstream");
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        let provenance_dir = h.cache().join("private/upstream");
         std::fs::create_dir_all(&provenance_dir).unwrap();
         std::fs::create_dir_all(provenance_dir.join("provenance.json")).unwrap();
-        let fixture = Fixture::start();
-        verified_fixture(&fixture);
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        verified_fixture(h.fixture());
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(
             candidates[0].source_url.as_deref(),
@@ -2346,33 +2215,28 @@ mod tests {
 
     #[test]
     fn enrich_tag_object_endpoint_failure_withholds_commit() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.fixture().route(
             "/api/repos/o/repo/git/ref/tags/v1.2.3",
             200,
             serde_json::json!({"object": {"type": "tag", "sha": TAG_OBJECT}})
                 .to_string()
                 .as_bytes(),
         );
-        fixture.route(
+        h.fixture().route(
             format!("/api/repos/o/repo/git/tags/{TAG_OBJECT}").as_str(),
             500,
             b"{}",
         );
-        fixture.route("/api/repos/o/repo/git/ref/tags/1.2.3", 404, b"");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        h.fixture()
+            .route("/api/repos/o/repo/git/ref/tags/1.2.3", 404, b"");
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(candidates[0].source_url.is_none());
         assert!(
             warnings
@@ -2384,28 +2248,23 @@ mod tests {
 
     #[test]
     fn enrich_tag_object_type_withholds_commit() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.fixture().route(
             "/api/repos/o/repo/git/ref/tags/v1.2.3",
             200,
             serde_json::json!({"object": {"type": "blob", "sha": TAG_OBJECT}})
                 .to_string()
                 .as_bytes(),
         );
-        fixture.route("/api/repos/o/repo/git/ref/tags/1.2.3", 404, b"");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        h.fixture()
+            .route("/api/repos/o/repo/git/ref/tags/1.2.3", 404, b"");
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(candidates[0].source_url.is_none());
         assert!(
             warnings
@@ -2417,25 +2276,15 @@ mod tests {
 
     #[test]
     fn enrich_git_checkout_without_origin_discloses_the_gap() {
-        let dir = tempfile::tempdir().unwrap();
-        let checkout = dir.path().join("checkout");
-        let root = checkout.join("crates").join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        let git_dir = checkout.join(".git");
-        std::fs::create_dir_all(&git_dir).unwrap();
-        std::fs::write(git_dir.join("config"), "[core]\n\trepo = true\n").unwrap();
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
         let source = format!("git+https://github.com/o/repo?branch=main#{PIN}");
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            &source,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::checkout("[core]\n\trepo = true\n", &source);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(candidates[0].source_url.is_none());
         assert!(
             warnings
@@ -2453,33 +2302,28 @@ mod tests {
     /// A tag ref whose object is the commit itself resolves without a peel.
     #[test]
     fn enrich_tag_ref_of_commit_type_resolves_the_commit() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.fixture().route(
             "/api/repos/o/repo/git/ref/tags/v1.2.3",
             200,
             serde_json::json!({"object": {"type": "commit", "sha": SHA}})
                 .to_string()
                 .as_bytes(),
         );
-        fixture.route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
-        fixture.route(
+        h.fixture()
+            .route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, BODY.as_bytes());
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(
             candidates[0].source_url.as_deref(),
@@ -2490,12 +2334,8 @@ mod tests {
     /// A provenance entry written by an earlier run is reused when no local evidence exists.
     #[test]
     fn enrich_reuses_a_provenance_entry_from_an_earlier_run() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        let cache = dir.path().join("cache");
-        let provenance_dir = cache.join("private/upstream");
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        let provenance_dir = h.cache().join("private/upstream");
         std::fs::create_dir_all(&provenance_dir).unwrap();
         let mut provenance = BTreeMap::new();
         provenance.insert(format!("dep@1.2.3|{SOURCE}"), PIN.to_string());
@@ -2504,48 +2344,42 @@ mod tests {
             serde_json::to_string(&provenance).unwrap(),
         )
         .unwrap();
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/{PIN}/{FILE}"), 200, BODY.as_bytes());
-        fixture.route(
+        h.fixture()
+            .route(&format!("/raw/o/repo/{PIN}/{FILE}"), 200, BODY.as_bytes());
+        h.fixture().route(
             "/api/search/issues",
             200,
             search_json(&[]).to_string().as_bytes(),
         );
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(
             candidates[0].source_url.as_deref(),
             Some(permalink(PIN).as_str())
         );
-        assert_eq!(fixture.hits("/api/repos/o/repo/git/ref/tags/v1.2.3"), 0);
+        assert_eq!(h.fixture().hits("/api/repos/o/repo/git/ref/tags/v1.2.3"), 0);
     }
 
     /// A hex `sha1` shorter than 40 digits is not a usable commit.
     #[test]
     fn enrich_rejects_a_vcs_sha_shorter_than_forty_hex_digits() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, "abc");
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.route(&format!("/raw/o/repo/abc/{FILE}"), 200, BODY.as_bytes());
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info("abc");
+        h.fixture()
+            .route(&format!("/raw/o/repo/abc/{FILE}"), 200, BODY.as_bytes());
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(candidates[0].source_url.is_none());
         assert!(
             warnings
@@ -2558,22 +2392,17 @@ mod tests {
     /// A source body far under the source limit is accepted and compared by hash.
     #[test]
     fn enrich_source_read_accepts_a_body_well_under_the_source_limit() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("dep");
-        std::fs::create_dir_all(&root).unwrap();
-        write_source_file(&root, FILE, BODY);
-        vcs_info(&root, SHA);
-        let cache = dir.path().join("cache");
-        let fixture = Fixture::start();
-        fixture.fill_route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, 8 * 1024 * 1024);
-        let package = make_package(
-            &root,
-            Some("https://github.com/o/repo"),
-            SOURCE,
-            lib_hashes(),
-        );
-        let mut candidates = vec![candidate(ReuseAction::RequestExtraction, FILE, 1, 4, 9)];
-        let warnings = enrich_owned(&mut upstream(&cache, &fixture), &package, &mut candidates);
+        let mut h = Harness::new(Some("https://github.com/o/repo"), SOURCE, lib_hashes());
+        h.vcs_info(SHA);
+        h.fixture()
+            .fill_route(&format!("/raw/o/repo/{SHA}/{FILE}"), 200, 8 * 1024 * 1024);
+        let (warnings, candidates) = h.enrich(vec![candidate(
+            ReuseAction::RequestExtraction,
+            FILE,
+            1,
+            4,
+            9,
+        )]);
         assert!(candidates[0].source_url.is_none());
         assert!(
             warnings

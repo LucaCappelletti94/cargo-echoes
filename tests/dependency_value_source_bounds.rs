@@ -1,15 +1,16 @@
 //! Source-AST budget endpoints of the complete-scope value pass.
 
+#[path = "support/form.rs"]
+mod form;
+
+use form::form;
+
 fn tree(leaves: &[&str]) -> String {
     if leaves.len() == 1 {
         return leaves[0].to_owned();
     }
     let mid = leaves.len() / 2;
     format!("({}^{})", tree(&leaves[..mid]), tree(&leaves[mid..]))
-}
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
 }
 
 // The balanced 8190-leaf tail has 16379 expressions after parenthesis folding.

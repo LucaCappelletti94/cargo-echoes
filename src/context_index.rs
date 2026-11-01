@@ -1910,6 +1910,18 @@ mod tests {
             })
     }
 
+    /// Asserts that `record` carries an extraction note containing `needle`, printing the notes on failure.
+    fn has_note(record: &IndexedContext, needle: &str) {
+        assert!(
+            record
+                .extraction_notes
+                .iter()
+                .any(|note| note.contains(needle)),
+            "no note containing {needle} in {:?}",
+            record.extraction_notes
+        );
+    }
+
     #[test]
     fn records_carry_form_tokens_module_and_site() {
         let out = records("pub fn helper(x: u32) -> u32 { x + 1u32 }");
@@ -2057,30 +2069,26 @@ mod tests {
         assert_eq!(record.api_path.as_deref(), Some("app::Box::pack"));
     }
 
+    /// A method's access and route follow the establishment of its receiver type.
     #[test]
-    fn method_on_an_internal_type_is_internal() {
-        let out = records("struct Box;\nimpl Box { pub fn pack(&self) -> u32 { 1u32 } }");
-        let record = &out[0];
-        assert_eq!(record.access, ContextAccess::InternalMethod);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("internal to the crate"))
-        );
-    }
-
-    #[test]
-    fn method_on_a_foreign_type_is_unresolved() {
-        let out = records("impl External { pub fn pack(&self) -> u32 { 1u32 } }");
-        let record = &out[0];
-        assert_eq!(record.access, ContextAccess::Unresolved);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("External"))
-        );
+    fn a_method_route_follows_the_receiver_type() {
+        for (code, access, note) in [
+            (
+                "struct Box;\nimpl Box { pub fn pack(&self) -> u32 { 1u32 } }",
+                ContextAccess::InternalMethod,
+                "internal to the crate",
+            ),
+            (
+                "impl External { pub fn pack(&self) -> u32 { 1u32 } }",
+                ContextAccess::Unresolved,
+                "External",
+            ),
+        ] {
+            let out = records(code);
+            let record = &out[0];
+            assert_eq!(record.access, access);
+            has_note(record, note);
+        }
     }
 
     #[test]
@@ -2132,12 +2140,7 @@ mod tests {
         let outer = out.iter().find(|r| r.site.item == "app::outer").unwrap();
         assert_eq!(outer.access, ContextAccess::PublicFunction);
         assert_eq!(inner.access, ContextAccess::InternalFunction);
-        assert!(
-            inner
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("nested"))
-        );
+        has_note(inner, "nested");
     }
 
     #[test]
@@ -2149,12 +2152,7 @@ mod tests {
         );
         let out = extract(&target(&[file], false), "", &|_| true);
         assert_eq!(out[0].access, ContextAccess::Unresolved);
-        assert!(
-            out[0]
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("not a library"))
-        );
+        has_note(&out[0], "not a library");
     }
 
     #[test]
@@ -2170,12 +2168,7 @@ mod tests {
         let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::leaf");
         assert_eq!(record.access, ContextAccess::Unresolved);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("missing"))
-        );
+        has_note(record, "missing");
     }
 
     #[test]
@@ -2277,12 +2270,7 @@ mod tests {
             branch.conditions,
             ["all(cfg(feature = \"alternate\"), false)"]
         );
-        assert!(
-            branch
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("shadowed"))
-        );
+        has_note(branch, "shadowed");
     }
 
     #[test]
@@ -2557,11 +2545,7 @@ mod tests {
         assert_eq!(alt.access, ContextAccess::Unresolved);
         assert_eq!(alt.api_path, None);
         assert_eq!(alt.conditions, vec!["all(cfg(unix), false)"]);
-        assert!(
-            alt.extraction_notes
-                .iter()
-                .any(|note| note.contains("shadowed"))
-        );
+        has_note(alt, "shadowed");
     }
 
     #[test]
@@ -2618,12 +2602,7 @@ mod tests {
                 "{}",
                 record.site.item
             );
-            assert!(
-                record
-                    .extraction_notes
-                    .iter()
-                    .any(|note| note.contains("not a library"))
-            );
+            has_note(record, "not a library");
         }
     }
 
@@ -2658,12 +2637,7 @@ mod tests {
             .find(|r| r.site.item == "app::outer::A::m")
             .unwrap();
         assert_eq!(nested.access, ContextAccess::InternalMethod);
-        assert!(
-            nested
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("nested"))
-        );
+        has_note(nested, "nested");
     }
 
     #[test]
@@ -2674,12 +2648,7 @@ mod tests {
             .find(|r| r.site.item == "app::outer::T::d")
             .unwrap();
         assert_eq!(nested.access, ContextAccess::InternalMethod);
-        assert!(
-            nested
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("nested"))
-        );
+        has_note(nested, "nested");
     }
 
     #[test]
@@ -2706,12 +2675,7 @@ mod tests {
         );
         let record = one(&out, "app::a::b");
         assert_eq!(record.access, ContextAccess::Unresolved);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("module a is not found"))
-        );
+        has_note(record, "module a is not found");
     }
 
     #[test]
@@ -2719,12 +2683,7 @@ mod tests {
         let out = records("struct A;\nimpl &A { pub fn m(&self) -> u32 { 1u32 } }");
         let record = one(&out, "app");
         assert_eq!(record.access, ContextAccess::Unresolved);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("&A"))
-        );
+        has_note(record, "&A");
     }
 
     #[test]
@@ -2742,12 +2701,7 @@ mod tests {
         );
         let record = one(&out, "app::inner");
         assert_eq!(record.access, ContextAccess::Unresolved);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("shadowed by a glob import"))
-        );
+        has_note(record, "shadowed by a glob import");
     }
 
     #[test]
@@ -2757,12 +2711,7 @@ mod tests {
         );
         let record = one(&out, "app::m");
         assert_eq!(record.access, ContextAccess::Unresolved);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("outside the scanned source"))
-        );
+        has_note(record, "outside the scanned source");
     }
 
     #[test]
@@ -2771,12 +2720,7 @@ mod tests {
             records("mod m { use nope::Pack; impl Pack { pub fn m(&self) -> u32 { 1u32 } } }");
         let record = one(&out, "app::m");
         assert_eq!(record.access, ContextAccess::Unresolved);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("unresolvable path"))
-        );
+        has_note(record, "unresolvable path");
     }
 
     #[test]
@@ -2784,12 +2728,7 @@ mod tests {
         let out = records("mod m { impl Ghost { pub fn m(&self) -> u32 { 1u32 } } }");
         let record = one(&out, "app::m");
         assert_eq!(record.access, ContextAccess::Unresolved);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("not defined in the scanned source"))
-        );
+        has_note(record, "not defined in the scanned source");
     }
 
     #[test]
@@ -2858,12 +2797,7 @@ mod tests {
         let out = extract(&target(&files, true), "", &|_| true);
         let record = one(&out, "app::a::name::sub");
         assert_eq!(record.access, ContextAccess::Unresolved);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("module a::name is not found"))
-        );
+        has_note(record, "module a::name is not found");
     }
 
     #[test]
@@ -2886,54 +2820,27 @@ mod tests {
         assert_eq!(other.api_path.as_deref(), Some("app::m::other"));
     }
 
+    /// An unclaimed file keeps its context without a mod.rs layout.
     #[test]
-    fn an_unclaimed_file_without_an_extension_keeps_its_context() {
-        let out = extract(
-            &target(
-                &[file(
-                    "m",
-                    &["m"],
-                    "pub fn helper(x: u32) -> u32 { x + 1u32 }",
-                )],
-                true,
-            ),
-            "",
-            &|_| true,
-        );
-        let record = one(&out, "app::m");
-        assert_eq!(record.site.file, "m");
-        assert_eq!(record.access, ContextAccess::Unresolved);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("module m is not found"))
-        );
-    }
-
-    #[test]
-    fn an_unclaimed_mod_rs_file_keeps_its_context() {
-        let out = extract(
-            &target(
-                &[file(
-                    "src/m/mod.rs",
-                    &["m"],
-                    "pub fn helper(x: u32) -> u32 { x + 1u32 }",
-                )],
-                true,
-            ),
-            "",
-            &|_| true,
-        );
-        let record = one(&out, "app::m");
-        assert_eq!(record.site.file, "src/m/mod.rs");
-        assert_eq!(record.access, ContextAccess::Unresolved);
-        assert!(
-            record
-                .extraction_notes
-                .iter()
-                .any(|note| note.contains("module m is not found"))
-        );
+    fn an_unclaimed_file_keeps_its_context() {
+        for path in ["m", "src/m/mod.rs"] {
+            let out = extract(
+                &target(
+                    &[file(
+                        path,
+                        &["m"],
+                        "pub fn helper(x: u32) -> u32 { x + 1u32 }",
+                    )],
+                    true,
+                ),
+                "",
+                &|_| true,
+            );
+            let record = one(&out, "app::m");
+            assert_eq!(record.site.file, path);
+            assert_eq!(record.access, ContextAccess::Unresolved);
+            has_note(record, "module m is not found");
+        }
     }
 
     #[test]
@@ -3240,11 +3147,7 @@ mod tests {
         );
         let m = out.iter().find(|r| r.site.item == "app::A::m").unwrap();
         assert_eq!(m.access, ContextAccess::Unresolved);
-        assert!(
-            m.extraction_notes
-                .iter()
-                .any(|note| note.contains("not defined in the scanned source"))
-        );
+        has_note(m, "not defined in the scanned source");
     }
 
     /// A struct declared inside a method body is not a module type.
@@ -3255,11 +3158,7 @@ mod tests {
         );
         let n = out.iter().find(|r| r.site.item == "app::B::n").unwrap();
         assert_eq!(n.access, ContextAccess::Unresolved);
-        assert!(
-            n.extraction_notes
-                .iter()
-                .any(|note| note.contains("not defined in the scanned source"))
-        );
+        has_note(n, "not defined in the scanned source");
     }
 
     /// A struct declared inside a trait default body is not a module type.
@@ -3270,11 +3169,7 @@ mod tests {
         );
         let n = out.iter().find(|r| r.site.item == "app::B::n").unwrap();
         assert_eq!(n.access, ContextAccess::Unresolved);
-        assert!(
-            n.extraction_notes
-                .iter()
-                .any(|note| note.contains("not defined in the scanned source"))
-        );
+        has_note(n, "not defined in the scanned source");
     }
 
     /// A receiver type leading with an underscore is a bare name.
@@ -3342,42 +3237,25 @@ mod tests {
         assert_eq!(other.api_path.as_deref(), Some("app::thing::inner::other"));
     }
 
-    /// A dot-prefixed file keeps the directory named after its whole dot-prefixed stem.
+    /// A dot-prefixed file and an extensionless dotfile each keep their directory link.
     #[test]
-    fn a_dot_prefixed_stem_keeps_its_directory_link() {
-        let files = vec![
-            file("lib.rs", &[], "pub mod h;"),
-            file("h.rs", &["h"], "pub fn h_fn(x: u32) -> u32 { x + 1u32 }"),
-            file(".hidden.rs", &["h"], "pub mod inner;"),
-            file(
-                ".hidden/inner.rs",
-                &["h", "inner"],
-                "pub fn other(x: u32) -> u32 { x + 2u32 }",
-            ),
-        ];
-        let out = extract(&target(&files, true), "", &|_| true);
-        let other = one(&out, "app::h::inner");
-        assert_eq!(other.access, ContextAccess::PublicFunction);
-        assert_eq!(other.api_path.as_deref(), Some("app::h::inner::other"));
-    }
-
-    /// An extensionless dotfile keeps its whole name as the child directory stem.
-    #[test]
-    fn an_extensionless_dotfile_keeps_its_directory_link() {
-        let files = vec![
-            file("lib.rs", &[], "pub mod h;"),
-            file("h.rs", &["h"], "pub fn h_fn(x: u32) -> u32 { x + 1u32 }"),
-            file(".hidden", &["h"], "pub mod inner;"),
-            file(
-                ".hidden/inner.rs",
-                &["h", "inner"],
-                "pub fn other(x: u32) -> u32 { x + 2u32 }",
-            ),
-        ];
-        let out = extract(&target(&files, true), "", &|_| true);
-        let other = one(&out, "app::h::inner");
-        assert_eq!(other.access, ContextAccess::PublicFunction);
-        assert_eq!(other.api_path.as_deref(), Some("app::h::inner::other"));
+    fn a_dotfile_keeps_its_directory_link() {
+        for stem in [".hidden.rs", ".hidden"] {
+            let files = vec![
+                file("lib.rs", &[], "pub mod h;"),
+                file("h.rs", &["h"], "pub fn h_fn(x: u32) -> u32 { x + 1u32 }"),
+                file(stem, &["h"], "pub mod inner;"),
+                file(
+                    ".hidden/inner.rs",
+                    &["h", "inner"],
+                    "pub fn other(x: u32) -> u32 { x + 2u32 }",
+                ),
+            ];
+            let out = extract(&target(&files, true), "", &|_| true);
+            let other = one(&out, "app::h::inner");
+            assert_eq!(other.access, ContextAccess::PublicFunction);
+            assert_eq!(other.api_path.as_deref(), Some("app::h::inner::other"));
+        }
     }
 
     /// A type defined after a module-scope block is still at module scope.

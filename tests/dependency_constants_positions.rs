@@ -1,8 +1,9 @@
 //! Fixed-width constant boundaries and contextual positions.
 
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
+#[path = "support/form.rs"]
+mod form;
+
+use form::form;
 
 fn same(left: &str, right: &str) {
     assert_eq!(form(left), form(right));

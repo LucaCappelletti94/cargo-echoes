@@ -1,14 +1,5 @@
-use syn_canon::CanonicalForm;
-
-/// The canonical view of one parsed source.
-fn form(source: &str) -> CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
-
-/// The canonical view of one parsed source, with opaque macro bodies.
-fn failing(source: &str) -> CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_str(source).unwrap())
-}
+use super::failing::failing;
+use super::form::form;
 
 /// The two sources canonicalize identically, keep equal sizes, and differ as failing forms.
 pub(super) fn same(left: &str, right: &str) {

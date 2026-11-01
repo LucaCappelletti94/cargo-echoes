@@ -1,18 +1,16 @@
 //! Macro-argument rewriter arms, impl-member name fallback and group-wrapped
 //! context locals.
 
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/grouped_file.rs"]
 mod grouped;
 
+use failing::failing;
+use form::form;
 use grouped::grouped_file;
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_file(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_file(source).unwrap())
-}
 
 /// Canonicalize a hand-built file.
 fn file_form(file: syn::File) -> syn_canon::CanonicalForm {

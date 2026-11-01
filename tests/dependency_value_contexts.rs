@@ -1,16 +1,15 @@
 //! Public contextual views of the value folds' original sources.
 
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/function.rs"]
 mod functions;
 #[path = "support/impl_item.rs"]
 mod impl_item;
 
+use form::form;
 use functions::function;
 use impl_item::impl_method;
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
 
 fn module_function<'a>(file: &'a syn::File, module: &str, name: &str) -> &'a syn::ItemFn {
     file.items
