@@ -1,12 +1,12 @@
 //! Coverage witnesses for the item graph pipeline edges.
 
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_file(source).unwrap())
-}
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_file(source).unwrap())
-}
+use failing::failing;
+use form::form;
 
 #[test]
 fn loop_labels_fold_like_renamed_local_markers() {

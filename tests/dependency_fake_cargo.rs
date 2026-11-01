@@ -4,6 +4,11 @@ use std::path::{Path, PathBuf};
 
 use echoes::{DependencySearch, ReuseReport};
 
+#[path = "support/put.rs"]
+mod put;
+
+use put::put;
+
 const MATCHING_BODY: &str = "let result = input + 1u32; result * 2u32";
 const APP_ID_SUFFIX: &str = "#0.1.0";
 
@@ -27,14 +32,6 @@ fi
 cat "$DJD_FULL_JSON"
 exit 0
 "#;
-
-fn put(root: &Path, rel: &str, text: &str) {
-    let path = root.join(rel);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).unwrap();
-    }
-    std::fs::write(&path, text).unwrap();
-}
 
 /// The workspace scanned by the public run pipeline.
 fn fixture(root: &Path) {

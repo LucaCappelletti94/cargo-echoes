@@ -1,10 +1,10 @@
 //! Original origins across item moves and rejected ancestor groups.
 
-use std::fmt::Write as _;
+#[path = "support/form.rs"]
+mod form;
 
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_file(source).unwrap())
-}
+use form::form;
+use std::fmt::Write as _;
 
 #[test]
 fn coincident_private_helpers_allow_a_consistent_port_bijection() {

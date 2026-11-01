@@ -3,19 +3,15 @@
 #![cfg(feature = "cli")]
 
 use serde_json::Value;
-use std::path::Path;
 mod support;
 
 #[path = "support/context_scan.rs"]
 mod context_scan;
+#[path = "support/put.rs"]
+mod put;
 
 use context_scan::{group_items, scan};
-
-fn put(root: &Path, path: &str, text: &str) {
-    let file = root.join(path);
-    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-    std::fs::write(file, text).unwrap();
-}
+use put::put;
 
 fn fixture() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();

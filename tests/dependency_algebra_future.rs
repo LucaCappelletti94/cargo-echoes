@@ -3,13 +3,13 @@
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/permutations.rs"]
 mod permutations;
-use permutations::permutations;
 
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
+use form::form;
+use permutations::permutations;
 
 fn source(
     current: &[(&str, String)],

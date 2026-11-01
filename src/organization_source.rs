@@ -705,7 +705,7 @@ fn relative_manifest(snapshot: &Path, manifest: &Path) -> String {
 mod tests {
     use super::*;
     use crate::context_network::tests::Fixture;
-    use crate::source_archive::tests::packed;
+    use crate::source_archive::tests::{packed, safe_archive};
     use alloc::vec;
 
     /// A JSON repository listing entry.
@@ -901,19 +901,6 @@ mod tests {
             resolve_owner(None, || Err(OwnerError::NoOrigin(String::from("none")))),
             Err(OwnerError::NoOrigin(_))
         ));
-    }
-
-    /// A gzip tar of one root directory without any Cargo package.
-    fn snapshot_archive(root: &str) -> Vec<u8> {
-        packed(vec![
-            (b'5', format!("{root}/").into(), String::new(), Vec::new()),
-            (
-                0,
-                format!("{root}/readme").into(),
-                String::new(),
-                b"snapshot".to_vec(),
-            ),
-        ])
     }
 
     /// A gzip tar of one root directory holding the standalone `good` package.
@@ -1488,12 +1475,12 @@ mod tests {
         fixture.route(
             &format!("/api/repos/o/app/tarball/{sha_a}"),
             200,
-            &snapshot_archive("o-app-a000000"),
+            &safe_archive("o-app-a000000", "readme", b"snapshot"),
         );
         fixture.route(
             &format!("/api/repos/o/app/tarball/{sha_b}"),
             200,
-            &snapshot_archive("o-app-b000000"),
+            &safe_archive("o-app-b000000", "readme", b"snapshot"),
         );
         let cache = tempfile::tempdir().unwrap();
         let first = load_with_bases(
@@ -1683,7 +1670,11 @@ mod tests {
         );
         let location = format!("{}/payload?sig=signed-url", fixture.raw_base().as_str());
         fixture.redirect_route(&format!("/api/repos/o/app/tarball/{sha}"), 302, &location);
-        fixture.route("/raw/payload", 200, &snapshot_archive("o-app-c000000"));
+        fixture.route(
+            "/raw/payload",
+            200,
+            &safe_archive("o-app-c000000", "readme", b"snapshot"),
+        );
         let dir = tempfile::tempdir().unwrap();
         let corpus = load_with_bases(
             &one_owner("o"),
@@ -1722,7 +1713,7 @@ mod tests {
         fixture.route(
             &format!("/api/repos/o/app/tarball/{sha}"),
             200,
-            &snapshot_archive("o-app-d000000"),
+            &safe_archive("o-app-d000000", "readme", b"snapshot"),
         );
         let cache = tempfile::tempdir().unwrap();
         let corpus = load_with_bases(

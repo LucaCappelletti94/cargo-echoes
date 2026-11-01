@@ -1,8 +1,9 @@
 //! Algebra eligibility follows execution regions and independent item bodies.
 
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
+#[path = "support/form.rs"]
+mod form;
+
+use form::form;
 
 #[test]
 fn unreachable_nested_expressions_retain_their_operations() {

@@ -3,6 +3,11 @@
 use core::fmt::Write;
 use syn_canon::{CanonicalForm, SourceContext};
 
+#[path = "support/form.rs"]
+mod form;
+
+use form::form;
+
 fn function<'a>(file: &'a syn::File, name: &str) -> &'a syn::ItemFn {
     file.items
         .iter()
@@ -410,10 +415,6 @@ fn captured_macro_patterns_preserve_outer_binding_identity() {
         "fn f(input: u32) -> bool { matches!(input, captured @ 0..=7) }",
         "fn f(value: u32) -> bool { matches!(value, captured @ 0..=7) }",
     );
-}
-
-fn form(source: &str) -> CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
 }
 
 fn alias_chain(count: usize) -> String {

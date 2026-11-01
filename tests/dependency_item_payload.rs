@@ -1,12 +1,12 @@
 //! Item payload projection through original helper proofs.
 
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_str(source).unwrap())
-}
+use failing::failing;
+use form::form;
 
 fn scheduled(left: &str, right: &str) {
     assert_eq!(form(left), form(right), "standalone helper provenance");

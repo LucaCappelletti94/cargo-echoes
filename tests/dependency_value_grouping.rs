@@ -3,8 +3,12 @@
 #[path = "support/dependency.rs"]
 mod support;
 
+#[path = "support/failing.rs"]
+mod failing;
 #[path = "support/fixture_group.rs"]
 mod fixture_group;
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/function_ids.rs"]
 mod functions;
 #[path = "support/group_members.rs"]

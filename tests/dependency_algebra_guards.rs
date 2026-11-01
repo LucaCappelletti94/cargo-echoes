@@ -1,21 +1,17 @@
 //! Public guards for the algebra laws beyond the four named cases.
 
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/same.rs"]
 mod same;
+#[path = "support/separate.rs"]
+mod separate;
 
+use form::form;
 use same::same;
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_str(source).unwrap())
-}
-
-fn separate(left: &str, right: &str) {
-    assert_ne!(form(left), form(right), "{left}\n{right}");
-    assert_ne!(failing(left), failing(right));
-}
+use separate::separate;
 
 #[test]
 fn comparison_kinds_and_operands_stay_ordered() {

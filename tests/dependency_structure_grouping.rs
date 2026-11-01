@@ -11,12 +11,18 @@ use echoes::{DocTest, Echoes, Kind, Remedy, SourceFile, TargetScan, group};
 
 #[path = "support/doc_blocks.rs"]
 mod doc_blocks;
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/function_ids.rs"]
 mod functions;
 #[path = "support/group_members.rs"]
 mod group_members;
 #[path = "support/same.rs"]
 mod same;
+#[path = "support/separate.rs"]
+mod separate;
 #[path = "support/site_src.rs"]
 mod site_src;
 
@@ -24,6 +30,7 @@ use doc_blocks::doc_blocks;
 use functions::function_ids;
 use group_members::members;
 use same::same;
+use separate::separate;
 use site_src::site;
 
 fn target(text: &str) -> TargetScan {
@@ -279,25 +286,13 @@ fn structure_threshold_uses_public_canonical_sizes() {
     );
 }
 
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_str(source).unwrap())
-}
-
-fn distinct(left: &str, right: &str) {
-    assert_ne!(form(left), form(right), "{left}\n{right}");
-}
-
 #[test]
 fn structure_canonical_folds_keep_labels_and_effects() {
     same(
         "struct S{x:u32,y:u32}\nfn f(input:u32)->(u32,u32){let s=S{x:input&15u32,y:input>>4};(s.x,s.y)}",
         "struct S{x:u32,y:u32}\nfn f(input:u32)->(u32,u32){let s=S{y:input>>4,x:input&15u32};(s.x,s.y)}",
     );
-    distinct(
+    separate(
         "struct S{x:u32,y:u32}\nfn f(input:u32)->(u32,u32){let s=S{x:input&15u32,y:input>>4};(s.x,s.y)}",
         "struct S{x:u32,y:u32}\nfn f(input:u32)->(u32,u32){let s=S{x:input>>4,y:input&15u32};(s.x,s.y)}",
     );
@@ -305,7 +300,7 @@ fn structure_canonical_folds_keep_labels_and_effects() {
         "struct S{x:u32,y:u32}\nfn base(input:u32)->S{S{x:input,y:input}}\nfn f(input:u32)->(u32,u32){let s=S{x:input&15u32,y:input>>4,..base(input)};(s.x,s.y)}",
         "struct S{x:u32,y:u32}\nfn base(input:u32)->S{S{x:input,y:input}}\nfn f(input:u32)->(u32,u32){let s=S{y:input>>4,x:input&15u32,..base(input)};(s.x,s.y)}",
     );
-    distinct(
+    separate(
         "struct S(u32,u32);\nfn f(input:u32)->(u32,u32){let s=S(input&15u32,input>>4);(s.0,s.1)}",
         "struct S(u32,u32);\nfn f(input:u32)->(u32,u32){let s=S(input>>4,input&15u32);(s.0,s.1)}",
     );
@@ -315,17 +310,16 @@ fn structure_canonical_folds_keep_labels_and_effects() {
         .iter()
         .find(|case| case.id == "S10_alias_shadowed_fields")
         .unwrap();
-    distinct(&shadow.a, &shadow.b);
-    assert_ne!(failing(&shadow.a), failing(&shadow.b));
+    separate(&shadow.a, &shadow.b);
     same(
         "fn note(input:u32)->u32{input}\nstruct S{x:u32,y:u32}\nfn f(input:u32)->(u32,u32){let s=S{x:input&15u32,y:note(input>>4)};(s.x,s.y)}",
         "fn note(input:u32)->u32{input}\nstruct S{x:u32,y:u32}\nfn f(input:u32)->(u32,u32){let s=S{y:note(input>>4),x:input&15u32};(s.x,s.y)}",
     );
-    distinct(
+    separate(
         "fn fail(input:u32)->u32{if input>10u32{panic!(\"no\")}input}\nstruct S{x:u32,y:u32}\nfn f(input:u32)->(u32,u32){let s=S{x:input&15u32,y:fail(input>>4)};(s.x,s.y)}",
         "fn fail(input:u32)->u32{if input>10u32{panic!(\"no\")}input}\nstruct S{x:u32,y:u32}\nfn f(input:u32)->(u32,u32){let s=S{y:fail(input>>4),x:input&15u32};(s.x,s.y)}",
     );
-    distinct(
+    separate(
         "fn fx(input:u32)->u32{println!(\"fx\");input&7u32}\nstruct S{x:u32,y:u32}\nfn f(input:u32)->u32{let s=S{x:fx(input),y:input>>4};s.x}",
         "fn fx(input:u32)->u32{println!(\"fx\");input&7u32}\nstruct S{x:u32,y:u32}\nfn f(input:u32)->u32{let s=S{y:input>>4,x:fx(input)};s.x}",
     );
@@ -341,15 +335,15 @@ fn structure_canonical_alternatives_keep_payload_and_order() {
         "fn f(input:u32)->bool{match input{2u32|1u32=>true,_=>false}}",
         "fn f(input:u32)->bool{match input{1u32|2u32=>true,_=>false}}",
     );
-    distinct(
+    separate(
         "fn f(input:u32)->bool{match input{1|1|2=>true,_=>false}}",
         "fn f(input:u32)->bool{match input{1|2=>true,_=>false}}",
     );
-    distinct(
+    separate(
         "fn f(input:u32)->bool{match input{1|2 if input!=0=>true,_=>false}}",
         "fn f(input:u32)->bool{match input{2|1 if input!=0=>true,_=>false}}",
     );
-    distinct(
+    separate(
         "fn f(input:u32)->u32{match input{n@1|n@2=>n,_=>0u32}}",
         "fn f(input:u32)->u32{match input{n@2|n@1=>n,_=>0u32}}",
     );
@@ -357,7 +351,7 @@ fn structure_canonical_alternatives_keep_payload_and_order() {
         "fn f(input:u32)->bool{match input{1|2..=2=>true,_=>false}}",
         "fn f(input:u32)->bool{match input{2..=2|1=>true,_=>false}}",
     );
-    distinct(
+    separate(
         "macro_rules!two{()=>{2u32}}\nfn f(input:u32)->bool{match input{two!()|1=>true,_=>false}}",
         "macro_rules!two{()=>{2u32}}\nfn f(input:u32)->bool{match input{1|two!()=>true,_=>false}}",
     );
@@ -392,6 +386,5 @@ fn structure_native_domains_and_observed_bases() {
         .iter()
         .find(|case| case.id == "S35_literal_payload_observer")
         .unwrap();
-    distinct(&observer.a, &observer.b);
-    assert_ne!(failing(&observer.a), failing(&observer.b));
+    separate(&observer.a, &observer.b);
 }

@@ -3,23 +3,17 @@
 #[path = "support/dependency.rs"]
 mod support;
 
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/same.rs"]
 mod same;
+#[path = "support/separate.rs"]
+mod separate;
 
 use same::same;
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_str(source).unwrap())
-}
-
-fn separate(left: &str, right: &str) {
-    assert_ne!(form(left), form(right), "{left}\n{right}");
-    assert_ne!(failing(left), failing(right));
-}
+use separate::separate;
 
 const TYPES: [&str; 11] = [
     "bool", "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",

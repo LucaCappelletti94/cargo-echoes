@@ -3,18 +3,16 @@
 #[path = "support/dependency.rs"]
 mod support;
 
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/trait_forms.rs"]
 mod trait_forms;
 
+use failing::failing;
+use form::form;
 use trait_forms::trait_method_forms;
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_str(source).unwrap())
-}
 
 fn plus_one(value: &str) -> String {
     if value.starts_with('-') {

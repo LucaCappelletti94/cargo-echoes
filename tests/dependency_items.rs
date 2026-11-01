@@ -1,34 +1,27 @@
 //! Closed item ordering and compatible inherent partitions.
 
+#[path = "support/dependency.rs"]
+mod support;
+
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/function.rs"]
 mod functions;
 #[path = "support/method_form.rs"]
 mod method_form;
+#[path = "support/separate.rs"]
+mod separate;
 
+use failing::failing;
+use form::form;
 use functions::function;
 use method_form::method_form;
+use separate::separate;
 
-#[derive(serde::Deserialize)]
-struct Pair {
-    id: String,
-    a: String,
-    b: String,
-}
-
-fn original(id: &str) -> Pair {
-    serde_json::from_str::<Vec<Pair>>(include_str!("fixtures/dependency/cases.json"))
-        .unwrap()
-        .into_iter()
-        .find(|pair| pair.id == id)
-        .unwrap()
-}
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_file(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_file(source).unwrap())
+fn original(id: &str) -> &'static support::Case {
+    support::cases().iter().find(|case| case.id == id).unwrap()
 }
 
 #[test]
@@ -45,26 +38,17 @@ fn items_inherent_impl_partition() {
     assert_eq!(form(&pair.a), form(&pair.b));
 }
 
-#[derive(serde::Deserialize)]
-struct Ledger {
-    id: String,
-    family: String,
-    a: String,
-    b: String,
-    expected: String,
-}
-
-fn ledger() -> Vec<Ledger> {
-    serde_json::from_str(include_str!("fixtures/dependency/cases.json")).unwrap()
+fn ledger() -> &'static [support::Case] {
+    support::cases()
 }
 
 /// The positive candidates, every `same` pair outside the control families.
-fn positive(case: &Ledger) -> bool {
+fn positive(case: &support::Case) -> bool {
     case.expected == "same" && case.family != "control" && case.family != "m1-control"
 }
 
 /// The negative controls, every pair expected to stay separate.
-fn negative(case: &Ledger) -> bool {
+fn negative(case: &support::Case) -> bool {
     case.expected != "same"
 }
 
@@ -93,7 +77,7 @@ fn ledger_negative_controls_separate_in_both_modes() {
 #[test]
 fn ledger_alpha_control_c01_equal_in_both_modes() {
     let c01 = ledger()
-        .into_iter()
+        .iter()
         .find(|case| case.id == "C01_alpha_control")
         .unwrap();
     assert_eq!(form(&c01.a), form(&c01.b));
@@ -251,11 +235,6 @@ fn folded(left: &str, right: &str) {
     assert_ne!(failing(left), failing(right), "{left}\n{right}");
 }
 
-fn distinct(left: &str, right: &str) {
-    assert_ne!(form(left), form(right), "{left}\n{right}");
-    assert_ne!(failing(left), failing(right), "{left}\n{right}");
-}
-
 fn failing_distinct(left: &str, right: &str) {
     assert_ne!(failing(left), failing(right), "{left}\n{right}");
 }
@@ -288,7 +267,7 @@ fn split_impl_blocks_fold_with_generic_owners() {
 fn split_impl_keeps_different_owners_separate() {
     let probe =
         "fn main() { println!(\"{:?}\", (Alpha::get(), Alpha::put(), Beta::get(), Beta::put())); }";
-    distinct(
+    separate(
         &format!(
             "{}{probe}",
             "struct Alpha; struct Beta; impl Alpha { fn get() -> u32 { 1 } fn put() -> u32 { 2 } } impl Beta { fn get() -> u32 { 3 } fn put() -> u32 { 4 } } "
@@ -302,11 +281,11 @@ fn split_impl_keeps_different_owners_separate() {
 
 #[test]
 fn split_impl_keeps_generic_environments_separate() {
-    distinct(
+    separate(
         "struct Pair<T>(T); impl Pair<u32> { fn one() -> u32 { 1 } }",
         "struct Pair<T>(T); impl Pair<u64> { fn one() -> u32 { 1 } }",
     );
-    distinct(
+    separate(
         "struct Pair<T>(T); impl<T> Pair<T> { fn one() -> u32 { 1 } }",
         "struct Pair<T>(T); impl Pair<u32> { fn one() -> u32 { 1 } }",
     );
@@ -314,11 +293,11 @@ fn split_impl_keeps_generic_environments_separate() {
 
 #[test]
 fn split_impl_keeps_bounds_separate() {
-    distinct(
+    separate(
         "struct Value<T>(T); impl<T: Copy> Value<T> { fn one() -> u32 { 1 } }",
         "struct Value<T>(T); impl<T> Value<T> { fn one() -> u32 { 1 } }",
     );
-    distinct(
+    separate(
         "struct Pair<T, U>(T, U); impl<T: Copy, U: Default> Pair<T, U> { fn one() -> u32 { 1 } }",
         "struct Pair<T, U>(T, U); impl<T: Default, U: Copy> Pair<T, U> { fn one() -> u32 { 1 } }",
     );
@@ -334,7 +313,7 @@ fn split_impl_bounds_fold_across_bound_order() {
 
 #[test]
 fn split_impl_keeps_member_visibility_separate() {
-    distinct(
+    separate(
         "struct S; impl S { fn one() -> u32 { 1 } }",
         "struct S; impl S { pub fn one() -> u32 { 1 } }",
     );
@@ -342,7 +321,7 @@ fn split_impl_keeps_member_visibility_separate() {
 
 #[test]
 fn split_impl_keeps_conditional_members_separate() {
-    distinct(
+    separate(
         "struct S; impl S { #[cfg(feature = \"one\")] fn one() -> u32 { 1 } }",
         "struct S; impl S { #[cfg(feature = \"two\")] fn one() -> u32 { 1 } }",
     );
@@ -350,7 +329,7 @@ fn split_impl_keeps_conditional_members_separate() {
 
 #[test]
 fn split_impl_keeps_duplicate_member_names_separate() {
-    distinct(
+    separate(
         "struct S; impl S { fn one() -> u32 { 1 } } impl S { fn one() -> u32 { 2 } }",
         "struct S; impl S { fn one() -> u32 { 1 } } impl S { fn one() -> u32 { 3 } }",
     );
@@ -358,11 +337,11 @@ fn split_impl_keeps_duplicate_member_names_separate() {
 
 #[test]
 fn trait_impls_keep_their_original_order() {
-    distinct(
+    separate(
         "trait First { fn get(&self) -> u32; } struct S; impl First for S { fn get(&self) -> u32 { 1 } } impl S { fn one() -> u32 { 2 } }",
         "trait First { fn get(&self) -> u32; } struct S; impl S { fn one() -> u32 { 2 } } impl First for S { fn get(&self) -> u32 { 1 } }",
     );
-    distinct(
+    separate(
         "trait A { fn a(&self) -> u32; } trait B { fn b(&self) -> u32; } struct S; impl A for S { fn a(&self) -> u32 { 1 } } impl B for S { fn b(&self) -> u32 { 2 } }",
         "trait A { fn a(&self) -> u32; } trait B { fn b(&self) -> u32; } struct S; impl B for S { fn b(&self) -> u32 { 2 } } impl A for S { fn a(&self) -> u32 { 1 } }",
     );
@@ -370,7 +349,7 @@ fn trait_impls_keep_their_original_order() {
 
 #[test]
 fn item_order_keeps_public_items_pinned() {
-    distinct(
+    separate(
         "pub fn one() -> u32 { 1 } fn two() -> u32 { 2 }",
         "fn two() -> u32 { 2 } pub fn one() -> u32 { 1 }",
     );
@@ -400,7 +379,7 @@ fn use_positions_hoist_like_inherited_drift() {
 
 #[test]
 fn item_order_abandons_groups_with_glob_imports() {
-    distinct(
+    separate(
         "use core::cmp::*; fn one() -> u32 { 1 } fn two() -> u32 { 2 }",
         "fn two() -> u32 { 2 } fn one() -> u32 { 1 } use core::cmp::*;",
     );
@@ -408,11 +387,11 @@ fn item_order_abandons_groups_with_glob_imports() {
 
 #[test]
 fn item_order_keeps_configuration_pinned_and_significant() {
-    distinct(
+    separate(
         "#[cfg(feature = \"one\")] fn one() -> u32 { 1 } fn two() -> u32 { 2 }",
         "fn two() -> u32 { 2 } #[cfg(feature = \"one\")] fn one() -> u32 { 1 }",
     );
-    distinct(
+    separate(
         "#[cfg(feature = \"one\")] fn one() -> u32 { 1 }",
         "#[cfg(feature = \"two\")] fn one() -> u32 { 1 }",
     );
@@ -420,7 +399,7 @@ fn item_order_keeps_configuration_pinned_and_significant() {
 
 #[test]
 fn item_order_keeps_observer_attributes_pinned() {
-    distinct(
+    separate(
         "#[track_caller] fn one() -> u32 { 1 } fn two() -> u32 { 2 }",
         "fn two() -> u32 { 2 } #[track_caller] fn one() -> u32 { 1 }",
     );
@@ -461,7 +440,7 @@ fn items_compose_with_named_field_order() {
         "struct S { x: u32, y: u32 } impl S { fn one() -> u32 { 1 } } impl S { fn two() -> u32 { 2 } } fn make(input: u32) -> (u32, u32) { let a = input & 1u32; let b = input ^ 1u32; let s = S { x: b, y: a }; (s.x, s.y) } fn main() { println!(\"{:?}\", (S::one(), S::two(), make(5))); }",
         "fn main() { println!(\"{:?}\", (S::one(), S::two(), make(5))); } struct S { x: u32, y: u32 } fn make(input: u32) -> (u32, u32) { let b = input ^ 1u32; let a = input & 1u32; let s = S { y: a, x: b }; (s.x, s.y) } impl S { fn one() -> u32 { 1 } fn two() -> u32 { 2 } }",
     );
-    distinct(
+    separate(
         "struct S { x: u32, y: u32 } impl S { fn one() -> u32 { 1 } } fn make(input: u32) -> (u32, u32) { let a = input & 1u32; let b = input ^ 1u32; let s = S { x: a, y: b }; (s.x, s.y) } fn main() { println!(\"{:?}\", (S::one(), make(5))); }",
         "fn main() { println!(\"{:?}\", (S::one(), make(5))); } struct S { x: u32, y: u32 } fn make(input: u32) -> (u32, u32) { let b = input ^ 1u32; let a = input & 1u32; let s = S { y: a, x: b }; (s.x, s.y) } impl S { fn one() -> u32 { 1 } }",
     );
@@ -473,7 +452,7 @@ fn items_compose_with_literal_alternatives() {
         "struct S; impl S { fn one(x: u32) -> u32 { match x { 1 | 2 | 3 => 10, _ => 0 } } } impl S { fn two() -> u32 { 2 } } fn main() { println!(\"{:?}\", (S::one(1), S::two())); }",
         "fn main() { println!(\"{:?}\", (S::one(1), S::two())); } struct S; impl S { fn one(x: u32) -> u32 { match x { 3 | 2 | 1 => 10, _ => 0 } } fn two() -> u32 { 2 } }",
     );
-    distinct(
+    separate(
         "struct S; impl S { fn one(x: u32) -> u32 { match x { 1 | 2 | 3 => 10, _ => 0 } } } fn main() { println!(\"{:?}\", S::one(1)); }",
         "fn main() { println!(\"{:?}\", S::one(1)); } struct S; impl S { fn one(x: u32) -> u32 { match x { 1 | 2 | 4 => 10, _ => 0 } } }",
     );
@@ -485,7 +464,7 @@ fn items_compose_with_local_pure_helpers() {
         "fn low(x: u32) -> u32 { x & 15u32 } struct S; impl S { fn one(input: u32) -> u32 { low(input) ^ 1u32 } } impl S { fn two() -> u32 { 2 } } fn main() { println!(\"{:?}\", (S::one(7), S::two())); }",
         "fn main() { println!(\"{:?}\", (S::one(7), S::two())); } struct S; fn low(x: u32) -> u32 { x & 15u32 } impl S { fn two() -> u32 { 2 } fn one(input: u32) -> u32 { low(input) ^ 1u32 } }",
     );
-    distinct(
+    separate(
         "fn low(x: u32) -> u32 { x & 15u32 } struct S; impl S { fn one(input: u32) -> u32 { low(input) ^ 1u32 } } fn main() { println!(\"{:?}\", S::one(7)); }",
         "fn main() { println!(\"{:?}\", S::one(7)); } struct S; fn low(x: u32) -> u32 { x & 7u32 } impl S { fn one(input: u32) -> u32 { low(input) ^ 1u32 } }",
     );
@@ -497,7 +476,7 @@ fn items_compose_with_boolean_laws() {
         "fn gate(p: bool) -> bool { !!p } fn other() -> u32 { 1 } fn main() { println!(\"{:?}\", (gate(true), other())); }",
         "fn main() { println!(\"{:?}\", (gate(true), other())); } fn other() -> u32 { 1 } fn gate(p: bool) -> bool { p }",
     );
-    distinct(
+    separate(
         "fn gate(p: bool) -> bool { !!p } fn other() -> u32 { 1 } fn main() { println!(\"{:?}\", (gate(true), other())); }",
         "fn main() { println!(\"{:?}\", (gate(true), other())); } fn other() -> u32 { 2 } fn gate(p: bool) -> bool { p }",
     );
@@ -509,7 +488,7 @@ fn items_compose_with_effect_barrier() {
         "fn other() -> u32 { 1 } fn f(input: u32) -> u32 { let a = input & 15u32; println!(\"{:?}\", a); let b = input ^ 3u32; a ^ b } fn main() { println!(\"{:?}\", (f(5), other())); }",
         "fn main() { println!(\"{:?}\", (f(5), other())); } fn other() -> u32 { 1 } fn f(input: u32) -> u32 { let a = input & 15u32; println!(\"{:?}\", a); let b = input ^ 3u32; a ^ b }",
     );
-    distinct(
+    separate(
         "fn other() -> u32 { 1 } fn f(input: u32) -> u32 { let a = input & 15u32; println!(\"{:?}\", a); let b = input ^ 3u32; a ^ b } fn main() { println!(\"{:?}\", (f(5), other())); }",
         "fn main() { println!(\"{:?}\", (f(5), other())); } fn other() -> u32 { 1 } fn f(input: u32) -> u32 { let b = input ^ 3u32; println!(\"{:?}\", b); let a = input & 15u32; a ^ b }",
     );
@@ -763,7 +742,7 @@ fn item_order_keeps_over_node_budget_groups_atomic() {
     let (original, swapped) = literal_item_orders(4000, false);
     let parsed: syn::File = syn::parse_file(&original).unwrap();
     assert!(KeyNodeCounter::count(&parsed) > 16384);
-    distinct(&original, &swapped);
+    separate(&original, &swapped);
 }
 
 #[test]
@@ -781,7 +760,7 @@ fn item_order_keeps_just_past_node_budget_groups_atomic() {
         KeyNodeCounter::count(&syn::parse_file(&original).unwrap()),
         16385
     );
-    distinct(&original, &swapped);
+    separate(&original, &swapped);
 }
 
 #[test]
@@ -802,7 +781,7 @@ fn item_order_keeps_over_depth_budget_groups_atomic() {
             let deep = format!("type Deep = {}u32{};", "Box<".repeat(64), ">".repeat(64));
             let original = format!("{deep}fn one() -> u32 {{ 1 }} fn two() -> u32 {{ 2 }}");
             let swapped = format!("{deep}fn two() -> u32 {{ 2 }} fn one() -> u32 {{ 1 }}");
-            distinct(&original, &swapped);
+            separate(&original, &swapped);
         })
         .expect("the deep-generics thread can start");
     while !worker.is_finished() && std::time::Instant::now() < deadline {
@@ -838,7 +817,7 @@ fn item_order_keeps_just_past_depth_budget_groups_atomic() {
     );
     let original = format!("{deep}fn one() -> u32 {{ 1 }} fn two() -> u32 {{ 2 }}");
     let swapped = format!("{deep}fn two() -> u32 {{ 2 }} fn one() -> u32 {{ 1 }}");
-    distinct(&original, &swapped);
+    separate(&original, &swapped);
 }
 
 fn recursive_pairs(count: usize, reordered: bool) -> String {
@@ -858,7 +837,7 @@ fn item_search_labels_ambiguous_recursive_components() {
 
 #[test]
 fn item_search_exhaustion_retains_ambiguous_components_atomically() {
-    distinct(&recursive_pairs(5, false), &recursive_pairs(5, true));
+    separate(&recursive_pairs(5, false), &recursive_pairs(5, true));
 }
 
 fn differently_colored_cycles(second_count: usize, reordered: bool) -> String {
@@ -889,7 +868,7 @@ fn item_search_accepts_exact_state_limit() {
 
 #[test]
 fn item_search_retains_partition_after_state_limit() {
-    distinct(
+    separate(
         &differently_colored_cycles(65, false),
         &differently_colored_cycles(65, true),
     );

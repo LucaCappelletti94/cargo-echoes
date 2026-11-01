@@ -3,23 +3,17 @@
 #[path = "support/dependency.rs"]
 mod support;
 
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/same.rs"]
 mod same;
+#[path = "support/separate.rs"]
+mod separate;
 
 use same::same;
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_str(source).unwrap())
-}
-
-fn separate(left: &str, right: &str) {
-    assert_ne!(form(left), form(right), "{left}\n{right}");
-    assert_ne!(failing(left), failing(right));
-}
+use separate::separate;
 
 #[test]
 fn double_negation_cancels_over_stable_scalars_and_aliases() {

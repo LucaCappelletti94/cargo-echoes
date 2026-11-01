@@ -1,5 +1,10 @@
 //! Atomic source and expanded-expression limits through public comparison.
 
+#[path = "support/form.rs"]
+mod form;
+
+use form::form;
+
 fn binary_tree(op: &str, leaf: &str, count: usize) -> String {
     if count == 1 {
         return leaf.to_owned();
@@ -9,10 +14,6 @@ fn binary_tree(op: &str, leaf: &str, count: usize) -> String {
         binary_tree(op, leaf, count / 2),
         binary_tree(op, leaf, count - count / 2)
     )
-}
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
 }
 
 #[test]

@@ -1,8 +1,9 @@
 //! Original helper provenance through syntax movement and cloning.
 
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
+#[path = "support/form.rs"]
+mod form;
+
+use form::form;
 
 fn view(source: &str) -> syn_canon::CanonicalForm {
     let file: syn::File = syn::parse_str(source).unwrap();

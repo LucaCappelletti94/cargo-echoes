@@ -1,20 +1,18 @@
 //! Macro argument provenance in closed item groups.
 
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_file(source).unwrap())
-}
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
+#[path = "support/separate.rs"]
+mod separate;
 
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_file(source).unwrap())
-}
+use failing::failing;
+use form::form;
+use separate::separate;
 
 fn folded(left: &str, right: &str) {
     assert_eq!(form(left), form(right), "{left}\n{right}");
-    assert_ne!(failing(left), failing(right), "{left}\n{right}");
-}
-
-fn distinct(left: &str, right: &str) {
-    assert_ne!(form(left), form(right), "{left}\n{right}");
     assert_ne!(failing(left), failing(right), "{left}\n{right}");
 }
 
@@ -44,7 +42,7 @@ fn item_macros_fold_width_and_precision_references() {
 
 #[test]
 fn item_macros_keep_different_width_origins_separate() {
-    distinct(
+    separate(
         "const W: usize = 8; const U: usize = 24; fn f() { let v = 1; println!(\"{v: W$}\"); }",
         "const W: usize = 8; const U: usize = 24; fn f() { let v = 1; println!(\"{v: U$}\"); }",
     );
@@ -72,7 +70,7 @@ fn item_macros_rebind_generic_arguments() {
 
 #[test]
 fn item_macros_freeze_unparsable_argument_groups() {
-    distinct(
+    separate(
         "fn one() -> u32 { 1 } fn two() -> u32 { 2 } fn main() { println!(; 3); }",
         "fn two() -> u32 { 2 } fn one() -> u32 { 1 } fn main() { println!(; 3); }",
     );
@@ -88,7 +86,7 @@ fn item_macros_fold_nested_format_capture_names() {
 
 #[test]
 fn item_macros_keep_nested_format_origins_separate() {
-    distinct(
+    separate(
         "const A: u32 = 1; const B: u32 = 2; fn f() { println!(\"{}\", format!(\"{A}\")); }",
         "const A: u32 = 1; const B: u32 = 2; fn g() { println!(\"{}\", format!(\"{B}\")); }",
     );
@@ -108,7 +106,7 @@ fn item_macros_rebind_raw_generic_arguments() {
 
 #[test]
 fn nested_unknown_macros_keep_ancestor_item_groups_atomic() {
-    distinct(
+    separate(
         "fn one() -> u32 { 1 } fn two() -> u32 { 2 } fn main() { println!(\"{:?}\", observer::order!((one(), two()))); }",
         "fn two() -> u32 { 2 } fn one() -> u32 { 1 } fn main() { println!(\"{:?}\", observer::order!((one(), two()))); }",
     );

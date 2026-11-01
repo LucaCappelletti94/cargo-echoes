@@ -4,26 +4,21 @@ use std::collections::BTreeSet;
 
 use echoes::{DocTest, group};
 
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 #[path = "support/group_members.rs"]
 mod group_members;
 #[path = "support/same.rs"]
 mod same;
+#[path = "support/separate.rs"]
+mod separate;
 
+use form::form;
 use group_members::members;
 use same::same;
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_str(source).unwrap())
-}
-
-fn separate(left: &str, right: &str) {
-    assert_ne!(form(left), form(right), "{left}\n{right}");
-    assert_ne!(failing(left), failing(right));
-}
+use separate::separate;
 
 fn source(current: [usize; 2], future: [usize; 4], tail: &str) -> String {
     let current_statements = ["let a=p;", "let b=q;"];

@@ -371,6 +371,12 @@ pub(crate) mod tests {
             format!("http://{}/api", self.addr)
         }
 
+        /// The root base this fixture serves.
+        #[must_use]
+        pub(crate) fn base(&self) -> String {
+            format!("http://{}", self.addr)
+        }
+
         /// The raw base this fixture serves under `/raw`.
         #[must_use]
         pub(crate) fn raw_base(&self) -> String {

@@ -1,14 +1,13 @@
 //! Structural reordering preserves labels, effects and alternative multiplicity.
 
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
+
+use failing::failing;
+use form::form;
 use std::fmt::Write as _;
-
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_str(source).unwrap())
-}
-
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_str(source).unwrap())
-}
 
 #[test]
 fn structure_field_order_shorthand_and_alias() {

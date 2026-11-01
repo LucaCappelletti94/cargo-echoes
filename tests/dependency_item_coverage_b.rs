@@ -1,12 +1,12 @@
 //! Item partition owners, label remaps, and observation-scalar boundaries.
 
-fn form(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize(syn::parse_file(source).unwrap())
-}
+#[path = "support/failing.rs"]
+mod failing;
+#[path = "support/form.rs"]
+mod form;
 
-fn failing(source: &str) -> syn_canon::CanonicalForm {
-    syn_canon::canonicalize_failing(syn::parse_file(source).unwrap())
-}
+use failing::failing;
+use form::form;
 
 /// A context item behind a trait, then a two-item region in both orders.
 fn region_pair(context: &str) -> (String, String) {

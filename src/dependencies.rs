@@ -2111,10 +2111,9 @@ fn source_key(kind: &str, value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context_network::tests::Fixture;
     use std::fmt::Write as _;
-    use std::io::{Read, Write};
-    use std::net::TcpListener;
-    use std::sync::Arc;
+    use std::io::Write;
 
     const MATCHING_BODY: &str = "let total = value + 1u32; total * 2u32";
     /// Canonical-equal to `MATCHING_BODY` for a parameter named `input`.
@@ -2199,62 +2198,55 @@ mod tests {
         }
     }
 
+    /// One parsed source file under `root`, as the target scans carry it.
+    fn source_file(root: &Path, rel: &str, segments: &[&str]) -> SourceFile {
+        let path = root.join(rel);
+        let text = std::fs::read_to_string(&path).unwrap();
+        SourceFile {
+            path: path.to_string_lossy().into_owned(),
+            segments: segments
+                .iter()
+                .map(|segment| (*segment).to_owned())
+                .collect(),
+            cfg: Vec::new(),
+            parsed: syn::parse_file(&text).unwrap(),
+            text,
+            rustdoc: true,
+        }
+    }
+
+    /// One library target scan holding `files`.
+    fn library_scan(name: &str, files: Vec<SourceFile>) -> TargetScan {
+        TargetScan {
+            name: name.to_owned(),
+            files,
+            library: true,
+            edition: syn_canon::Edition::E2021,
+        }
+    }
+
     /// Local records of one crate, extracted the same way the scan does.
     fn local_records(
         dir: &Path,
         crate_name: &str,
         files: &[(&str, Vec<&str>)],
     ) -> Vec<IndexedContext> {
-        let mut sources = Vec::new();
-        for (rel, segments) in files {
-            let text = std::fs::read_to_string(dir.join(rel)).unwrap();
-            sources.push(SourceFile {
-                path: dir.join(rel).to_string_lossy().into_owned(),
-                segments: segments
-                    .iter()
-                    .map(|segment| (*segment).to_owned())
-                    .collect(),
-                cfg: Vec::new(),
-                parsed: syn::parse_file(&text).unwrap(),
-                text,
-                rustdoc: true,
-            });
-        }
-        let scan = TargetScan {
-            name: crate_name.to_owned(),
-            files: sources,
-            library: true,
-            edition: syn_canon::Edition::E2021,
-        };
+        let sources = files
+            .iter()
+            .map(|(rel, segments)| source_file(dir, rel, segments))
+            .collect();
+        let scan = library_scan(crate_name, sources);
         crate::context_index::extract(&scan, &dir.to_string_lossy(), &|_| true)
     }
 
     fn app_targets(dir: &Path) -> Vec<TargetScan> {
-        let text = std::fs::read_to_string(dir.join("app/src/lib.rs")).unwrap();
-        let shared = std::fs::read_to_string(dir.join("app/src/shared.rs")).unwrap();
-        vec![TargetScan {
-            name: "app".to_owned(),
-            files: vec![
-                SourceFile {
-                    path: dir.join("app/src/lib.rs").to_string_lossy().into_owned(),
-                    segments: Vec::new(),
-                    cfg: Vec::new(),
-                    parsed: syn::parse_file(&text).unwrap(),
-                    text,
-                    rustdoc: true,
-                },
-                SourceFile {
-                    path: dir.join("app/src/shared.rs").to_string_lossy().into_owned(),
-                    segments: vec!["shared".to_owned()],
-                    cfg: Vec::new(),
-                    parsed: syn::parse_file(&shared).unwrap(),
-                    text: shared,
-                    rustdoc: true,
-                },
+        vec![library_scan(
+            "app",
+            vec![
+                source_file(dir, "app/src/lib.rs", &[]),
+                source_file(dir, "app/src/shared.rs", &["shared"]),
             ],
-            library: true,
-            edition: syn_canon::Edition::E2021,
-        }]
+        )]
     }
 
     fn run(
@@ -2279,7 +2271,7 @@ mod tests {
         names
     }
 
-    fn app_options(_dir: &Path, cache: &Path, depth: usize) -> DependencySearch {
+    fn app_options(cache: &Path, depth: usize) -> DependencySearch {
         DependencySearch {
             depth: Some(depth),
             check_latest: Some(false),
@@ -2381,7 +2373,7 @@ mod tests {
         fixture(dir.path());
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let mut options = app_options(dir.path(), &cache, 1);
+        let mut options = app_options(&cache, 1);
         let report = run(dir.path(), &local, &targets, &options);
         assert_eq!(packages(&report), vec!["direct".to_owned()]);
         options.depth = Some(2);
@@ -2438,7 +2430,7 @@ mod tests {
             dir.path(),
             &app_records(dir.path()),
             &app_targets(dir.path()),
-            &app_options(dir.path(), &dir.path().join("index"), 1),
+            &app_options(&dir.path().join("index"), 1),
         );
         let versions: BTreeSet<&str> = report
             .groups
@@ -2470,7 +2462,7 @@ mod tests {
         std::fs::write(path, manifest).unwrap();
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let mut options = app_options(dir.path(), &dir.path().join("index"), 1);
+        let mut options = app_options(&dir.path().join("index"), 1);
         assert_eq!(
             packages(&run(dir.path(), &local, &targets, &options)),
             ["direct"]
@@ -2502,7 +2494,7 @@ mod tests {
         std::fs::write(app_path, toml::to_string(&app).unwrap()).unwrap();
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let mut options = app_options(dir.path(), &dir.path().join("index"), 1);
+        let mut options = app_options(&dir.path().join("index"), 1);
         assert_eq!(
             packages(&run(dir.path(), &local, &targets, &options)),
             ["direct", "optional"]
@@ -2548,7 +2540,7 @@ mod tests {
         fixture(dir.path());
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let mut options = app_options(dir.path(), &cache, 2);
+        let mut options = app_options(&cache, 2);
         options.all_optional = Some(true);
         let report = run(dir.path(), &local, &targets, &options);
         assert_eq!(
@@ -2569,7 +2561,7 @@ mod tests {
         fixture(dir.path());
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let mut options = app_options(dir.path(), &cache, 1);
+        let mut options = app_options(&cache, 1);
         options.all_optional = Some(true);
         options.target = Some("x86_64-pc-windows-gnu".to_owned());
         let report = run(dir.path(), &local, &targets, &options);
@@ -2601,12 +2593,7 @@ mod tests {
         );
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let report = run(
-            dir.path(),
-            &local,
-            &targets,
-            &app_options(dir.path(), &cache, 1),
-        );
+        let report = run(dir.path(), &local, &targets, &app_options(&cache, 1));
         let names = packages(&report);
         assert!(names.iter().any(|name| name == "winonly"), "{names:?}");
         assert!(report.coverage.complete, "{:?}", report.coverage.failures);
@@ -2622,25 +2609,11 @@ mod tests {
         let mut local = app.clone();
         local.extend(other);
         let mut targets = app_targets(dir.path());
-        let other_text = std::fs::read_to_string(dir.path().join("other/src/lib.rs")).unwrap();
-        targets.push(TargetScan {
-            name: "other".to_owned(),
-            files: vec![SourceFile {
-                path: dir
-                    .path()
-                    .join("other/src/lib.rs")
-                    .to_string_lossy()
-                    .into_owned(),
-                segments: Vec::new(),
-                cfg: Vec::new(),
-                parsed: syn::parse_file(&other_text).unwrap(),
-                text: other_text,
-                rustdoc: true,
-            }],
-            library: true,
-            edition: syn_canon::Edition::E2021,
-        });
-        let options = app_options(dir.path(), &cache, 1);
+        targets.push(library_scan(
+            "other",
+            vec![source_file(dir.path(), "other/src/lib.rs", &[])],
+        ));
+        let options = app_options(&cache, 1);
         let report = run(dir.path(), &local, &targets, &options);
         let groups: Vec<_> = report
             .groups
@@ -2680,7 +2653,7 @@ mod tests {
         assert!(!dir.path().join("Cargo.lock").exists());
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let options = app_options(dir.path(), &cache, 1);
+        let options = app_options(&cache, 1);
         run(dir.path(), &local, &targets, &options);
         assert!(!dir.path().join("Cargo.lock").exists());
         put(
@@ -2704,7 +2677,7 @@ mod tests {
         fixture(dir.path());
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let options = app_options(dir.path(), &cache, 1);
+        let options = app_options(&cache, 1);
         let first = run(dir.path(), &local, &targets, &options);
         assert_eq!(packages(&first), vec!["direct".to_owned()]);
         assert_eq!(first.coverage.cached_files, 0);
@@ -2753,7 +2726,7 @@ mod tests {
         );
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let options = app_options(dir.path(), &cache, 1);
+        let options = app_options(&cache, 1);
         let report = run(dir.path(), &local, &targets, &options);
         assert!(report.coverage.complete, "{:?}", report.coverage);
         let candidate = report
@@ -2777,7 +2750,7 @@ mod tests {
         );
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let options = app_options(dir.path(), &cache, 1);
+        let options = app_options(&cache, 1);
         let refs: Vec<&IndexedContext> = local.iter().collect();
         let excluded = vec!["pub fn helper".to_owned()];
         let first = analyze(dir.path(), &targets, &refs, &options, 0, false, &excluded);
@@ -2797,7 +2770,7 @@ mod tests {
         fixture(dir.path());
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let options = app_options(dir.path(), &cache, 1);
+        let options = app_options(&cache, 1);
         let lib = dir.path().join("deps/direct/src/lib.rs");
         std::fs::remove_file(&lib).unwrap();
         std::os::unix::fs::symlink("missing.rs", &lib).unwrap();
@@ -2828,88 +2801,13 @@ mod tests {
         );
     }
 
-    /// Socket I/O deadline for the test fixture.
-    const SOCKET_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
-    /// Poll interval for the fixture's nonblocking accept.
-    const ACCEPT_POLL: std::time::Duration = std::time::Duration::from_millis(5);
-
-    /// A single-threaded test HTTP server, with bounded socket I/O and a
-    /// bounded shutdown.
-    struct HttpServer {
-        base: String,
-        handle: std::thread::JoinHandle<()>,
-        shutdown: Arc<std::sync::atomic::AtomicBool>,
-    }
-
-    impl HttpServer {
-        fn start(routes: BTreeMap<String, Vec<u8>>) -> Self {
-            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-            let port = listener.local_addr().unwrap().port();
-            let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let control = Arc::clone(&shutdown);
-            let handle = std::thread::spawn(move || {
-                let listener = listener;
-                let _ = listener.set_nonblocking(true);
-                loop {
-                    if control.load(std::sync::atomic::Ordering::Acquire) {
-                        break;
-                    }
-                    match listener.accept() {
-                        Ok((stream, _)) => serve_one(stream, &routes),
-                        Err(_) => std::thread::sleep(ACCEPT_POLL),
-                    }
-                }
-            });
-            Self {
-                base: format!("http://127.0.0.1:{port}"),
-                handle,
-                shutdown,
-            }
+    /// A context-network fixture serving each `routes` entry with status 200.
+    fn registry_fixture(routes: BTreeMap<String, Vec<u8>>) -> Fixture {
+        let fixture = Fixture::start();
+        for (path, body) in routes {
+            fixture.route(&path, 200, &body);
         }
-
-        fn stop(self) {
-            self.shutdown
-                .store(true, std::sync::atomic::Ordering::Release);
-            let _ = self.handle.join();
-        }
-    }
-
-    /// Serve one connection, with bounded socket reads and writes.
-    fn serve_one(mut stream: std::net::TcpStream, routes: &BTreeMap<String, Vec<u8>>) {
-        let _ = stream.set_read_timeout(Some(SOCKET_IO_TIMEOUT));
-        let _ = stream.set_write_timeout(Some(SOCKET_IO_TIMEOUT));
-        let mut head = Vec::new();
-        let mut chunk = [0u8; 1024];
-        loop {
-            let Ok(n) = stream.read(&mut chunk) else {
-                return;
-            };
-            if n == 0 {
-                return;
-            }
-            head.extend_from_slice(&chunk[..n]);
-            if head.windows(4).any(|window| window == b"\r\n\r\n") {
-                break;
-            }
-        }
-        let request = String::from_utf8_lossy(&head);
-        let path = request
-            .lines()
-            .next()
-            .and_then(|line| line.split_whitespace().nth(1))
-            .unwrap_or_default()
-            .to_owned();
-        let (status, body) = routes
-            .get(&path)
-            .map_or(("404 Not Found", b"not found".as_slice()), |body| {
-                ("200 OK", body.as_slice())
-            });
-        let response = format!(
-            "HTTP/1.1 {status}\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-            body.len()
-        );
-        let _ = stream.write_all(response.as_bytes());
-        let _ = stream.write_all(body);
+        fixture
     }
 
     /// A crate archive holding the manifest, the library and extra files.
@@ -2949,7 +2847,7 @@ mod tests {
     const LATEST_LIB: &str = "pub fn both(input: u32) -> u32 { let result = input + 1u32; result * 2u32 }\npub fn only_new(input: u32) -> u32 { input + 4u32 }\n";
 
     /// Registry metadata rooted at `ws` without invoking Cargo.
-    fn registry_workspace_json(ws: &Path) -> String {
+    fn registry_workspace_json(ws: &Path) -> serde_json::Value {
         let ws = ws.to_string_lossy();
         let value = serde_json::json!({
             "packages": [
@@ -3022,57 +2920,43 @@ mod tests {
             "metadata": null,
             "version": 1
         });
-        serde_json::to_string(&value).unwrap()
+        value
     }
 
+    impl Registry {
+        /// A registry whose API and CDN are rooted at `base`.
+        fn from_base(base: &str) -> Self {
+            Self {
+                api: format!("{base}/api/v1/crates"),
+                cdn: format!("{base}/crates"),
+            }
+        }
+    }
+
+    /// A crafted run over the standard two-package registry workspace.
     fn registry_run(ws: &Path, cache: &Path, base: &str, check_latest: bool) -> ReuseReport {
-        let local = local_records(ws, "app", &[("app/src/lib.rs", vec![])]);
-        let refs: Vec<&IndexedContext> = local.iter().collect();
-        let metadata: Metadata = serde_json::from_str(&registry_workspace_json(ws)).unwrap();
-        let graph = build_graph(&metadata, &BTreeMap::new());
-        let store = Store::open(cache).unwrap();
         let options = DependencySearch {
             depth: Some(1),
             check_latest: Some(check_latest),
             cache_dir: Some(cache.to_string_lossy().into_owned()),
             ..DependencySearch::default()
         };
-        let eff = effective(&options);
-        let mut d = Discovery {
-            graph,
-            index_fingerprint: index_fingerprint(&eff),
-            eff,
-            store: Some(store),
-            store_root: cache.to_path_buf(),
-            registry: Registry {
-                api: format!("{base}/api/v1/crates"),
-                cdn: format!("{base}/crates"),
-            },
-            coverage: DependencyCoverage::default(),
-            effective_targets: Vec::new(),
-            cfgs: BTreeMap::new(),
-            latest_known: BTreeMap::new(),
-        };
-        let targets = single_lib_targets(ws);
-        analyze_discovery(&mut d, ws, &targets, &refs, 0)
+        crafted_run(
+            ws,
+            cache,
+            Some(base),
+            &options,
+            registry_workspace_json(ws),
+            &[],
+        )
     }
 
     /// A single-library target scan of the registry workspace app.
     fn single_lib_targets(ws: &Path) -> Vec<TargetScan> {
-        let text = std::fs::read_to_string(ws.join("app/src/lib.rs")).unwrap();
-        vec![TargetScan {
-            name: "app".to_owned(),
-            files: vec![SourceFile {
-                path: ws.join("app/src/lib.rs").to_string_lossy().into_owned(),
-                segments: Vec::new(),
-                cfg: Vec::new(),
-                parsed: syn::parse_file(&text).unwrap(),
-                text,
-                rustdoc: true,
-            }],
-            library: true,
-            edition: syn_canon::Edition::E2021,
-        }]
+        vec![library_scan(
+            "app",
+            vec![source_file(ws, "app/src/lib.rs", &[])],
+        )]
     }
 
     #[test]
@@ -3090,9 +2974,8 @@ mod tests {
             "/crates/upstream/upstream-1.0.0.crate".to_owned(),
             crate_archive("upstream", "1.0.0", RESOLVED_LIB),
         );
-        let server = HttpServer::start(routes);
-        let report = registry_run(&ws, &cache, &server.base, false);
-        server.stop();
+        let fixture = registry_fixture(routes);
+        let report = registry_run(&ws, &cache, &fixture.base(), false);
         assert!(!report.coverage.complete);
         assert_eq!(packages(&report), vec!["upstream".to_owned()]);
         let key = source_key("path", &ws.join("app").to_string_lossy());
@@ -3136,9 +3019,8 @@ mod tests {
                 "/crates/upstream/upstream-1.0.0.crate".to_owned(),
                 crate_archive("upstream", "1.0.0", RESOLVED_LIB),
             );
-            let server = HttpServer::start(routes);
-            let report = registry_run(&ws, &cache, &server.base, false);
-            server.stop();
+            let fixture = registry_fixture(routes);
+            let report = registry_run(&ws, &cache, &fixture.base(), false);
             assert!(report.coverage.complete, "{:?}", report.coverage);
             assert_eq!(packages(&report), vec!["upstream".to_owned()]);
             let public_index = cache.join("public/crates.io/upstream-1.0.0.json");
@@ -3188,9 +3070,8 @@ mod tests {
                 crate_archive("upstream", "1.2.0", &latest),
             ),
         ]);
-        let server = HttpServer::start(routes);
-        let report = registry_run(&ws, &dir.path().join("index"), &server.base, true);
-        server.stop();
+        let fixture = registry_fixture(routes);
+        let report = registry_run(&ws, &dir.path().join("index"), &fixture.base(), true);
         let candidate = report
             .groups
             .iter()
@@ -3244,9 +3125,8 @@ mod tests {
             "/crates/upstream/upstream-1.2.0.crate".to_owned(),
             crate_archive("upstream", "1.2.0", LATEST_LIB),
         );
-        let server = HttpServer::start(routes);
-        let report = registry_run(&ws, &cache, &server.base, true);
-        server.stop();
+        let fixture = registry_fixture(routes);
+        let report = registry_run(&ws, &cache, &fixture.base(), true);
         let found = report
             .groups
             .iter()
@@ -3329,8 +3209,7 @@ mod tests {
             "app/src/lib.rs",
             &format!("pub fn local_match(value: u32) -> u32 {{ {MATCHING_BODY} }}\n"),
         );
-        let mut metadata: serde_json::Value =
-            serde_json::from_str(&registry_workspace_json(&ws)).unwrap();
+        let mut metadata = registry_workspace_json(&ws);
         metadata["packages"][0]["dependencies"][0]["optional"] = serde_json::json!(true);
         metadata["packages"].as_array_mut().unwrap().truncate(1);
         metadata["resolve"]["nodes"] = serde_json::json!([{
@@ -3348,10 +3227,7 @@ mod tests {
             "/crates/upstream/upstream-1.0.0.crate".to_owned(),
             crate_archive("upstream", "1.0.0", RESOLVED_LIB),
         );
-        let server = HttpServer::start(routes);
-        let local = local_records(&ws, "app", &[("app/src/lib.rs", vec![])]);
-        let refs: Vec<&IndexedContext> = local.iter().collect();
-        let metadata: Metadata = serde_json::from_value(metadata).unwrap();
+        let fixture = registry_fixture(routes);
         let options = DependencySearch {
             depth: Some(1),
             all_optional: Some(true),
@@ -3359,24 +3235,7 @@ mod tests {
             cache_dir: Some(cache.to_string_lossy().into_owned()),
             ..DependencySearch::default()
         };
-        let eff = effective(&options);
-        let mut d = Discovery {
-            graph: build_graph(&metadata, &BTreeMap::new()),
-            index_fingerprint: index_fingerprint(&eff),
-            eff,
-            store: Some(Store::open(&cache).unwrap()),
-            store_root: cache.clone(),
-            registry: Registry {
-                api: format!("{}/api/v1/crates", server.base),
-                cdn: format!("{}/crates", server.base),
-            },
-            coverage: DependencyCoverage::default(),
-            effective_targets: Vec::new(),
-            cfgs: BTreeMap::new(),
-            latest_known: BTreeMap::new(),
-        };
-        let report = analyze_discovery(&mut d, &ws, &single_lib_targets(&ws), &refs, 0);
-        server.stop();
+        let report = crafted_run(&ws, &cache, Some(&fixture.base()), &options, metadata, &[]);
         assert!(report.coverage.complete, "{:?}", report.coverage.failures);
         let group = report
             .groups
@@ -3415,9 +3274,8 @@ mod tests {
             "/crates/upstream/upstream-1.0.0.crate".to_owned(),
             crate_archive("upstream", "1.0.0", RESOLVED_LIB),
         );
-        let server = HttpServer::start(routes);
-        let report = registry_run(&ws, &cache, &server.base, false);
-        server.stop();
+        let fixture = registry_fixture(routes);
+        let report = registry_run(&ws, &cache, &fixture.base(), false);
         assert!(
             report.groups.iter().all(|group| {
                 group
@@ -3457,9 +3315,8 @@ mod tests {
             "/crates/upstream/upstream-1.0.0.crate".to_owned(),
             crate_archive("upstream", "1.0.0", RESOLVED_LIB),
         );
-        let server = HttpServer::start(routes);
-        let report = registry_run(&ws, &cache, &server.base, true);
-        server.stop();
+        let fixture = registry_fixture(routes);
+        let report = registry_run(&ws, &cache, &fixture.base(), true);
         assert!(
             !report.coverage.complete,
             "a failed latest check must leave the analysis incomplete"
@@ -3583,19 +3440,21 @@ mod tests {
         put(ws, &format!("{name}/src/lib.rs"), lib);
     }
 
-    /// A crafted metadata package entry rooted at `ws/name`.
-    fn json_pkg(
+    /// A crafted metadata package entry rooted at `root`, with `id` derived when absent.
+    fn pkg(
         name: &str,
         version: &str,
-        ws: &Path,
+        root: &str,
+        id: Option<&str>,
         source: Option<&str>,
         kind: &str,
         deps: &[serde_json::Value],
     ) -> serde_json::Value {
-        let id = source.map_or_else(
-            || format!("path+file://{}#{}", ws.join(name).display(), version),
+        let derived = source.map_or_else(
+            || format!("path+file://{root}#{version}"),
             |source| format!("{source}#{name}/{version}"),
         );
+        let id = id.unwrap_or(&derived);
         serde_json::json!({
             "name": name,
             "version": version,
@@ -3607,12 +3466,32 @@ mod tests {
                     "name": name,
                     "kind": [kind],
                     "crate_types": [kind],
-                    "src_path": format!("{}/src/lib.rs", ws.join(name).display()),
+                    "src_path": format!("{root}/src/lib.rs"),
                 }
             ],
-            "manifest_path": format!("{}/Cargo.toml", ws.join(name).display()),
+            "manifest_path": format!("{root}/Cargo.toml"),
             "features": {}
         })
+    }
+
+    /// A crafted metadata package entry rooted at `ws/name`.
+    fn json_pkg(
+        name: &str,
+        version: &str,
+        ws: &Path,
+        source: Option<&str>,
+        kind: &str,
+        deps: &[serde_json::Value],
+    ) -> serde_json::Value {
+        pkg(
+            name,
+            version,
+            &format!("{}/{}", ws.to_string_lossy(), name),
+            None,
+            source,
+            kind,
+            deps,
+        )
     }
 
     /// A crafted manifest dependency entry.
@@ -3683,12 +3562,13 @@ mod tests {
         cache: &Path,
         base: Option<&str>,
         options: &DependencySearch,
-        json: serde_json::Value,
+        metadata: serde_json::Value,
+        effective_targets: &[String],
     ) -> ReuseReport {
         let local = local_records(ws, "app", &[("app/src/lib.rs", vec![])]);
         let refs: Vec<&IndexedContext> = local.iter().collect();
-        let metadata: Metadata = serde_json::from_value(json).unwrap();
-        let graph = build_graph(&metadata, &BTreeMap::new());
+        let parsed: Metadata = serde_json::from_value(metadata).unwrap();
+        let graph = build_graph(&parsed, &BTreeMap::new());
         let store = Store::open(cache).unwrap();
         let eff = effective(options);
         let mut d = Discovery {
@@ -3698,14 +3578,11 @@ mod tests {
             store: Some(store),
             store_root: cache.to_path_buf(),
             registry: match base {
-                Some(base) => Registry {
-                    api: format!("{base}/api/v1/crates"),
-                    cdn: format!("{base}/crates"),
-                },
+                Some(base) => Registry::from_base(base),
                 None => Registry::default(),
             },
             coverage: DependencyCoverage::default(),
-            effective_targets: Vec::new(),
+            effective_targets: effective_targets.to_vec(),
             cfgs: BTreeMap::new(),
             latest_known: BTreeMap::new(),
         };
@@ -3727,7 +3604,7 @@ mod tests {
             check_latest: Some(false),
             ..DependencySearch::default()
         };
-        crafted_run(ws, cache, base, &options, json)
+        crafted_run(ws, cache, base, &options, json, &[])
     }
 
     /// A discovery state without a store, rooted at `dir`.
@@ -3942,7 +3819,7 @@ mod tests {
         let cache = dir.path().join("index");
         unresolved_fixture(&ws);
         let routes = BTreeMap::new();
-        let server = HttpServer::start(routes);
+        let fixture = registry_fixture(routes);
         let side_deps = [
             json_dep("inner", None, "^1.0", false, None, None),
             json_dep("inner2", None, "^9.0", false, None, None),
@@ -3994,8 +3871,7 @@ mod tests {
                 ]
             })),
         );
-        let report = crafted(&ws, &cache, Some(&server.base), 2, json);
-        server.stop();
+        let report = crafted(&ws, &cache, Some(&fixture.base()), 2, json);
         assert_eq!(
             packages(&report),
             vec![
@@ -4138,30 +4014,29 @@ iota = { version = "4", optional = true }
         assert!(by_name["iota"].optional);
     }
 
-    #[test]
-    fn oversized_subprocess_output_is_rejected() {
+    /// The stdout length of `sh -c 'head -c bytes /dev/zero'` under `run_bounded`.
+    /// Propagates the `run_bounded` error.
+    fn head_stdout(bytes: u64) -> Result<usize, ProcessError> {
         let id = next_proc_id();
-        let args = ["-c", "head -c 17000000 /dev/zero"].map(str::to_owned);
-        let error = run_bounded(
+        let args = ["-c".to_owned(), format!("head -c {bytes} /dev/zero")];
+        run_bounded(
             std::process::Command::new("sh").args(&args),
             std::time::Duration::from_secs(30),
             &id,
         )
-        .expect_err("oversized output must be rejected");
+        .map(|output| output.stdout.len())
+    }
+
+    #[test]
+    fn oversized_subprocess_output_is_rejected() {
+        let error = head_stdout(17_000_000).expect_err("oversized output must be rejected");
         assert!(matches!(error, ProcessError::OutputLimit { .. }));
     }
 
     #[test]
     fn output_at_the_limit_is_kept() {
-        let id = next_proc_id();
-        let args = ["-c".to_owned(), format!("head -c {OUTPUT_LIMIT} /dev/zero")];
-        let output = run_bounded(
-            std::process::Command::new("sh").args(&args),
-            std::time::Duration::from_secs(30),
-            &id,
-        )
-        .expect("output at the limit is kept");
-        assert_eq!(u64::try_from(output.stdout.len()).unwrap(), OUTPUT_LIMIT);
+        let got = head_stdout(OUTPUT_LIMIT).expect("output at the limit is kept");
+        assert_eq!(got, usize::try_from(OUTPUT_LIMIT).unwrap());
     }
 
     #[cfg(target_os = "linux")]
@@ -4274,22 +4149,23 @@ iota = { version = "4", optional = true }
         assert!(error.contains("could not be extracted"), "{error}");
     }
 
+    /// The fixture ends serving a peer that closes early and one that stays idle.
     #[cfg(unix)]
     #[test]
-    fn serve_one_ends_on_closed_and_idle_peers() {
-        use std::io::Write as _;
-        let routes = BTreeMap::new();
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-        let mut client = std::net::TcpStream::connect(addr).unwrap();
-        client.write_all(b"GET /x HTTP/1.1\r\n").unwrap();
-        let (stream, _) = listener.accept().unwrap();
-        drop(client);
-        serve_one(stream, &routes);
-        let client = std::net::TcpStream::connect(addr).unwrap();
-        let (stream, _) = listener.accept().unwrap();
-        serve_one(stream, &routes);
-        drop(client);
+    fn the_fixture_ends_on_closed_and_idle_peers() {
+        let fixture = Fixture::start();
+        let addr = fixture
+            .base()
+            .trim_start_matches("http://")
+            .parse::<std::net::SocketAddr>()
+            .unwrap();
+        {
+            let mut early = std::net::TcpStream::connect(addr).unwrap();
+            early.write_all(b"GET /x HTTP/1.1\r\n").unwrap();
+        }
+        let idle = std::net::TcpStream::connect(addr).unwrap();
+        drop(fixture);
+        drop(idle);
     }
 
     #[test]
@@ -4304,12 +4180,7 @@ iota = { version = "4", optional = true }
         std::fs::write(&entry, "not json").unwrap();
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let report = run(
-            dir.path(),
-            &local,
-            &targets,
-            &app_options(dir.path(), &cache, 1),
-        );
+        let report = run(dir.path(), &local, &targets, &app_options(&cache, 1));
         let warnings = report.coverage.warnings.join("\n");
         assert!(
             warnings.contains("dependency index for direct is corrupt, rebuilt"),
@@ -4333,12 +4204,7 @@ iota = { version = "4", optional = true }
         std::fs::write(cache.join("private"), "blocked").unwrap();
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let report = run(
-            dir.path(),
-            &local,
-            &targets,
-            &app_options(dir.path(), &cache, 1),
-        );
+        let report = run(dir.path(), &local, &targets, &app_options(&cache, 1));
         let warnings = report.coverage.warnings.join("\n");
         assert!(
             warnings.contains("dependency index for direct is unavailable"),
@@ -4359,12 +4225,7 @@ iota = { version = "4", optional = true }
         std::fs::write(&cache, "a file").unwrap();
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let report = run(
-            dir.path(),
-            &local,
-            &targets,
-            &app_options(dir.path(), &cache, 1),
-        );
+        let report = run(dir.path(), &local, &targets, &app_options(&cache, 1));
         assert_eq!(packages(&report), vec!["direct".to_owned()]);
         assert!(report.coverage.complete, "{:?}", report.coverage);
         assert_eq!(std::fs::read_to_string(&cache).unwrap(), "a file");
@@ -4381,22 +4242,11 @@ iota = { version = "4", optional = true }
             &format!("pub fn stray_fn(value: u32) -> u32 {{ {MATCHING_BODY} }}\n"),
         );
         let local = local_records(dir.path(), "stray", &[("stray/src/lib.rs", vec![])]);
-        let file = dir.path().join("stray/src/lib.rs");
-        let text = std::fs::read_to_string(&file).unwrap();
-        let targets = vec![TargetScan {
-            name: "stray".to_owned(),
-            files: vec![SourceFile {
-                path: file.to_string_lossy().into_owned(),
-                segments: Vec::new(),
-                cfg: Vec::new(),
-                parsed: syn::parse_file(&text).unwrap(),
-                text,
-                rustdoc: true,
-            }],
-            library: true,
-            edition: syn_canon::Edition::E2021,
-        }];
-        let options = app_options(dir.path(), &cache, 1);
+        let targets = vec![library_scan(
+            "stray",
+            vec![source_file(dir.path(), "stray/src/lib.rs", &[])],
+        )];
+        let options = app_options(&cache, 1);
         let report = run(dir.path(), &local, &targets, &options);
         let failures = report.coverage.failures.join("\n");
         assert!(
@@ -4449,7 +4299,7 @@ iota = { version = "4", optional = true }
         std::fs::write(&path, manifest).unwrap();
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let mut options = app_options(dir.path(), &cache, 2);
+        let mut options = app_options(&cache, 2);
         options.all_optional = Some(true);
         let report = run(dir.path(), &local, &targets, &options);
         assert_eq!(
@@ -4502,12 +4352,7 @@ iota = { version = "4", optional = true }
         std::fs::write(&path, toml::to_string(&app).unwrap()).unwrap();
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let report = run(
-            dir.path(),
-            &local,
-            &targets,
-            &app_options(dir.path(), &cache, 1),
-        );
+        let report = run(dir.path(), &local, &targets, &app_options(&cache, 1));
         let failures = report.coverage.failures.join("\n");
         assert!(
             failures.contains("dependency source for badsrc"),
@@ -4750,7 +4595,7 @@ iota = { version = "4", optional = true }
             "badspec/src/lib.rs",
             "pub fn badspec_fn(value: u32) -> u32 { value + 1u32 }\n",
         );
-        let server = HttpServer::start(failing_registry_routes());
+        let fixture = registry_fixture(failing_registry_routes());
         let json = crafted_meta(
             &ws,
             &[
@@ -4779,8 +4624,7 @@ iota = { version = "4", optional = true }
                 ]
             })),
         );
-        let report = crafted(&ws, &cache, Some(&server.base), 2, json);
-        server.stop();
+        let report = crafted(&ws, &cache, Some(&fixture.base()), 2, json);
         let failures = report.coverage.failures.join("\n");
         for needle in [
             "version of g404 could not be resolved",
@@ -4926,7 +4770,7 @@ iota = { version = "4", optional = true }
         let dir = tempfile::tempdir().unwrap();
         let ws = dir.path().join("ws");
         let cache = dir.path().join("index");
-        let server = HttpServer::start(privacy_fixture(&ws));
+        let fixture = registry_fixture(privacy_fixture(&ws));
         let kinds = [
             ("cprivdiff", "lib"),
             ("cmanidiff", "lib"),
@@ -4953,8 +4797,7 @@ iota = { version = "4", optional = true }
                 ]
             })),
         );
-        let report = crafted(&ws, &cache, Some(&server.base), 1, json);
-        server.stop();
+        let report = crafted(&ws, &cache, Some(&fixture.base()), 1, json);
         let warnings = report.coverage.warnings.join("\n");
         assert!(
             warnings.contains("cwarn remains private because its published source is unavailable"),
@@ -5039,7 +4882,7 @@ iota = { version = "4", optional = true }
                 &format!("pub fn {name}_fn(value: u32) -> u32 {{ value + 1u32 }}\n"),
             );
         }
-        let server = HttpServer::start(failing_latest_routes());
+        let fixture = registry_fixture(failing_latest_routes());
         let packages_json: Vec<serde_json::Value> = [
             ("u0", "1.0.0"),
             ("u1", "1.0.0"),
@@ -5071,8 +4914,7 @@ iota = { version = "4", optional = true }
             check_latest: Some(true),
             ..DependencySearch::default()
         };
-        let report = crafted_run(&ws, &cache, Some(&server.base), &options, json);
-        server.stop();
+        let report = crafted_run(&ws, &cache, Some(&fixture.base()), &options, json, &[]);
         let warnings = report.coverage.warnings.join("\n");
         assert!(
             warnings.contains("latest release of u0 is unknown (no max_stable_version)"),
@@ -5371,12 +5213,7 @@ iota = { version = "4", optional = true }
         std::fs::write(path, manifest).unwrap();
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let report = run(
-            dir.path(),
-            &local,
-            &targets,
-            &app_options(dir.path(), &cache, 1),
-        );
+        let report = run(dir.path(), &local, &targets, &app_options(&cache, 1));
         assert_eq!(
             packages(&report),
             vec!["direct".to_owned(), "repdep".to_owned()],
@@ -5437,12 +5274,7 @@ iota = { version = "4", optional = true }
         std::fs::write(path, manifest).unwrap();
         let local = app_records(dir.path());
         let targets = app_targets(dir.path());
-        let report = run(
-            dir.path(),
-            &local,
-            &targets,
-            &app_options(dir.path(), &cache, 1),
-        );
+        let report = run(dir.path(), &local, &targets, &app_options(&cache, 1));
         assert!(report.coverage.complete, "{:?}", report.coverage);
         let names = packages(&report);
         assert!(
@@ -5486,9 +5318,8 @@ iota = { version = "4", optional = true }
                 "/crates/upstream/upstream-1.0.0.crate".to_owned(),
                 crate_archive_with("upstream", "1.0.0", lib, &extra),
             )]);
-            let server = HttpServer::start(routes);
-            let report = registry_run(&ws, &cache, &server.base, false);
-            server.stop();
+            let fixture = registry_fixture(routes);
+            let report = registry_run(&ws, &cache, &fixture.base(), false);
             let public_index = cache.join("public/crates.io/upstream-1.0.0.json");
             assert!(
                 !public_index.exists(),
@@ -5501,15 +5332,9 @@ iota = { version = "4", optional = true }
 
     #[test]
     fn output_well_below_the_limit_is_kept() {
-        let id = next_proc_id();
-        let args = ["-c", "head -c 2000000 /dev/zero"].map(str::to_owned);
-        let output = run_bounded(
-            std::process::Command::new("sh").args(&args),
-            std::time::Duration::from_secs(30),
-            &id,
-        )
-        .expect("two megabytes of output sit well under the capture limit");
-        assert_eq!(u64::try_from(output.stdout.len()).unwrap(), 2_000_000);
+        let got = head_stdout(2_000_000)
+            .expect("two megabytes of output sit well under the capture limit");
+        assert_eq!(got, 2_000_000);
     }
 
     #[test]
@@ -5591,46 +5416,15 @@ iota = { version = "4", optional = true }
         source: Option<&str>,
         deps: &[serde_json::Value],
     ) -> serde_json::Value {
-        serde_json::json!({
-            "name": name,
-            "version": "0.1.0",
-            "id": id,
-            "source": source,
-            "dependencies": deps,
-            "targets": [
-                {
-                    "name": name,
-                    "kind": ["lib"],
-                    "crate_types": ["lib"],
-                    "src_path": format!("{ws}/{dir}/src/lib.rs")
-                }
-            ],
-            "manifest_path": format!("{ws}/{dir}/Cargo.toml"),
-            "metadata": null,
-            "features": {}
-        })
-    }
-
-    /// One manifest dependency edge of the synthetic metadata.
-    fn walk_dep(
-        name: &str,
-        source: Option<&str>,
-        req: &str,
-        target: Option<&str>,
-    ) -> serde_json::Value {
-        serde_json::json!({
-            "name": name,
-            "source": source,
-            "req": req,
-            "kind": null,
-            "optional": false,
-            "uses_default_features": true,
-            "features": [],
-            "target": target,
-            "rename": null,
-            "registry": null,
-            "path": null
-        })
+        pkg(
+            name,
+            "0.1.0",
+            &format!("{ws}/{dir}"),
+            Some(id),
+            source,
+            "lib",
+            deps,
+        )
     }
 
     /// Run the discovery analysis over metadata whose `mid` package is absent from the
@@ -5672,35 +5466,20 @@ iota = { version = "4", optional = true }
             "metadata": null,
             "version": 1
         });
-        let local = local_records(ws, "app", &[("app/src/lib.rs", vec![])]);
-        let refs: Vec<&IndexedContext> = local.iter().collect();
-        let metadata: Metadata = serde_json::from_value(value).unwrap();
-        let graph = build_graph(&metadata, &BTreeMap::new());
-        let store = Store::open(cache).unwrap();
         let options = DependencySearch {
             depth: Some(3),
             check_latest: Some(false),
             cache_dir: Some(cache.to_string_lossy().into_owned()),
             ..DependencySearch::default()
         };
-        let eff = effective(&options);
-        let mut d = Discovery {
-            graph,
-            index_fingerprint: index_fingerprint(&eff),
-            eff,
-            store: Some(store),
-            store_root: cache.to_path_buf(),
-            registry: Registry {
-                api: format!("{base}/api/v1/crates"),
-                cdn: format!("{base}/crates"),
-            },
-            coverage: DependencyCoverage::default(),
-            effective_targets: vec!["x86_64-unknown-linux-gnu".to_owned()],
-            cfgs: BTreeMap::new(),
-            latest_known: BTreeMap::new(),
-        };
-        let targets = single_lib_targets(ws);
-        analyze_discovery(&mut d, ws, &targets, &refs, 0)
+        crafted_run(
+            ws,
+            cache,
+            Some(base),
+            &options,
+            value,
+            &["x86_64-unknown-linux-gnu".to_owned()],
+        )
     }
 
     fn walk_files(ws: &Path, dirs: &[(&str, &str)]) {
@@ -5742,7 +5521,7 @@ iota = { version = "4", optional = true }
                 "app",
                 "path+file:///ws/app#0.1.0",
                 None,
-                &[walk_dep("mid", None, "^0.1.0", None)],
+                &[json_dep("mid", None, "^0.1.0", false, None, None)],
             ),
             walk_pkg(
                 &ws_text,
@@ -5750,11 +5529,13 @@ iota = { version = "4", optional = true }
                 "mid",
                 "path+file:///ws/mid#0.1.0",
                 None,
-                &[walk_dep(
+                &[json_dep(
                     "winonly",
                     None,
                     "^0.1.0",
+                    false,
                     Some("x86_64-pc-windows-gnu"),
+                    None,
                 )],
             ),
             walk_pkg(
@@ -5812,7 +5593,7 @@ iota = { version = "4", optional = true }
                 "app",
                 "path+file:///ws/app#0.1.0",
                 None,
-                &[walk_dep("mid", None, "^0.1.0", None)],
+                &[json_dep("mid", None, "^0.1.0", false, None, None)],
             ),
             walk_pkg(
                 &ws_text,
@@ -5820,7 +5601,7 @@ iota = { version = "4", optional = true }
                 "mid",
                 "path+file:///ws/mid#0.1.0",
                 None,
-                &[walk_dep("dup", None, "^0.1.0", None)],
+                &[json_dep("dup", None, "^0.1.0", false, None, None)],
             ),
             walk_pkg(
                 &ws_text,
@@ -5828,7 +5609,7 @@ iota = { version = "4", optional = true }
                 "dup",
                 "path+file:///ws/dup-a#0.1.0",
                 None,
-                &[walk_dep("alpha", None, "^0.1.0", None)],
+                &[json_dep("alpha", None, "^0.1.0", false, None, None)],
             ),
             walk_pkg(
                 &ws_text,
@@ -5836,7 +5617,7 @@ iota = { version = "4", optional = true }
                 "dup",
                 "path+file:///ws/dup-b#0.1.0",
                 None,
-                &[walk_dep("beta", None, "^0.1.0", None)],
+                &[json_dep("beta", None, "^0.1.0", false, None, None)],
             ),
             walk_pkg(
                 &ws_text,
@@ -5896,7 +5677,7 @@ iota = { version = "4", optional = true }
                 "app",
                 "path+file:///ws/app#0.1.0",
                 None,
-                &[walk_dep("mid", None, "^0.1.0", None)],
+                &[json_dep("mid", None, "^0.1.0", false, None, None)],
             ),
             walk_pkg(
                 &ws_text,
@@ -5904,10 +5685,12 @@ iota = { version = "4", optional = true }
                 "mid",
                 "path+file:///ws/mid#0.1.0",
                 None,
-                &[walk_dep(
+                &[json_dep(
                     "upstream",
                     Some(CRATES_IO_SOURCE),
                     "=2.0.0-rc.1",
+                    false,
+                    None,
                     None,
                 )],
             ),
@@ -5923,15 +5706,14 @@ iota = { version = "4", optional = true }
                 crate_archive("upstream", "2.0.0-rc.1", &lib),
             ),
         ]);
-        let server = HttpServer::start(routes);
+        let fixture = registry_fixture(routes);
         let report = walk_run(
             &ws,
             &cache,
-            &server.base,
+            &fixture.base(),
             &pkgs,
             &[("mid", "path+file:///ws/mid#0.1.0")],
         );
-        server.stop();
         assert!(
             report
                 .coverage
