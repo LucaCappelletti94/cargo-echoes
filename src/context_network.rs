@@ -46,10 +46,18 @@ fn fail(id: &str, url: &str, cause: impl Display) -> String {
     format!("{id} GET {url} {cause}")
 }
 
+/// The cause a bounded read reports for a body over its limit.
+const OVERSIZE: &str = "response exceeds ";
+
+/// The diagnostic of a body over `limit` bytes, which `is_oversize` recognizes.
+fn oversize(id: &str, url: &str, limit: u64) -> String {
+    fail(id, url, format!("{OVERSIZE}{limit} bytes"))
+}
+
 /// Whether `err` is the bounded read's refusal of an oversized body.
 #[must_use]
 pub(crate) fn is_oversize(err: &str) -> bool {
-    err.contains("response exceeds ")
+    err.contains(OVERSIZE)
 }
 
 /// The lowercased host of `url` without a port, for `scheme://authority` URLs.
@@ -193,7 +201,7 @@ pub(crate) fn get_raw(url: &str, limit: u64, deadline: Duration) -> Result<RawRe
         .map_err(|err| fail(&id, url, format!("body read {err}")))?;
     let body_len = u64::try_from(body.len()).unwrap_or(u64::MAX);
     if body_len > limit {
-        return Err(fail(&id, url, format!("response exceeds {limit} bytes")));
+        return Err(oversize(&id, url, limit));
     }
     Ok(RawResponse {
         status,
@@ -248,11 +256,7 @@ pub fn download(url: &str, destination: &Path) -> Result<(), String> {
     };
     if written > ARCHIVE_LIMIT {
         fs::remove_file(&part).ok();
-        return Err(fail(
-            &id,
-            url,
-            format!("response exceeds {ARCHIVE_LIMIT} bytes"),
-        ));
+        return Err(oversize(&id, url, ARCHIVE_LIMIT));
     }
     let renamed = fs::rename(&part, destination);
     if let Err(err) = renamed {

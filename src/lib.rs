@@ -465,10 +465,8 @@ impl Echoes {
                 .iter()
                 .filter(|target| roots.insert(target.files.first().map(|f| f.path.as_str())));
             let sites = crates.flat_map(|target| {
-                let crate_root = target.files.first().map_or("", |f| {
-                    f.path
-                        .strip_prefix(root)
-                        .map_or(f.path.as_str(), |p| p.trim_start_matches('/'))
+                let crate_root = target.files.first().map_or(Cow::Borrowed(""), |f| {
+                    discover::site_relative(&f.path, root)
                 });
                 let context = syn_canon::SourceContext::new(
                     target
@@ -486,7 +484,7 @@ impl Echoes {
                             &module_prefix(target, file),
                             file,
                             root,
-                            crate_root,
+                            &crate_root,
                             target.library,
                             &context,
                         )
@@ -642,20 +640,7 @@ impl Echoes {
             let legacy_crates: BTreeSet<Cow<'_, str>> = targets
                 .iter()
                 .filter_map(|target| target.files.first())
-                .map(|file| {
-                    file.path
-                        .strip_prefix(root)
-                        .map_or(file.path.as_str(), |path| {
-                            path.trim_start_matches(['/', '\\'])
-                        })
-                })
-                .map(|path| {
-                    if path.contains('\\') {
-                        Cow::Owned(path.replace('\\', "/"))
-                    } else {
-                        Cow::Borrowed(path)
-                    }
-                })
+                .map(|file| discover::site_relative(&file.path, root))
                 .collect();
             let selected: Vec<_> = entries
                 .iter()
@@ -772,7 +757,7 @@ pub struct TargetScan {
 /// One file of a target.
 #[derive(Clone)]
 pub struct SourceFile {
-    /// Site path, stripped of the `root` prefix.
+    /// Path of the file as discovery found it, the scan root included.
     pub path: String,
     /// Module-path segments from the target root, empty for the root file.
     pub segments: Vec<String>,

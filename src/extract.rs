@@ -623,11 +623,7 @@ fn blocks(src: &DocSource, item: &str, root: &str) -> Vec<DocTest> {
             continue;
         };
         let (start, stop) = (&src.origins[f.line], &src.origins[f.end]);
-        let file = start
-            .file
-            .strip_prefix(root)
-            .and_then(|f| f.strip_prefix('/'))
-            .unwrap_or(&start.file);
+        let file = crate::discover::site_relative(&start.file, root);
         // Deleting the span must take the attribute's opening and closing lines
         // together or not at all, else a `/** */` or raw literal loses one end.
         let spanned = stop.file == start.file
@@ -636,7 +632,7 @@ fn blocks(src: &DocSource, item: &str, root: &str) -> Vec<DocTest> {
             && stop.exact
             && (start.line == start.attr.0) == (stop.line == stop.attr.1);
         out.push(DocTest {
-            file: lexical(file),
+            file: lexical(&file),
             line: start.line,
             end: spanned.then_some(stop.line),
             item: item.to_string(),
