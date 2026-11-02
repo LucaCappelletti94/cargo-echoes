@@ -1,9 +1,9 @@
 use echoes::group;
 
-use crate::{group_members, site_src, support};
+use super::{dependency, group_members, site_src};
 
 /// The two passing sites of one case group together, apart from the compile-failing copies.
-pub(super) fn assert_fixture_group(case: &support::Case) {
+pub(crate) fn assert_fixture_group(case: &dependency::Case) {
     let sites = [
         site_src::site("pass_a", &case.a, &[]),
         site_src::site("pass_b", &case.b, &[]),

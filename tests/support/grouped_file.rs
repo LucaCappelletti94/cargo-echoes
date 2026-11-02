@@ -1,5 +1,5 @@
 /// Parse a source file and wrap every expression in a delimiterless group.
-pub(super) fn grouped_file(source: &str) -> syn::File {
+pub(crate) fn grouped_file(source: &str) -> syn::File {
     struct Groups;
 
     impl syn::visit_mut::VisitMut for Groups {

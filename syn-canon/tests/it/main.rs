@@ -1,0 +1,55 @@
+//! The integration tests of `syn-canon`, one module per area in one test binary.
+
+#[path = "../support/mod.rs"]
+mod support;
+
+mod adjacent_comparisons;
+mod bool_int_min_max;
+mod boolean_literal;
+mod boolean_logic;
+mod boolean_match;
+mod bounds_impl_lifetimes;
+mod bounds_lifetimes;
+mod char_patterns;
+mod char_primitive;
+mod collection_accessors;
+mod collection_iteration;
+mod commutative;
+mod comparison;
+mod compound_assignment;
+mod concat;
+mod constructor_annotations;
+mod constructor_returns;
+mod contexts;
+mod copy_noops;
+mod declared_conversions;
+mod dependency_coverage_alpha;
+mod dependency_coverage_helpers_form_values;
+mod discarded_calls;
+mod early_return;
+mod format_spellings;
+mod guard_clauses;
+mod identities;
+mod import_paths;
+mod iterator_chains;
+mod let_literal;
+mod let_return;
+mod literal_casts_limits;
+mod literal_disjunctions;
+mod loop_while_let;
+mod macro_punctuation;
+mod match_arms;
+mod matches_expansion;
+mod nested_conditionals;
+mod option_predicates;
+mod or_arms_let_else;
+mod prelude_owned;
+mod ref_bindings;
+mod reflexive;
+mod return_literal_typing;
+mod string_copies;
+mod strings_format;
+mod tail_scopes;
+mod widening_casts;
+mod wrapping_add;
+mod xor;

@@ -1,7 +1,7 @@
 use syn_canon::{CanonicalForm, SourceContext};
 
 /// The canonical forms of one trait's default method bodies.
-pub(super) fn trait_method_forms(
+pub(crate) fn trait_method_forms(
     context: &SourceContext<'_>,
     trait_: &syn::ItemTrait,
 ) -> Vec<CanonicalForm> {

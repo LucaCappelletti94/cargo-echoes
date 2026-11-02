@@ -1,5 +1,5 @@
 /// The named top-level function of one file.
-pub(super) fn function<'a>(file: &'a syn::File, name: &str) -> &'a syn::ItemFn {
+pub(crate) fn function<'a>(file: &'a syn::File, name: &str) -> &'a syn::ItemFn {
     file.items
         .iter()
         .find_map(|item| match item {

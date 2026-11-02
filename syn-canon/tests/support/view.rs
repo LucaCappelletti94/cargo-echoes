@@ -1,5 +1,5 @@
 /// The canonical view of one indexed declaration, by its written name.
-pub(super) fn view_of(file: &syn::File, name: &str) -> syn_canon::CanonicalForm {
+pub(crate) fn view_of(file: &syn::File, name: &str) -> syn_canon::CanonicalForm {
     let context =
         syn_canon::SourceContext::new(core::iter::once((&[][..], file)), syn_canon::Edition::E2021);
     let target = file

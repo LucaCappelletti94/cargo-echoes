@@ -1,5 +1,5 @@
 /// The named inherent method of one file.
-pub(super) fn impl_method<'a>(source: &'a syn::File, name: &str) -> &'a syn::ImplItemFn {
+pub(crate) fn impl_method<'a>(source: &'a syn::File, name: &str) -> &'a syn::ImplItemFn {
     source
         .items
         .iter()

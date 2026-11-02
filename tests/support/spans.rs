@@ -1,5 +1,5 @@
 /// Reset every span of a token stream, and of each nested group, to the call site.
-pub(super) fn reset_spans(stream: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+pub(crate) fn reset_spans(stream: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     stream
         .into_iter()
         .map(|mut token| {

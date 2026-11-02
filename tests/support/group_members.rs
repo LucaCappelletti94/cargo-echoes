@@ -8,7 +8,7 @@ fn sorted_items(group: &Group) -> Vec<&str> {
 }
 
 /// The sorted item lists of the given groups.
-pub(super) fn members<'a, Groups: IntoIterator<Item = &'a Group>>(
+pub(crate) fn members<'a, Groups: IntoIterator<Item = &'a Group>>(
     groups: Groups,
 ) -> Vec<Vec<&'a str>> {
     let mut out: Vec<Vec<&str>> = groups.into_iter().map(sorted_items).collect();

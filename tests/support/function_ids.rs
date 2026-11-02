@@ -1,7 +1,7 @@
 use echoes::{Kind, Report};
 
 /// The sorted ids of the function groups of one report.
-pub(super) fn function_ids(report: &Report) -> Vec<&str> {
+pub(crate) fn function_ids(report: &Report) -> Vec<&str> {
     let mut ids: Vec<&str> = report
         .groups
         .iter()

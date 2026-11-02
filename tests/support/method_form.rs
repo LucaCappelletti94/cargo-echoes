@@ -1,7 +1,7 @@
 use syn_canon::{CanonicalForm, SourceContext};
 
 /// The canonical view of the named inherent method of one file.
-pub(super) fn method_form(
+pub(crate) fn method_form(
     context: &SourceContext<'_>,
     source: &syn::File,
     name: &str,
