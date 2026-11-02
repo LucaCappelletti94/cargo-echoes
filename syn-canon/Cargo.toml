@@ -9,6 +9,11 @@ license = "MIT"
 repository = "https://github.com/LucaCappelletti94/cargo-echoes"
 keywords = ["syn", "canonical", "normalize", "alpha-equivalence", "no-std"]
 categories = ["development-tools", "parser-implementations", "no-std"]
+autotests = false
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
 
 [dependencies]
 proc-macro2 = { version = "1.0.107", default-features = false }

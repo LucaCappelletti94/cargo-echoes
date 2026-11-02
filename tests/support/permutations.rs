@@ -1,5 +1,5 @@
 /// Every ordering of 0 through n-1.
-pub(super) fn permutations(n: usize) -> Vec<Vec<usize>> {
+pub(crate) fn permutations(n: usize) -> Vec<Vec<usize>> {
     fn extend(n: usize, prefix: &mut Vec<usize>, out: &mut Vec<Vec<usize>>) {
         if prefix.len() == n {
             out.push(prefix.clone());

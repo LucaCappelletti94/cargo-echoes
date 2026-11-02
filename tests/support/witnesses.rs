@@ -8,7 +8,7 @@ pub struct Case {
 }
 
 /// The same and separate cases canonicalize as expected, with distinct failing forms.
-pub(super) fn relations(cases: &[Case]) {
+pub(crate) fn relations(cases: &[Case]) {
     for case in cases {
         let parse = |source: &str| syn::parse_str::<syn::File>(source).unwrap();
         let left = syn_canon::canonicalize(parse(&case.a));

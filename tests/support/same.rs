@@ -2,7 +2,7 @@ use super::failing::failing;
 use super::form::form;
 
 /// The two sources canonicalize identically, keep equal sizes, and differ as failing forms.
-pub(super) fn same(left: &str, right: &str) {
+pub(crate) fn same(left: &str, right: &str) {
     let a = form(left);
     let b = form(right);
     assert_eq!(a, b, "{left}\n{right}");

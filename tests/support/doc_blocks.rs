@@ -1,5 +1,5 @@
 /// The fenced code blocks of a rustdoc comment stream, in source order.
-pub(super) fn doc_blocks(text: &str) -> Vec<String> {
+pub(crate) fn doc_blocks(text: &str) -> Vec<String> {
     let mut blocks: Vec<String> = Vec::new();
     let mut current: Option<String> = None;
     for raw in text.lines() {

@@ -10,11 +10,16 @@ repository = "https://github.com/LucaCappelletti94/cargo-echoes"
 keywords = ["cargo-subcommand", "doctest", "duplicate-detection", "cli", "rustdoc"]
 categories = ["command-line-utilities", "development-tools"]
 exclude = ["/docs", "/skills", "/fuzz", "/.clusterfuzzlite"]
+autotests = false
 
 [[bin]]
 name = "cargo-echoes"
 path = "src/main.rs"
 required-features = ["cli"]
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
 
 [features]
 default = ["cli"]
