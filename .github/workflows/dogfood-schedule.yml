@@ -18,6 +18,8 @@ jobs:
   api-check:
     name: Exercise the pull request review surface
     runs-on: ubuntu-26.04
+    # Above the 300 minute deadline of the waits, so a wait always reports before the job is killed.
+    timeout-minutes: 320
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,9 +92,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          # A monotonic clock, so a wall clock step neither shortens nor stretches a wait.
+          now() { cut -d. -f1 /proc/uptime; }
+          # Both waits share one deadline that fires before the job timeout.
+          deadline=$(( $(now) + 300 * 60 ))
           wait_run() {
-            local sha="$1" what="$2" i run_json status conclusion
-            for i in $(seq 1 20); do
+            local sha="$1" what="$2" run_json status conclusion run_id counts started=""
+            while :; do
               run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&per_page=50" --jq '[.workflow_runs[] | select(.path == ".github/workflows/dogfood.yml")] | first // empty' 2>/dev/null)"
               if [ -n "$run_json" ]; then
                 status="$(printf '%s' "$run_json" | jq -r '.status')"
@@ -105,11 +111,23 @@ jobs:
                   echo "the dogfood run $what finished with $conclusion, the check pull request stays open for inspection"
                   return 1
                 fi
+                run_id="$(printf '%s' "$run_json" | jq -r '.id')"
+                counts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" --jq '"\(.jobs | length) \([.jobs[] | select(.status != "in_progress" and .status != "completed")] | length)"' 2>/dev/null)"
+                # Time in the runner queue does not count. The 30 minutes start once every job holds a runner.
+                if [ -z "$started" ] && [ -n "$counts" ] && [ "${counts% *}" -gt 0 ] && [ "${counts#* }" -eq 0 ]; then
+                  started="$(now)"
+                fi
               fi
-              [ "$i" -lt 20 ] && sleep 90
+              if [ -n "$started" ] && [ $(( $(now) - started )) -ge $(( 30 * 60 )) ]; then
+                echo "the dogfood run $what did not finish within 30 minutes of its last job starting, the check pull request stays open for inspection"
+                return 1
+              fi
+              if [ "$(now)" -ge "$deadline" ]; then
+                echo "the dogfood run $what did not finish within the 300 minutes both waits share, the check pull request stays open for inspection"
+                return 1
+              fi
+              sleep 90
             done
-            echo "the dogfood run $what did not finish within the 30 minute window, the check pull request stays open for inspection"
-            return 1
           }
           wait_run "$(git rev-parse HEAD)" "on the copies" || exit 1
           git revert --no-edit HEAD
