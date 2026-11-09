@@ -174,9 +174,6 @@ runs:
         case "$RUNNER_OS/$RUNNER_ARCH" in
           Linux/X64)   target=x86_64-unknown-linux-gnu ;;
           Linux/ARM64) target=aarch64-unknown-linux-gnu ;;
-          macOS/X64)   target=x86_64-apple-darwin ;;
-          macOS/ARM64) target=aarch64-apple-darwin ;;
-          Windows/X64) target=x86_64-pc-windows-msvc ;;
           *)           target='' ;;
         esac
 
@@ -194,7 +191,6 @@ runs:
           [ -n "$tag" ] && args=("$tag" "${args[@]}")
           if err="$(gh release download "${args[@]}" 2>&1)"; then
             bin=cargo-echoes
-            [ "$RUNNER_OS" = Windows ] && bin=cargo-echoes.exe
             tar -xzf "$dest/$asset" -C "$dest"
             # Cargo also finds subcommands in its own bin directory, so PATH stays untouched.
             bin_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
