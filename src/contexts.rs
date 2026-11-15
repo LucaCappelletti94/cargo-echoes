@@ -79,12 +79,15 @@ pub(crate) fn group(
             }
         })
         .collect();
+    // A group nested in another group's sites is reported by that group, unless it
+    // holds more sites, a duplicate within one copy of the outer context.
     let covered: Vec<bool> = groups
         .iter()
         .enumerate()
         .map(|(index, group)| {
             groups.iter().enumerate().any(|(other, outer)| {
                 index != other
+                    && group.sites.len() <= outer.sites.len()
                     && group
                         .sites
                         .iter()
@@ -160,6 +163,10 @@ mod tests {
     use alloc::vec::Vec;
 
     fn scan(code: &str, floor: usize) -> Report {
+        scan_with(Echoes::default(), code, floor)
+    }
+
+    fn scan_with(echoes: Echoes, code: &str, floor: usize) -> Report {
         let target = TargetScan {
             name: "fixture".into(),
             library: true,
@@ -173,7 +180,7 @@ mod tests {
                 rustdoc: true,
             }],
         };
-        Echoes::default()
+        echoes
             .context_blocks()
             .context_min_tokens(floor)
             .run_targets("", &[target], &|_, _| None)
@@ -236,6 +243,20 @@ mod tests {
         );
         assert_eq!(extra.context_groups.len(), 2);
         assert!(extra.context_groups.iter().any(|g| g.sites.len() == 3));
+    }
+
+    #[test]
+    fn single_site_group_does_not_cover_a_nested_pair() {
+        let code = "fn a(x: u32, y: u32) -> u32 { let s = { x * y + x }; let t = { x * y + x }; s - t + y }";
+        let pairs = scan(code, 0);
+        assert_eq!(pairs.context_groups.len(), 1);
+        assert_eq!(pairs.context_groups[0].sites.len(), 2);
+        let inventory = scan_with(Echoes::default().threshold(1), code, 0);
+        assert!(
+            inventory.context_groups.contains(&pairs.context_groups[0]),
+            "{:?}",
+            inventory.context_groups
+        );
     }
 
     #[test]
